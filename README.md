@@ -62,4 +62,4 @@ This is a plugin for [Ubiquibot](https://github.com/ubiquity-os/ubiquity-os-kern
 
 ## Testing
 
-- Run `bun test` to run the tests.
+- Run `bun run test` to run the tests.
