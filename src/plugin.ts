@@ -14,6 +14,7 @@ import { Database } from "./types/database";
 import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
 import { issueTransfer } from "./handlers/transfer-issue";
 import { completeIssue } from "./handlers/complete-issue";
+import { commandHandler, userAnnotate } from "./handlers/user-annotate";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -32,10 +33,15 @@ export async function runPlugin(context: Context) {
     context.logger[isConnectionValid ? "ok" : "error"](`Supabase connection ${isConnectionValid ? "successful" : "failed"}`);
   }
 
+  if (context.command) {
+    return await commandHandler(context);
+  }
+
   if (isIssueCommentEvent(context)) {
     switch (eventName) {
       case "issue_comment.created":
-        return await addComments(context as Context<"issue_comment.created">);
+        await addComments(context as Context<"issue_comment.created">);
+        return await userAnnotate(context as Context<"issue_comment.created">);
       case "issue_comment.deleted":
         return await deleteComment(context as Context<"issue_comment.deleted">);
       case "issue_comment.edited":

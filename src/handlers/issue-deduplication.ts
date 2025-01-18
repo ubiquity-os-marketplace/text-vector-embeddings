@@ -216,7 +216,7 @@ async function handleMatchIssuesComment(
 }
 
 // Process similar issues and return the list of similar issues with their similarity scores
-async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
+export async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
   const processedIssues = await Promise.all(
     similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {
