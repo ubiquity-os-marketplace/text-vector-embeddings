@@ -4,6 +4,7 @@
 export const STRINGS: Record<string, string> = {
   HELLO_WORLD: "Hello, world!",
   TEST_REPO: "test-repo",
+  TEST_REPO_2: "test-repo-2",
   SUCCESSFULLY_CREATED_COMMENT: "Successfully created comment!",
   EXITING_HELLO_WORLD: "Exiting helloWorld",
   ERROR_CREATING_COMMENT: "Error creating comment:",
@@ -21,4 +22,5 @@ export const STRINGS: Record<string, string> = {
   SIMILAR_ISSUE_TITLE: "Description: The Java service layer's performance deteriorates under high load, partly due to the absence of effective caching.",
   ISSUE_URL_TEMPLATE: "https://github.com/ubiquity/test-repo/issues/1",
   CONTRIBUTOR_SUGGESTION_TEXT: "The following contributors may be suitable for this task:",
+  SIMILAR_COMMENT: "One time we we working on a fix where the price label should be the first thing that start command checks for and throws an error for",
 };

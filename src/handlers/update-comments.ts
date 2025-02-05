@@ -1,10 +1,12 @@
 import { Context } from "../types";
 import { addIssue } from "./add-issue";
+import { checkIfAnnotateFootNoteExists, removeAnnotateFootnotes } from "./annotate";
 
 export async function updateComment(context: Context<"issue_comment.edited">) {
   const {
     logger,
     adapters: { supabase },
+    octokit,
     payload,
   } = context;
   const markdown = payload.comment.body;
@@ -25,7 +27,16 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
       logger.info("Parent issue not found, creating new issue");
       await addIssue(context as unknown as Context<"issues.opened">);
     }
-    await supabase.comment.updateComment({ markdown, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
+    const cleanedComment = removeAnnotateFootnotes(markdown);
+    if (checkIfAnnotateFootNoteExists(markdown)) {
+      await octokit.rest.issues.updateComment({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        comment_id: payload.comment.id,
+        body: cleanedComment,
+      });
+    }
+    await supabase.comment.updateComment({ markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
     logger.ok(`Successfully updated comment! ${payload.comment.id}`, payload.comment);
   } catch (error) {
     if (error instanceof Error) {

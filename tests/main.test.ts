@@ -14,6 +14,7 @@ import { CommentMock, createMockAdapters } from "./__mocks__/adapter";
 import { db } from "./__mocks__/db";
 import { server } from "./__mocks__/node";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
+import annotateComment from "./__sample__/comment_annotate.json";
 
 const DEFAULT_HOOK = "issue_comment.created";
 
@@ -442,6 +443,124 @@ describe("Plugin tests", () => {
     );
   });
 
+  it("When a user uses default annotate command and last comment has similarity above match threshold, it should update comment body with footnotes", async () => {
+    const [annotateIssue] = fetchSimilarIssues("annotate");
+    const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
+    context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
+    context.adapters.supabase.issue.createIssue = jest.fn(async () => {
+      createIssue(annotateIssue.issue_body, "annotate", annotateIssue.title, 9, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO, STRINGS.USER_1);
+    });
+
+    await runPlugin(context);
+
+    createComment(annotateComment.body, annotateComment.id, "annotate", 9);
+
+    const { context: context2, comment } = createContext("/annotate", 1, 1, 2, "createAnnotate", "annotate");
+
+    context2.adapters.supabase.issue.findSimilarIssues = jest
+      .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
+      .mockResolvedValue([{ issue_id: "annotate", similarity: 0.88 }] as unknown as IssueSimilaritySearchResult[]);
+    context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
+      node: {
+        __typename: "Issue",
+        title: STRINGS.SIMILAR_ISSUE,
+        url: STRINGS.ISSUE_URL,
+        number: 9,
+        body: annotateIssue.issue_body,
+        repository: {
+          name: STRINGS.TEST_REPO,
+          owner: {
+            login: STRINGS.USER_1,
+          },
+        },
+      },
+    }) as unknown as typeof context2.octokit.graphql;
+
+    context2.octokit.rest.issues.listComments = jest.fn(async () => {
+      return { data: [annotateComment, comment] };
+    }) as unknown as typeof octokit.rest.issues.listComments;
+
+    context2.octokit.rest.issues.updateComment = jest.fn(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
+      // Find the most similar sentence (first sentence in this case)
+      const updatedBody =
+        annotateComment.body.replace(STRINGS.SIMILAR_COMMENT, `${STRINGS.SIMILAR_COMMENT}[^01^]`) +
+        `\n\n[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
+
+      db.issueComments.update({
+        where: {
+          id: { equals: params.comment_id },
+        },
+        data: {
+          body: updatedBody,
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+
+    await runPlugin(context2);
+
+    const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+    expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+  });
+
+  it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
+    const [annotateIssue] = fetchSimilarIssues("annotate");
+    const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
+    context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
+    context.adapters.supabase.issue.createIssue = jest.fn(async () => {
+      createIssue(annotateIssue.issue_body, "annotate", annotateIssue.title, 9, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO2, STRINGS.USER_1);
+    });
+
+    await runPlugin(context);
+
+    createComment(annotateComment.body, annotateComment.id, "annotate", 9);
+
+    const { context: context2 } = createContext("/annotate /#issuecomment-1 repo", 1, 1, 2, "createAnnotate", "annotate");
+
+    context2.adapters.supabase.issue.findSimilarIssues = jest
+      .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
+      .mockResolvedValue([{ issue_id: "annotate", similarity: 0.88 }] as unknown as IssueSimilaritySearchResult[]);
+    context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
+      node: {
+        __typename: "Issue",
+        title: STRINGS.SIMILAR_ISSUE,
+        url: STRINGS.ISSUE_URL,
+        number: 9,
+        body: annotateIssue.issue_body,
+        repository: {
+          name: STRINGS.TEST_REPO2,
+          owner: {
+            login: STRINGS.USER_1,
+          },
+        },
+      },
+    }) as unknown as typeof context2.octokit.graphql;
+
+    context2.octokit.rest.issues.getComment = jest.fn(async () => {
+      return { data: annotateComment };
+    }) as unknown as typeof octokit.rest.issues.getComment;
+
+    context2.octokit.rest.issues.updateComment = jest.fn(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
+      // Find the most similar sentence (first sentence in this case)
+      const updatedBody =
+        annotateComment.body.replace(STRINGS.SIMILAR_COMMENT, `${STRINGS.SIMILAR_COMMENT}[^01^]`) +
+        `\n\n[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
+
+      db.issueComments.update({
+        where: {
+          id: { equals: params.comment_id },
+        },
+        data: {
+          body: updatedBody,
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+
+    await runPlugin(context2);
+
+    const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+    expect(updatedComment.body).not.toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+  });
+
   function createContext(
     commentBody: string = "Hello, world!",
     repoId: number = 1,
@@ -469,6 +588,7 @@ describe("Plugin tests", () => {
 
     return {
       context,
+      comment,
       infoSpy,
       errorSpy,
       debugSpy,
