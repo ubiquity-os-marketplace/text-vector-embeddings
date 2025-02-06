@@ -155,7 +155,7 @@ async function handleSimilarIssuesComment(
   const existingFootnotes = issueBody.match(footnoteRegex) || [];
   const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = issueBody;
-  let footnotes: string[] | undefined;
+  const footnotes: string[] = [];
   // Sort relevant issues by similarity in ascending order
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
@@ -167,15 +167,11 @@ async function handleSimilarIssuesComment(
     const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
     updatedBody = updatedBody.replace(sentencePattern, `${sentence} ${footnoteRef}`);
 
-    // Initialize footnotes array if not already done
-    if (!footnotes) {
-      footnotes = [];
-    }
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ⚠ ${issue.similarity}% possible duplicate - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
   });
   // Append new footnotes to the body, keeping the previous ones
-  if (footnotes) {
+  if (footnotes.length > 0) {
     updatedBody += "\n\n" + footnotes.join("");
   }
   // Update the issue with the modified body
@@ -216,7 +212,7 @@ async function handleMatchIssuesComment(
 }
 
 // Process similar issues and return the list of similar issues with their similarity scores
-async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
+export async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
   const processedIssues = await Promise.all(
     similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {

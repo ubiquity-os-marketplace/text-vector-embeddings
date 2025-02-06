@@ -29,6 +29,7 @@
     "open-source"
   ],
   "dependencies": {
+    "@octokit/openapi-types": "^23.0.1",
     "@octokit/plugin-rest-endpoint-methods": "^13.2.6",
     "@sinclair/typebox": "0.34.3",
     "@supabase/supabase-js": "^2.45.2",

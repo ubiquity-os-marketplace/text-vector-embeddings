@@ -1,4 +1,5 @@
 import { createAdapters } from "../adapters";
+import { Command } from "./command";
 import { Env } from "./env";
 import { PluginSettings } from "./plugin-input";
 import { Context as PluginContext } from "@ubiquity-os/plugin-sdk";
@@ -19,6 +20,6 @@ export type SupportedEvents =
   | "issues.transferred"
   | "issues.closed";
 
-export type Context<TEvents extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, null, TEvents> & {
+export type Context<TEvents extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, Command, TEvents> & {
   adapters: ReturnType<typeof createAdapters>;
 };
