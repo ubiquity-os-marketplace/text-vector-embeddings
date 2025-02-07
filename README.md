@@ -146,7 +146,7 @@ This allows the system to:
 - Find related issues based on content similarity
 - Maintain a clean issue tracker by preventing redundancy
 
-#### 2. Privacy-Aware Storage
+#### 2. Secure Storage for Private Issues
 
 The system implements privacy-conscious storage of issue data:
 
