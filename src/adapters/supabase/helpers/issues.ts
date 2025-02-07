@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { htmlToMarkdown } from "../../utils/html-to-markdown";
 
 export interface IssueType {
   id: string;
@@ -56,6 +57,7 @@ export class Issue extends SuperSupabase {
     }
 
     //Create the embedding for this issue
+    issueData.markdown = htmlToMarkdown(issueData.markdown);
     const embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;
@@ -83,6 +85,7 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData) {
     const { isPrivate } = issueData;
     //Create the embedding for this issue
+    issueData.markdown = htmlToMarkdown(issueData.markdown);
     const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;

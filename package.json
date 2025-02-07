@@ -37,10 +37,11 @@
     "@ubiquity-os/plugin-sdk": "^2.0.1",
     "@ubiquity-os/ubiquity-os-logger": "^1.3.2",
     "dotenv": "16.4.5",
+    "hono": "^4.6.4",
+    "html-to-md": "^0.8.6",
     "markdown-it": "^14.1.0",
     "markdown-it-plain-text": "^0.3.0",
-    "voyageai": "^0.0.1-5",
-    "hono": "^4.6.4"
+    "voyageai": "^0.0.1-5"
   },
   "devDependencies": {
     "@commitlint/cli": "19.3.0",

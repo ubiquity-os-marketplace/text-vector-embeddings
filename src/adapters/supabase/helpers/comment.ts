@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { htmlToMarkdown } from "../../utils/html-to-markdown";
 
 export interface CommentType {
   id: string;
@@ -44,6 +45,7 @@ export class Comment extends SuperSupabase {
       return;
     }
     //Create the embedding for this comment
+    commentData.markdown = htmlToMarkdown(commentData.markdown);
     const embedding = await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown);
     let plaintext: string | null = markdownToPlainText(commentData.markdown);
     let finalMarkdown = commentData.markdown;
@@ -78,6 +80,7 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData) {
     const { isPrivate } = commentData;
     //Create the embedding for this comment
+    commentData.markdown = htmlToMarkdown(commentData.markdown);
     const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown));
     let plaintext: string | null = markdownToPlainText(commentData.markdown);
     let finalMarkdown = commentData.markdown;
