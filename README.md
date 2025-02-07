@@ -125,7 +125,7 @@ The system implements several advanced features for issue management:
 
 #### 1. Issue Deduplication
 
-One of the most powerful features is the ability to find similar issues using vector similarity search. The implementation uses Supabase's vector similarity capabilities:
+One of the most powerful features is the ability to find similar issues using vector similarity search. The implementation uses a custom-implemented vector similarity search:
 
 ```typescript
 async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
