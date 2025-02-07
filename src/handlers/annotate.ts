@@ -53,7 +53,7 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
   const similarIssues = await supabase.issue.findSimilarIssues({
     markdown: commentBody,
     currentId: comment.node_id,
-    threshold: context.config.warningThreshold,
+    threshold: context.config.annotateThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
     let processedIssues = await processSimilarIssues(similarIssues, context, commentBody);
@@ -61,7 +61,7 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
       filterByScope(scope, payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
     if (processedIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
+      logger.info(`Similar issue which matches more than ${context.config.annotateThreshold} already exists`, { processedIssues });
       await handleSimilarIssuesComment(context, payload, commentBody, comment.id, processedIssues);
       return;
     }

@@ -22,7 +22,12 @@
       },
       "warningThreshold": {
         "default": 0.75,
-        "description": "Issues above this similarity score will be marked as a potential duplicate",
+        "description": "Issues above this similarity score will be marked as a potential duplicate.",
+        "type": "number"
+      },
+      "annotateThreshold": {
+        "default": 0.5,
+        "description": "The minimum similarity score for including similar issues as annotations in the comment footnotes.",
         "type": "number"
       },
       "jobMatchingThreshold": {

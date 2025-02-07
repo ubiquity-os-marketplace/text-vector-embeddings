@@ -443,7 +443,7 @@ describe("Plugin tests", () => {
     );
   });
 
-  it("When a user uses default annotate command and last comment has similarity above match threshold, it should update comment body with footnotes", async () => {
+  it("When a user uses default annotate command and last comment has similarity above annotate threshold, it should update comment body with footnotes", async () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
@@ -502,7 +502,7 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
-  it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
+  it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above annotate threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
@@ -621,6 +621,7 @@ describe("Plugin tests", () => {
         warningThreshold: 0.75,
         matchThreshold: 0.95,
         jobMatchingThreshold: 0.95,
+        annotateThreshold: 0.5,
       },
       command: null,
       adapters: {} as Context["adapters"],
