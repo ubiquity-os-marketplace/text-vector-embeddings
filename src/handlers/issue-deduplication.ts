@@ -40,16 +40,16 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   const similarIssues = await supabase.issue.findSimilarIssues({
     markdown: issue.title + removeFootnotes(issueBody),
     currentId: issue.node_id,
-    threshold: context.config.warningThreshold,
+    threshold: context.config.dedupeWarningThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
     let processedIssues = await processSimilarIssues(similarIssues, context, issueBody);
     processedIssues = processedIssues.filter((issue) =>
       matchRepoOrgToSimilarIssueRepoOrg(payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
-    const matchIssues = processedIssues.filter((issue) => parseFloat(issue.similarity) / 100 >= context.config.matchThreshold);
+    const matchIssues = processedIssues.filter((issue) => parseFloat(issue.similarity) / 100 >= context.config.dedupeMatchThreshold);
     if (matchIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.matchThreshold} already exists`, { matchIssues });
+      logger.info(`Similar issue which matches more than ${context.config.dedupeMatchThreshold} already exists`, { matchIssues });
       //To the issue body, add a footnote with the link to the similar issue
       const updatedBody = await handleMatchIssuesComment(context, payload, issueBody, processedIssues);
       issueBody = updatedBody || issueBody;
@@ -64,7 +64,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
       return;
     }
     if (processedIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
+      logger.info(`Similar issue which matches more than ${context.config.dedupeWarningThreshold} already exists`, { processedIssues });
       await handleSimilarIssuesComment(context, payload, issueBody, issue.number, processedIssues);
       return;
     }

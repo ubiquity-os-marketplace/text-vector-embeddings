@@ -618,8 +618,8 @@ describe("Plugin tests", () => {
         organization: { login: STRINGS.USER_1 } as Context["payload"]["organization"],
       } as Context["payload"],
       config: {
-        warningThreshold: 0.75,
-        matchThreshold: 0.95,
+        dedupeWarningThreshold: 0.75,
+        dedupeMatchThreshold: 0.95,
         jobMatchingThreshold: 0.95,
         annotateThreshold: 0.5,
       },
