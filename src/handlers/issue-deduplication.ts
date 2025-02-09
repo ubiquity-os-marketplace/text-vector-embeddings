@@ -19,6 +19,32 @@ export interface IssueGraphqlResponse {
 }
 
 /**
+ * Sleep for the specified duration
+ * @param ms duration in milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch the latest issue details
+ */
+async function getLatestIssueDetails(context: Context, issueNumber: number) {
+  try {
+    const { data: issue } = await context.octokit.rest.issues.get({
+      owner: context.payload.repository.owner.login,
+      repo: context.payload.repository.name,
+      issue_number: issueNumber,
+    });
+    return issue;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
+    return null;
+  }
+}
+
+/**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar issue is found, a footnote is added to the current issue.
  * @param context The context object
@@ -30,16 +56,49 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
     octokit,
     payload,
   } = context;
-  const issue = payload.issue;
-  let issueBody = issue.body;
+
+  const originalIssue = payload.issue;
+
+  // Wait for the configured timeout period
+  await sleep(context.config.editTimeout);
+
+  // Fetch latest issue details
+  const latestIssue = await getLatestIssueDetails(context, originalIssue.number);
+
+  // Skip if issue doesn't exist anymore
+  if (!latestIssue) {
+    logger.info("Issue no longer exists, skipping deduplication check", {
+      issueNumber: originalIssue.number,
+    });
+    return;
+  }
+
+  // Determine if this event should proceed based on latest state
+  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
+
+  const latestEventTime = new Date(latestIssue.updated_at).getTime();
+
+  // Event should only proceed if it's the most recent action
+  if (currentEventTime !== latestEventTime) {
+    logger.info("Event superseded by newer changes, skipping deduplication check", {
+      issueNumber: latestIssue.number,
+      currentEventType: context.eventName,
+      currentEventTime: new Date(currentEventTime).toISOString(),
+      latestUpdateTime: new Date(latestEventTime).toISOString(),
+    });
+    return;
+  }
+
+  // Use the latest issue data
+  let issueBody = latestIssue.body;
   if (!issueBody) {
-    logger.info("Issue body is empty", { issue });
+    logger.info("Issue body is empty", { latestIssue });
     return;
   }
   issueBody = removeFootnotes(issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: issue.title + removeFootnotes(issueBody),
-    currentId: issue.node_id,
+    markdown: latestIssue.title + removeFootnotes(issueBody),
+    currentId: latestIssue.node_id,
     threshold: context.config.warningThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
@@ -56,7 +115,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: issue.number,
+        issue_number: latestIssue.number,
         body: issueBody,
         state: "closed",
         state_reason: "not_planned",
@@ -65,17 +124,17 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
     }
     if (processedIssues.length > 0) {
       logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
-      await handleSimilarIssuesComment(context, payload, issueBody, issue.number, processedIssues);
+      await handleSimilarIssuesComment(context, payload, issueBody, latestIssue.number, processedIssues);
       return;
     }
   } else {
     //Use the IssueBody (Without footnotes) to update the issue when no similar issues are found
     //Only if the issue has "possible duplicate" footnotes, update the issue
-    if (checkIfDuplicateFootNoteExists(issue.body || "")) {
+    if (checkIfDuplicateFootNoteExists(issueBody || "")) {
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: issue.number,
+        issue_number: latestIssue.number,
         body: issueBody,
       });
     }
@@ -145,6 +204,7 @@ async function handleSimilarIssuesComment(
 
   if (relevantIssues.length === 0) {
     context.logger.info("No relevant issues found with the same repository and organization");
+    return;
   }
 
   if (!issueBody) {
