@@ -447,6 +447,7 @@ describe("Plugin tests", () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = jest.fn<typeof context.adapters.supabase.comment.findSimilarComments>().mockResolvedValue([]);
     context.adapters.supabase.issue.createIssue = jest.fn(async () => {
       createIssue(annotateIssue.issue_body, "annotate", annotateIssue.title, 9, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO, STRINGS.USER_1);
     });
@@ -460,6 +461,7 @@ describe("Plugin tests", () => {
     context2.adapters.supabase.issue.findSimilarIssues = jest
       .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
       .mockResolvedValue([{ issue_id: "annotate", similarity: 0.88 }] as unknown as IssueSimilaritySearchResult[]);
+    context2.adapters.supabase.comment.findSimilarComments = jest.fn<typeof context.adapters.supabase.comment.findSimilarComments>().mockResolvedValue([]);
     context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
       node: {
         __typename: "Issue",
@@ -506,6 +508,7 @@ describe("Plugin tests", () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = jest.fn<typeof context.adapters.supabase.comment.findSimilarComments>().mockResolvedValue([]);
     context.adapters.supabase.issue.createIssue = jest.fn(async () => {
       createIssue(annotateIssue.issue_body, "annotate", annotateIssue.title, 9, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO2, STRINGS.USER_1);
     });
@@ -519,6 +522,7 @@ describe("Plugin tests", () => {
     context2.adapters.supabase.issue.findSimilarIssues = jest
       .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
       .mockResolvedValue([{ issue_id: "annotate", similarity: 0.88 }] as unknown as IssueSimilaritySearchResult[]);
+    context2.adapters.supabase.comment.findSimilarComments = jest.fn<typeof context.adapters.supabase.comment.findSimilarComments>().mockResolvedValue([]);
     context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
       node: {
         __typename: "Issue",
