@@ -103,7 +103,11 @@ function splitIntoSentences(text: string): string[] {
  * @param similarIssueContent The content of the similar issue
  * @returns The most similar sentence and its similarity score
  */
-function findMostSimilarSentence(issueContent: string, similarIssueContent: string, context: Context): { sentence: string; similarity: number; index: number } {
+export function findMostSimilarSentence(
+  issueContent: string,
+  similarIssueContent: string,
+  context: Context
+): { sentence: string; similarity: number; index: number } {
   const issueSentences = splitIntoSentences(issueContent);
   const similarIssueSentences = splitIntoSentences(similarIssueContent);
 
