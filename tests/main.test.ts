@@ -621,6 +621,7 @@ describe("Plugin tests", () => {
         warningThreshold: 0.75,
         matchThreshold: 0.95,
         jobMatchingThreshold: 0.95,
+        editTimeout: 1800000,
       },
       command: null,
       adapters: {} as Context["adapters"],
