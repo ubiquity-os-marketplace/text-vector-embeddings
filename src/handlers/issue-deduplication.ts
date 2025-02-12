@@ -22,7 +22,8 @@ export interface IssueGraphqlResponse {
  * Sleep for the specified duration
  * @param ms duration in milliseconds
  */
-function sleep(ms: number): Promise<void> {
+function sleep(ms: number, context: Context): Promise<void> {
+  context.logger.debug("Sleeping for " + ms + " milliseconds");
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -60,7 +61,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   const originalIssue = payload.issue;
 
   // Wait for the configured timeout period
-  await sleep(context.config.editTimeout);
+  await sleep(context.config.editTimeout, context);
 
   // Fetch latest issue details
   const latestIssue = await getLatestIssueDetails(context, originalIssue.number);
