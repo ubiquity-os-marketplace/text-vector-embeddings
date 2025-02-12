@@ -23,7 +23,7 @@ export interface IssueGraphqlResponse {
  * @param ms duration in milliseconds
  */
 function sleep(ms: number, context: Context): Promise<void> {
-  context.logger.debug("Sleeping for " + ms + " milliseconds");
+  context.logger.info("Sleeping for " + ms + " milliseconds");
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
