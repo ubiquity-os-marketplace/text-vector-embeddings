@@ -33,24 +33,6 @@ function sleep(ms: number, context: Context): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Fetch the latest issue details
- */
-async function getLatestIssueDetails(context: Context, issueNumber: number) {
-  try {
-    const { data: issue } = await context.octokit.rest.issues.get({
-      owner: context.payload.repository.owner.login,
-      repo: context.payload.repository.name,
-      issue_number: issueNumber,
-    });
-    return issue;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    context.logger.error("Failed to issue details", { stack: errorMessage });
-    return null;
-  }
-}
-
 async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
   try {
     // Directly type the response using the IssueResponse interface
@@ -68,12 +50,17 @@ async function fetchLastEditTime(context: Context, issueNodeId: string): Promise
       { issueNodeId }
     );
 
-    // Return lastEditedAt if the node exists, else null
-    return data.node ? data.node.lastEditedAt || null : null;
+    // Check if the node exists
+    if (!data.node) {
+      context.logger.error("Issue does not exist", { issueNodeId });
+      return null;
+    }
+
+    // Return lastEditedAt if available; otherwise return null
+    return data.node.lastEditedAt || null;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.log("Failed to fetch issue details", { stack: errorMessage });
-    context.logger.error("Failed to fetch issue details" + JSON.stringify(error), { stack: errorMessage });
+    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
     return null;
   }
 }
@@ -96,33 +83,23 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   // Wait for the configured timeout period
   await sleep(context.config.editTimeout, context);
 
-  // Fetch latest issue details
-  const latestIssue = await getLatestIssueDetails(context, originalIssue.number);
+  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
 
-  // Skip if issue doesn't exist anymore
-  if (!latestIssue) {
-    logger.info("Issue no longer exists, skipping deduplication check", {
+  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
+
+  if (lastEditedAt === null) {
+    logger.info("Last edited time is null, skipping deduplication check", {
       issueNumber: originalIssue.number,
     });
     return;
   }
 
-  // Determine if this event should proceed based on latest state
-  // Debug logging
-  context.logger.info("Original issue details:", {
-    created_at: originalIssue.created_at,
-    updated_at: originalIssue.updated_at,
-  });
-
-  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
-
-  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
-  const latestEventTime = lastEditedAt ? new Date(lastEditedAt).getTime() : new Date(latestIssue.updated_at).getTime();
+  const latestEventTime = new Date(lastEditedAt).getTime();
 
   // Event should only proceed if it's the most recent action
   if (currentEventTime !== latestEventTime) {
     logger.info("Event superseded by newer changes, skipping deduplication check", {
-      issueNumber: latestIssue.number,
+      issueNumber: originalIssue.number,
       currentEventType: context.eventName,
       currentEventTime: new Date(currentEventTime).toISOString(),
       latestUpdateTime: new Date(latestEventTime).toISOString(),
@@ -131,15 +108,15 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   }
 
   // Use the latest issue data
-  let issueBody = latestIssue.body;
+  let issueBody = originalIssue.body;
   if (!issueBody) {
-    logger.info("Issue body is empty", { latestIssue });
+    logger.info("Issue body is empty", { originalIssue });
     return;
   }
   issueBody = removeFootnotes(issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: latestIssue.title + removeFootnotes(issueBody),
-    currentId: latestIssue.node_id,
+    markdown: originalIssue.title + removeFootnotes(issueBody),
+    currentId: originalIssue.node_id,
     threshold: context.config.warningThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
@@ -156,7 +133,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: latestIssue.number,
+        issue_number: originalIssue.number,
         body: issueBody,
         state: "closed",
         state_reason: "not_planned",
@@ -165,7 +142,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
     }
     if (processedIssues.length > 0) {
       logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
-      await handleSimilarIssuesComment(context, payload, issueBody, latestIssue.number, processedIssues);
+      await handleSimilarIssuesComment(context, payload, issueBody, originalIssue.number, processedIssues);
       return;
     }
   } else {
@@ -175,7 +152,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: latestIssue.number,
+        issue_number: originalIssue.number,
         body: issueBody,
       });
     }
