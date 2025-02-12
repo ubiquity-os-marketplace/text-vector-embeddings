@@ -46,7 +46,7 @@ async function getLatestIssueDetails(context: Context, issueNumber: number) {
     return issue;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
+    context.logger.error("Failed to issue details", { stack: errorMessage });
     return null;
   }
 }
@@ -72,7 +72,8 @@ async function fetchLastEditTime(context: Context, issueNodeId: string): Promise
     return data.node.lastEditedAt || null;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
+    console.log("Failed to fetch issue details", { stack: errorMessage });
+    context.logger.error("Failed to fetch issue details" + JSON.stringify(error), { stack: errorMessage });
     return null;
   }
 }
@@ -115,7 +116,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
 
   const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
 
-  const lastEditedAt = await fetchLastEditTime(context, latestIssue.node_id);
+  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
   const latestEventTime = lastEditedAt ? new Date(lastEditedAt).getTime() : new Date(latestIssue.updated_at).getTime();
 
   // Event should only proceed if it's the most recent action
