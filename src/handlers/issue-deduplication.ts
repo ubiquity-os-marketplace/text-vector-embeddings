@@ -53,8 +53,8 @@ async function getLatestIssueDetails(context: Context, issueNumber: number) {
 
 async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
   try {
-    // Type the response using the IssueResponse interface
-    const { data }: { data: IssueResponse } = await context.octokit.graphql(
+    // Directly type the response using the IssueResponse interface
+    const data: IssueResponse = await context.octokit.graphql(
       /* GraphQL */
       `
         query ($issueNodeId: ID!) {
@@ -68,8 +68,8 @@ async function fetchLastEditTime(context: Context, issueNodeId: string): Promise
       { issueNodeId }
     );
 
-    // Return lastEditedAt if available, or null if it's not set
-    return data.node.lastEditedAt || null;
+    // Return lastEditedAt if the node exists, else null
+    return data.node ? data.node.lastEditedAt || null : null;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.log("Failed to fetch issue details", { stack: errorMessage });
