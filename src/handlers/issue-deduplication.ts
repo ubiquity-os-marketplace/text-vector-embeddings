@@ -75,9 +75,22 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   }
 
   // Determine if this event should proceed based on latest state
+  // Debug logging
+  context.logger.info("Original issue details:", {
+    created_at: originalIssue.created_at,
+    updated_at: originalIssue.updated_at,
+  });
+
   const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
 
   const latestEventTime = new Date(latestIssue.updated_at).getTime();
+
+  // Debug timestamps
+  context.logger.info("Time comparison details:", {
+    currentEventTime: new Date(currentEventTime).toISOString(),
+    latestEventTime: new Date(latestEventTime).toISOString(),
+    originalIssueJSON: JSON.stringify(originalIssue),
+  });
 
   // Event should only proceed if it's the most recent action
   if (currentEventTime !== latestEventTime) {
