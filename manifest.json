@@ -30,6 +30,11 @@
         "description": "The minimum similarity score when considering users to be suitable for a job.",
         "type": "number"
       },
+      "editTimeout": {
+        "default": 1800000,
+        "description": "The timeout period in milliseconds before running deduplication after an edit (default 30 minutes)",
+        "type": "number"
+      },
       "alwaysRecommend": {
         "default": 0,
         "description": "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score.",
