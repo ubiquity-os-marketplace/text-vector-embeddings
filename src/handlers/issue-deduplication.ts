@@ -18,6 +18,12 @@ export interface IssueGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
+interface IssueResponse {
+  node: {
+    lastEditedAt: string | null; // This will be a string or null, depending on the API response
+  };
+}
+
 /**
  * Sleep for the specified duration
  * @param ms duration in milliseconds
@@ -38,6 +44,32 @@ async function getLatestIssueDetails(context: Context, issueNumber: number) {
       issue_number: issueNumber,
     });
     return issue;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
+    return null;
+  }
+}
+
+async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
+  try {
+    // Type the response using the IssueResponse interface
+    const { data }: { data: IssueResponse } = await context.octokit.graphql(
+      /* GraphQL */
+      `
+        query ($issueNodeId: ID!) {
+          node(id: $issueNodeId) {
+            ... on Issue {
+              lastEditedAt
+            }
+          }
+        }
+      `,
+      { issueNodeId }
+    );
+
+    // Return lastEditedAt if available, or null if it's not set
+    return data.node.lastEditedAt || null;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     context.logger.error("Failed to fetch issue details", { stack: errorMessage });
@@ -83,14 +115,8 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
 
   const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
 
-  const latestEventTime = new Date(latestIssue.updated_at).getTime();
-
-  // Debug timestamps
-  context.logger.info("Time comparison details:", {
-    currentEventTime: new Date(currentEventTime).toISOString(),
-    latestEventTime: new Date(latestEventTime).toISOString(),
-    originalIssueJSON: JSON.stringify(originalIssue),
-  });
+  const lastEditedAt = await fetchLastEditTime(context, latestIssue.node_id);
+  const latestEventTime = lastEditedAt ? new Date(lastEditedAt).getTime() : new Date(latestIssue.updated_at).getTime();
 
   // Event should only proceed if it's the most recent action
   if (currentEventTime !== latestEventTime) {
