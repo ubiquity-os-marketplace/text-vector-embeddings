@@ -7,6 +7,7 @@ export async function addComments(context: Context<"issue_comment.created">) {
     logger,
     adapters: { supabase },
     payload,
+    config,
   } = context;
   const comment = payload.comment;
   const markdown = comment.body;
@@ -27,6 +28,12 @@ export async function addComments(context: Context<"issue_comment.created">) {
       await addIssue(context as unknown as Context<"issues.opened">);
     }
     const cleanComment = removeAnnotateFootnotes(markdown);
+
+    if (config.demoFlag) {
+      logger.info("Demo mode active - skipping comment storage", { comment: comment.id });
+      return;
+    }
+
     await supabase.comment.createComment({ markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
     logger.ok(`Successfully created comment!`, comment);
   } catch (error) {
