@@ -6,6 +6,7 @@ export async function addIssue(context: Context<"issues.opened">) {
     logger,
     adapters: { supabase },
     payload,
+    config,
   } = context;
   const issue = payload.issue;
   const markdown = payload.issue.body && payload.issue.title ? `${payload.issue.body} ${payload.issue.title}` : null;
@@ -19,6 +20,12 @@ export async function addIssue(context: Context<"issues.opened">) {
       return;
     }
     const cleanedIssue = removeFootnotes(markdown);
+
+    if (config.demoFlag) {
+      logger.info("Demo mode active - skipping issue storage", { issue: issue.number });
+      return;
+    }
+
     await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId });
     logger.ok(`Successfully created issue!`, issue);
   } catch (error) {
