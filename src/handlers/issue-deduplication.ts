@@ -97,7 +97,7 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   const latestEventTime = new Date(lastEditedAt).getTime();
 
   // Event should only proceed if it's the most recent action
-  if (currentEventTime !== latestEventTime) {
+  if (currentEventTime < latestEventTime) {
     logger.info("Event superseded by newer changes, skipping deduplication check", {
       issueNumber: originalIssue.number,
       currentEventType: context.eventName,
