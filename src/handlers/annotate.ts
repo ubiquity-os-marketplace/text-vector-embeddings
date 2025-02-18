@@ -91,6 +91,8 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
     } else {
       context.logger.info("No similar issues found for comment", { commentBody });
     }
+  } else {
+    context.logger.info("No similar issues found for comment", { commentBody });
   }
   if (similarComments && similarComments.length > 0) {
     processedComments = await processSimilarComments(similarComments, context, commentBody);
@@ -108,6 +110,8 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
     } else {
       context.logger.info("No similar comments found for comment", { commentBody });
     }
+  } else {
+    context.logger.info("No similar comments found for comment", { commentBody });
   }
   await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments);
 }
