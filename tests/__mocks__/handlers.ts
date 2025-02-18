@@ -5,6 +5,24 @@ import { db } from "./db";
  * Intercepts the routes and returns a custom payload
  */
 export const handlers = [
+  //Handle graphql request
+  http.post("https://api.github.com/graphql", async ({ request }) => {
+    const { query } = await getValue(request.body);
+    if (query.includes("query ($issueNodeId: ID!)")) {
+      return HttpResponse.json({
+        data: {
+          node: {
+            lastEditedAt: "2020-01-12T17:52:02Z",
+          },
+        },
+      });
+    }
+
+    return HttpResponse.json({
+      data: {},
+    });
+  }),
+
   // get org repos
   http.get("https://api.github.com/orgs/:org/repos", ({ params: { org } }: { params: { org: string } }) =>
     HttpResponse.json(db.repo.findMany({ where: { owner: { login: { equals: org } } } }))

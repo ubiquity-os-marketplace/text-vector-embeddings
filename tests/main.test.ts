@@ -142,6 +142,7 @@ describe("Plugin tests", () => {
         title: STRINGS.SIMILAR_ISSUE,
         url: STRINGS.ISSUE_URL,
         number: 3,
+        lastEditedAt: "2020-01-12T17:52:02Z",
         body: warningThresholdIssue1.issue_body,
         repository: {
           name: STRINGS.TEST_REPO,
@@ -218,6 +219,7 @@ describe("Plugin tests", () => {
         title: STRINGS.SIMILAR_ISSUE,
         url: STRINGS.ISSUE_URL,
         number: 3,
+        lastEditedAt: "2020-01-12T17:52:02Z",
         body: matchThresholdIssue1.issue_body,
         repository: {
           name: STRINGS.TEST_REPO,
@@ -393,6 +395,7 @@ describe("Plugin tests", () => {
         title: markdownLinkIssue1.title,
         url: STRINGS.ISSUE_URL,
         number: 7,
+        lastEditedAt: "2022-01-12T17:52:02Z",
         body: markdownLinkIssue1.issue_body,
         repository: {
           name: STRINGS.TEST_REPO,
@@ -621,6 +624,7 @@ describe("Plugin tests", () => {
         warningThreshold: 0.75,
         matchThreshold: 0.95,
         jobMatchingThreshold: 0.95,
+        editTimeout: 0,
       },
       command: null,
       adapters: {} as Context["adapters"],
