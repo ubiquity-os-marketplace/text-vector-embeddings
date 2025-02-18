@@ -33,9 +33,9 @@ export async function annotate(context: Context, commentId: string | null, scope
       issue_number: context.payload.issue.number,
       per_page: 100,
     });
-    const commments = response.data;
-    if (commments.length > 1) {
-      const commentBeforeAnnotate = commments[commments.length - 2];
+    const comments = response.data;
+    if (comments.length > 1) {
+      const commentBeforeAnnotate = comments[comments.length - 2];
       await commentChecker(context, commentBeforeAnnotate, scope);
     } else {
       logger.error("No comments before the annotate command");
