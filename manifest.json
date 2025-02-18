@@ -26,7 +26,7 @@
         "type": "number"
       },
       "annotateThreshold": {
-        "default": 0.5,
+        "default": 0.65,
         "description": "The minimum similarity score for including similar issues as annotations in the comment footnotes.",
         "type": "number"
       },

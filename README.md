@@ -19,7 +19,7 @@ This is a plugin for [Ubiquibot](https://github.com/ubiquity-os/ubiquity-os-kern
   with:
     dedupeMatchThreshold: 0.95
     dedupeWarningThreshold: 0.75
-    annotateThreshold: 0.5
+    annotateThreshold: 0.65
     jobMatchingThreshold: 0.75
 ```
 
