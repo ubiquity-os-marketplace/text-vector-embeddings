@@ -167,7 +167,7 @@ export class Comment extends SuperSupabase {
     // Create a new issue embedding
     try {
       const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
-      const { data, error } = await this.supabase.rpc("find_similar_comments", {
+      const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
         query_embedding: embedding,
         current_id: currentId,
         threshold,
