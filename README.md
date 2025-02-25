@@ -17,8 +17,9 @@ This is a plugin for [Ubiquibot](https://github.com/ubiquity-os/ubiquity-os-kern
 ```yaml
 - plugin: https://ubiquity-os-comment-vector-embeddings-main.ubiquity.workers.dev
   with:
-    matchThreshold: 0.95
-    warningThreshold: 0.75
+    dedupeMatchThreshold: 0.95
+    dedupeWarningThreshold: 0.75
+    annotateThreshold: 0.65
     jobMatchingThreshold: 0.75
 ```
 

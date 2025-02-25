@@ -21,6 +21,17 @@ export interface CommentData {
   issue_id: string;
 }
 
+export interface CommentSimilaritySearchResult {
+  comment_id: string;
+  similarity: number;
+}
+
+interface FindSimilarCommentsParams {
+  markdown: string;
+  currentId: string;
+  threshold: number;
+}
+
 export class Comment extends SuperSupabase {
   constructor(supabase: SupabaseClient, context: Context) {
     super(supabase, context);
@@ -150,5 +161,37 @@ export class Comment extends SuperSupabase {
       return;
     }
     this.context.logger.info("Comment deleted successfully with id: " + commentNodeId);
+  }
+
+  async findSimilarComments({ markdown, currentId, threshold }: FindSimilarCommentsParams): Promise<CommentSimilaritySearchResult[] | null> {
+    // Create a new issue embedding
+    try {
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
+        query_embedding: embedding,
+        current_id: currentId,
+        threshold,
+        top_k: 5,
+      });
+      if (error) {
+        this.context.logger.error("Unable to find similar comments", {
+          Error: error,
+          markdown,
+          currentId,
+          threshold,
+          query_embedding: embedding,
+        });
+        return null;
+      }
+      return data;
+    } catch (error) {
+      this.context.logger.error("Unable to find similar comments", {
+        Error: error,
+        markdown,
+        currentId,
+        threshold,
+      });
+      return null;
+    }
   }
 }

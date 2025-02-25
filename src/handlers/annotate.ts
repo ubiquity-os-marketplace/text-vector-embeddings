@@ -1,6 +1,25 @@
 import { Context } from "../types";
 import { Comment } from "../types/comment";
-import { processSimilarIssues, IssueGraphqlResponse } from "./issue-deduplication";
+import { processSimilarIssues, IssueGraphqlResponse, findMostSimilarSentence } from "./issue-deduplication";
+import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";
+
+interface CommentGraphqlResponse {
+  node: {
+    body: string;
+    url: string;
+    issue: {
+      number: string;
+      repository: {
+        name: string;
+        owner: {
+          login: string;
+        };
+      };
+    };
+  };
+  similarity: string;
+  mostSimilarSentence: { sentence: string; similarity: number; index: number };
+}
 
 export async function annotate(context: Context, commentId: string | null, scope: string) {
   const { logger, octokit, payload } = context;
@@ -32,8 +51,8 @@ export async function annotate(context: Context, commentId: string | null, scope
 }
 
 /**
- * Checks if the comment is similar to a existing issue.
- * If a similar issue is found, a footnote is added to the comment.
+ * Checks if the comment is similar to a existing issue or comment.
+ * If a similar issue or comment is found, a footnote is added to the comment.
  * @param context The context object
  * @param comment The comment object
  * @param scope The scope of the annotation
@@ -53,20 +72,48 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
   const similarIssues = await supabase.issue.findSimilarIssues({
     markdown: commentBody,
     currentId: comment.node_id,
-    threshold: context.config.warningThreshold,
+    threshold: context.config.annotateThreshold,
   });
+  const similarComments = await supabase.comment.findSimilarComments({
+    markdown: commentBody,
+    currentId: comment.node_id,
+    threshold: context.config.annotateThreshold,
+  });
+  let processedIssues: IssueGraphqlResponse[] = [];
+  let processedComments: CommentGraphqlResponse[] = [];
   if (similarIssues && similarIssues.length > 0) {
-    let processedIssues = await processSimilarIssues(similarIssues, context, commentBody);
+    processedIssues = await processSimilarIssues(similarIssues, context, commentBody);
     processedIssues = processedIssues.filter((issue) =>
       filterByScope(scope, payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
     if (processedIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
-      await handleSimilarIssuesComment(context, payload, commentBody, comment.id, processedIssues);
-      return;
+      logger.info(`Similar issue which matches more than ${context.config.annotateThreshold} already exists`, { processedIssues });
+    } else {
+      context.logger.info("No similar issues found for comment", { commentBody });
     }
+  } else {
+    context.logger.info("No similar issues found for comment", { commentBody });
   }
-  context.logger.info("No similar issues found for comment", { commentBody });
+  if (similarComments && similarComments.length > 0) {
+    processedComments = await processSimilarComments(similarComments, context, commentBody);
+    processedComments = processedComments.filter((comment) =>
+      filterByScope(
+        scope,
+        payload.repository.owner.login,
+        comment.node.issue.repository.owner.login,
+        payload.repository.name,
+        comment.node.issue.repository.name
+      )
+    );
+    if (processedComments.length > 0) {
+      logger.info(`Similar comment which matches more than ${context.config.annotateThreshold} already exists`, { processedComments });
+    } else {
+      context.logger.info("No similar comments found for comment", { commentBody });
+    }
+  } else {
+    context.logger.info("No similar comments found for comment", { commentBody });
+  }
+  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments);
 }
 
 function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: string, repoName: string, similarIssueRepoName: string): boolean {
@@ -82,17 +129,21 @@ function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: stri
   }
 }
 
-async function handleSimilarIssuesComment(
+async function handleSimilarIssuesAndComments(
   context: Context,
   payload: Context["payload"],
   commentBody: string,
   commentId: number,
-  issueList: IssueGraphqlResponse[]
+  issueList: IssueGraphqlResponse[],
+  commentList: CommentGraphqlResponse[]
 ) {
+  if (!issueList.length && !commentList.length) {
+    return;
+  }
   // Find existing footnotes in the body
   const footnoteRegex = /\[\^(\d+)\^\]/g;
   const existingFootnotes = commentBody.match(footnoteRegex) || [];
-  const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
+  let highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = commentBody;
   const footnotes: string[] = [];
   // Sort relevant issues by similarity in ascending order
@@ -109,6 +160,20 @@ async function handleSimilarIssuesComment(
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ${issue.similarity}% similar to issue: [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
   });
+  highestFootnoteIndex += footnotes.length;
+  commentList.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
+  commentList.forEach((comment, index) => {
+    const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
+    const footnoteRef = `[^0${footnoteIndex}^]`;
+    const modifiedUrl = comment.node.url.replace("https://github.com", "https://www.github.com");
+    const { sentence } = comment.mostSimilarSentence;
+    // Insert footnote reference in the body
+    const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+    updatedBody = updatedBody.replace(sentencePattern, `${sentence} ${footnoteRef}`);
+
+    // Add new footnote to the array
+    footnotes.push(`${footnoteRef}: ${comment.similarity}% similar to comment: [#${comment.node.issue.number} (comment)](${modifiedUrl})\n\n`);
+  });
   // Append new footnotes to the body, keeping the previous ones
   if (footnotes.length > 0) {
     updatedBody += "\n\n" + footnotes.join("");
@@ -122,13 +187,57 @@ async function handleSimilarIssuesComment(
   });
 }
 
+// Process similar comments and return the list of similar comments with their similarity scores
+async function processSimilarComments(
+  similarComments: CommentSimilaritySearchResult[],
+  context: Context,
+  commentBody: string
+): Promise<CommentGraphqlResponse[]> {
+  const processedComments = await Promise.all(
+    similarComments.map(async (comment: CommentSimilaritySearchResult) => {
+      try {
+        const commentUrl: CommentGraphqlResponse = await context.octokit.graphql(
+          /* GraphQL */
+          `
+            query ($commentNodeId: ID!) {
+              node(id: $commentNodeId) {
+                ... on IssueComment {
+                  body
+                  url
+                  issue {
+                    number
+                    repository {
+                      name
+                      owner {
+                        login
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          `,
+          { commentNodeId: comment.comment_id }
+        );
+        commentUrl.similarity = Math.round(comment.similarity * 100).toString();
+        commentUrl.mostSimilarSentence = findMostSimilarSentence(commentBody, commentUrl.node.body, context);
+        return commentUrl;
+      } catch (error) {
+        context.logger.error(`Failed to fetch comment ${comment.comment_id}: ${error}`, { comment });
+        return null;
+      }
+    })
+  );
+  return processedComments.filter((comment): comment is CommentGraphqlResponse => comment !== null);
+}
+
 /**
  * Checks if a annotate footnote exists in the content.
  * @param content The content to check for annotate footnotes
  * @returns True if a annotate footnote exists, false otherwise
  */
 export function checkIfAnnotateFootNoteExists(content: string): boolean {
-  const footnoteDefRegex = /\[\^(\d+)\^\]: \d+% similar to issue: [^\n]+(\n|$)/g;
+  const footnoteDefRegex = /\[\^(\d+)\^\]: \d+% similar to (issue|comment): [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   return !!footnotes;
 }
@@ -140,7 +249,7 @@ export function checkIfAnnotateFootNoteExists(content: string): boolean {
  * @returns The content without footnotes
  */
 export function removeAnnotateFootnotes(content: string): string {
-  const footnoteDefRegex = /\[\^(\d+)\^\]: \d+% similar to issue: [^\n]+(\n|$)/g;
+  const footnoteDefRegex = /\[\^(\d+)\^\]: \d+% similar to (issue|comment): [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   let contentWithoutFootnotes = content.replace(footnoteDefRegex, "");
   if (footnotes) {
