@@ -95,7 +95,7 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
 
     logger.debug("Fetched similar issues", { issueList });
     issueList.forEach((issuePromise: PromiseSettledResult<IssueGraphqlResponse | null>) => {
-      if (!issuePromise || issuePromise.status === "rejected") {
+      if (!issuePromise || issuePromise.status === "rejected" || !issuePromise.value) {
         return;
       }
       const issue = issuePromise.value as IssueGraphqlResponse;

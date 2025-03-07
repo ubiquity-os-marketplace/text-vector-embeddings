@@ -8,10 +8,11 @@ import manifest from "../manifest.json";
 import { runPlugin } from "./plugin";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
+import { Command } from "./types/command";
 
 export default {
   async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
-    return createPlugin<PluginSettings, Env, null, SupportedEvents>(
+    return createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin({
           ...context,

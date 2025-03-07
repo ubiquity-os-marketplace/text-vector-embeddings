@@ -1,5 +1,6 @@
 import { Context } from "../types";
 import { addIssue } from "./add-issue";
+import { removeAnnotateFootnotes } from "./annotate";
 
 export async function addComments(context: Context<"issue_comment.created">) {
   const {
@@ -25,7 +26,8 @@ export async function addComments(context: Context<"issue_comment.created">) {
       logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
       await addIssue(context as unknown as Context<"issues.opened">);
     }
-    await supabase.comment.createComment({ markdown, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
+    const cleanComment = removeAnnotateFootnotes(markdown);
+    await supabase.comment.createComment({ markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
     logger.ok(`Successfully created comment!`, comment);
   } catch (error) {
     if (error instanceof Error) {

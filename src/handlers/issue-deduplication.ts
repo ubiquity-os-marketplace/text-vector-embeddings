@@ -18,6 +18,53 @@ export interface IssueGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
+interface IssueResponse {
+  node: {
+    lastEditedAt: string | null; // This will be a string or null, depending on the API response
+  };
+}
+
+/**
+ * Sleep for the specified duration
+ * @param ms duration in milliseconds
+ */
+function sleep(ms: number, context: Context): Promise<void> {
+  context.logger.info("Sleeping for " + ms + " milliseconds");
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
+  try {
+    // Directly type the response using the IssueResponse interface
+    const data: IssueResponse = await context.octokit.graphql(
+      /* GraphQL */
+      `
+        query ($issueNodeId: ID!) {
+          node(id: $issueNodeId) {
+            ... on Issue {
+              lastEditedAt
+            }
+          }
+        }
+      `,
+      { issueNodeId }
+    );
+
+    // Check if the node exists
+    if (!data.node) {
+      context.logger.error("Issue does not exist", { issueNodeId });
+      return null;
+    }
+
+    // Return lastEditedAt if available; otherwise return null
+    return data.node.lastEditedAt || null;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
+    return null;
+  }
+}
+
 /**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar issue is found, a footnote is added to the current issue.
@@ -30,33 +77,63 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
     octokit,
     payload,
   } = context;
-  const issue = payload.issue;
-  let issueBody = issue.body;
+
+  const originalIssue = payload.issue;
+
+  // Wait for the configured timeout period
+  await sleep(context.config.editTimeout, context);
+
+  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
+
+  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
+
+  if (lastEditedAt === null) {
+    logger.info("Last edited time is null, skipping deduplication check", {
+      issueNumber: originalIssue.number,
+    });
+    return;
+  }
+
+  const latestEventTime = new Date(lastEditedAt).getTime();
+
+  // Event should only proceed if it's the most recent action
+  if (currentEventTime < latestEventTime) {
+    logger.info("Event superseded by newer changes, skipping deduplication check", {
+      issueNumber: originalIssue.number,
+      currentEventType: context.eventName,
+      currentEventTime: new Date(currentEventTime).toISOString(),
+      latestUpdateTime: new Date(latestEventTime).toISOString(),
+    });
+    return;
+  }
+
+  // Use the latest issue data
+  let issueBody = originalIssue.body;
   if (!issueBody) {
-    logger.info("Issue body is empty", { issue });
+    logger.info("Issue body is empty", { originalIssue });
     return;
   }
   issueBody = removeFootnotes(issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: issue.title + removeFootnotes(issueBody),
-    currentId: issue.node_id,
-    threshold: context.config.warningThreshold,
+    markdown: originalIssue.title + removeFootnotes(issueBody),
+    currentId: originalIssue.node_id,
+    threshold: context.config.dedupeWarningThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
     let processedIssues = await processSimilarIssues(similarIssues, context, issueBody);
     processedIssues = processedIssues.filter((issue) =>
       matchRepoOrgToSimilarIssueRepoOrg(payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
-    const matchIssues = processedIssues.filter((issue) => parseFloat(issue.similarity) / 100 >= context.config.matchThreshold);
+    const matchIssues = processedIssues.filter((issue) => parseFloat(issue.similarity) / 100 >= context.config.dedupeMatchThreshold);
     if (matchIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.matchThreshold} already exists`, { matchIssues });
+      logger.info(`Similar issue which matches more than ${context.config.dedupeMatchThreshold} already exists`, { matchIssues });
       //To the issue body, add a footnote with the link to the similar issue
       const updatedBody = await handleMatchIssuesComment(context, payload, issueBody, processedIssues);
       issueBody = updatedBody || issueBody;
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: issue.number,
+        issue_number: originalIssue.number,
         body: issueBody,
         state: "closed",
         state_reason: "not_planned",
@@ -64,18 +141,18 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
       return;
     }
     if (processedIssues.length > 0) {
-      logger.info(`Similar issue which matches more than ${context.config.warningThreshold} already exists`, { processedIssues });
-      await handleSimilarIssuesComment(context, payload, issueBody, issue.number, processedIssues);
+      logger.info(`Similar issue which matches more than ${context.config.dedupeWarningThreshold} already exists`, { processedIssues });
+      await handleSimilarIssuesComment(context, payload, issueBody, originalIssue.number, processedIssues);
       return;
     }
   } else {
     //Use the IssueBody (Without footnotes) to update the issue when no similar issues are found
     //Only if the issue has "possible duplicate" footnotes, update the issue
-    if (checkIfDuplicateFootNoteExists(issue.body || "")) {
+    if (checkIfDuplicateFootNoteExists(issueBody || "")) {
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
-        issue_number: issue.number,
+        issue_number: originalIssue.number,
         body: issueBody,
       });
     }
@@ -103,7 +180,11 @@ function splitIntoSentences(text: string): string[] {
  * @param similarIssueContent The content of the similar issue
  * @returns The most similar sentence and its similarity score
  */
-function findMostSimilarSentence(issueContent: string, similarIssueContent: string, context: Context): { sentence: string; similarity: number; index: number } {
+export function findMostSimilarSentence(
+  issueContent: string,
+  similarIssueContent: string,
+  context: Context
+): { sentence: string; similarity: number; index: number } {
   const issueSentences = splitIntoSentences(issueContent);
   const similarIssueSentences = splitIntoSentences(similarIssueContent);
 
@@ -145,6 +226,7 @@ async function handleSimilarIssuesComment(
 
   if (relevantIssues.length === 0) {
     context.logger.info("No relevant issues found with the same repository and organization");
+    return;
   }
 
   if (!issueBody) {
@@ -155,7 +237,7 @@ async function handleSimilarIssuesComment(
   const existingFootnotes = issueBody.match(footnoteRegex) || [];
   const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = issueBody;
-  let footnotes: string[] | undefined;
+  const footnotes: string[] = [];
   // Sort relevant issues by similarity in ascending order
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
@@ -167,15 +249,11 @@ async function handleSimilarIssuesComment(
     const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
     updatedBody = updatedBody.replace(sentencePattern, `${sentence} ${footnoteRef}`);
 
-    // Initialize footnotes array if not already done
-    if (!footnotes) {
-      footnotes = [];
-    }
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ⚠ ${issue.similarity}% possible duplicate - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
   });
   // Append new footnotes to the body, keeping the previous ones
-  if (footnotes) {
+  if (footnotes.length > 0) {
     updatedBody += "\n\n" + footnotes.join("");
   }
   // Update the issue with the modified body
@@ -216,7 +294,7 @@ async function handleMatchIssuesComment(
 }
 
 // Process similar issues and return the list of similar issues with their similarity scores
-async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
+export async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
   const processedIssues = await Promise.all(
     similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {
