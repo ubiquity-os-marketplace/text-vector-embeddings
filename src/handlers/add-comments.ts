@@ -30,7 +30,7 @@ export async function addComments(context: Context<"issue_comment.created">) {
     const cleanComment = removeAnnotateFootnotes(markdown);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping comment storage", { comment: comment.id });
+      logger.info("Demo mode active - skipping comment storage", { comment: comment.id, comment_url: comment.html_url });
       return;
     }
 

@@ -22,7 +22,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
     const cleanedIssue = removeFootnotes(markdown);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number });
+      logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
       return;
     }
 

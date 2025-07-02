@@ -22,7 +22,7 @@ export async function addIssue(context: Context<"issues.opened">) {
     const cleanedIssue = removeFootnotes(markdown);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping issue storage", { issue: issue.number });
+      logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
       return;
     }
 
