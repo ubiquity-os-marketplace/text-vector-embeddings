@@ -44,11 +44,6 @@
         "default": 0,
         "description": "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score.",
         "type": "number"
-      },
-      "demoFlag": {
-        "default": false,
-        "description": "When true, disables storing issues and comments in the database.",
-        "type": "boolean"
       }
     }
   },
