@@ -685,6 +685,7 @@ describe("Plugin tests", () => {
         jobMatchingThreshold: 0.95,
         editTimeout: 0,
         annotateThreshold: 0.65,
+        demoFlag: false,
       },
       command: null,
       adapters: {} as Context["adapters"],
