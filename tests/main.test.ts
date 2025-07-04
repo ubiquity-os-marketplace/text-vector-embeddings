@@ -10,13 +10,16 @@ import dotenv from "dotenv";
 import { runPlugin } from "../src/plugin";
 import { Env } from "../src/types";
 import { Context } from "../src/types/context";
-import { CommentMock, createMockAdapters } from "./__mocks__/adapter";
+import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
 import { db } from "./__mocks__/db";
 import { server } from "./__mocks__/node";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
 import annotateComment from "./__sample__/comment_annotate.json";
 
+// Constants to avoid duplication
 const DEFAULT_HOOK = "issue_comment.created";
+const DEFAULT_ISSUE_ID = "1";
+const DEFAULT_BODY = "Test issue body";
 
 dotenv.config();
 const octokit = new Octokit();
@@ -507,7 +510,58 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
-  it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above annotate threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
+  it("When demoFlag is true, it should skip storing issues in the database", async () => {
+    const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
+
+    // Enable demo mode
+    context.config = {
+      ...context.config,
+      demoFlag: true,
+    };
+
+    await runPlugin(context);
+
+    // Verify the issue was not stored in the database
+    await expect(context.adapters.supabase.issue.getIssue("demoIssue")).resolves.toBeNull();
+  });
+
+  it("When demoFlag is true, it should skip storing comments in the database", async () => {
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "demoComment", DEFAULT_ISSUE_ID);
+
+    // Enable demo mode
+    context.config = {
+      ...context.config,
+      demoFlag: true,
+    };
+
+    await runPlugin(context);
+
+    // Verify the comment was not stored in the database
+    await expect(context.adapters.supabase.comment.getComment("demoComment")).rejects.toThrow();
+  });
+
+  it("When demoFlag is false (default), it should store issues in the database", async () => {
+    const { context } = createContextIssues(DEFAULT_BODY, "normalIssue", 11, "Normal Test Issue");
+    context.config.demoFlag = false;
+    await runPlugin(context);
+
+    // Verify the issue was stored in the database
+    const issue = (await context.adapters.supabase.issue.getIssue("normalIssue")) as unknown as IssueMock;
+    expect(issue).toBeDefined();
+    expect(issue.markdown).toContain(DEFAULT_BODY);
+  });
+
+  it("When demoFlag is false (default), it should store comments in the database", async () => {
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "normalComment", DEFAULT_ISSUE_ID);
+    await runPlugin(context);
+
+    // Verify the comment was stored in the database
+    const comment = (await context.adapters.supabase.comment.getComment("normalComment")) as unknown as CommentMock;
+    expect(comment).toBeDefined();
+    expect(comment.plaintext).toContain(DEFAULT_BODY);
+  });
+
+  it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
@@ -630,6 +684,7 @@ describe("Plugin tests", () => {
         jobMatchingThreshold: 0.95,
         editTimeout: 0,
         annotateThreshold: 0.65,
+        demoFlag: false,
       },
       command: null,
       adapters: {} as Context["adapters"],

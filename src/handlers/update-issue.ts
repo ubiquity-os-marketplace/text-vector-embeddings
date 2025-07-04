@@ -6,6 +6,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
     logger,
     adapters: { supabase },
     payload,
+    config,
   } = context;
   const id = payload.issue.node_id;
   const isPrivate = payload.repository.private;
@@ -19,6 +20,12 @@ export async function updateIssue(context: Context<"issues.edited">) {
     }
     //clean issue by removing footnotes
     const cleanedIssue = removeFootnotes(markdown);
+
+    if (config.demoFlag) {
+      logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
+      return;
+    }
+
     await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId });
     logger.ok(`Successfully updated issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {
