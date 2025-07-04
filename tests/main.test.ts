@@ -10,7 +10,7 @@ import dotenv from "dotenv";
 import { runPlugin } from "../src/plugin";
 import { Env } from "../src/types";
 import { Context } from "../src/types/context";
-import { CommentMock, createMockAdapters } from "./__mocks__/adapter";
+import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
 import { db } from "./__mocks__/db";
 import { server } from "./__mocks__/node";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
@@ -522,7 +522,7 @@ describe("Plugin tests", () => {
     await runPlugin(context);
 
     // Verify the issue was not stored in the database
-    await expect(context.adapters.supabase.issue.getIssue("demoIssue")).rejects.toThrow();
+    await expect(context.adapters.supabase.issue.getIssue("demoIssue")).resolves.toBeNull();
   });
 
   it("When demoFlag is true, it should skip storing comments in the database", async () => {
@@ -542,24 +542,23 @@ describe("Plugin tests", () => {
 
   it("When demoFlag is false (default), it should store issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "normalIssue", 11, "Normal Test Issue");
-
+    context.config.demoFlag = false;
     await runPlugin(context);
 
     // Verify the issue was stored in the database
-    const issue = (await context.adapters.supabase.issue.getIssue("normalIssue")) as unknown as CommentMock;
+    const issue = (await context.adapters.supabase.issue.getIssue("normalIssue")) as unknown as IssueMock;
     expect(issue).toBeDefined();
-    expect(issue.plaintext).toContain(DEFAULT_BODY);
+    expect(issue.markdown).toContain(DEFAULT_BODY);
   });
 
   it("When demoFlag is false (default), it should store comments in the database", async () => {
-    const { context } = createContext("Test comment body", 1, 1, 1, "normalComment", DEFAULT_ISSUE_ID);
-
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "normalComment", DEFAULT_ISSUE_ID);
     await runPlugin(context);
 
     // Verify the comment was stored in the database
     const comment = (await context.adapters.supabase.comment.getComment("normalComment")) as unknown as CommentMock;
     expect(comment).toBeDefined();
-    expect(comment.plaintext).toContain("Test comment body");
+    expect(comment.plaintext).toContain(DEFAULT_BODY);
   });
 
   it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
