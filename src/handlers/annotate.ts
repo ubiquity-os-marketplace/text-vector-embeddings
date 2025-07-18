@@ -155,7 +155,11 @@ async function handleSimilarIssuesAndComments(
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
     const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
-    updatedBody = updatedBody.replace(sentencePattern, `${sentence} ${footnoteRef}`);
+    updatedBody = updatedBody.replace(sentencePattern, (match) => {
+      // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
+      const isAfterCodeBlock = /```\s*$/.test(match);
+      return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
+    });
 
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ${issue.similarity}% similar to issue: [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
@@ -169,7 +173,11 @@ async function handleSimilarIssuesAndComments(
     const { sentence } = comment.mostSimilarSentence;
     // Insert footnote reference in the body
     const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
-    updatedBody = updatedBody.replace(sentencePattern, `${sentence} ${footnoteRef}`);
+    updatedBody = updatedBody.replace(sentencePattern, (match) => {
+      // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
+      const isAfterCodeBlock = /```\s*$/.test(match);
+      return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
+    });
 
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ${comment.similarity}% similar to comment: [#${comment.node.issue.number} (comment)](${modifiedUrl})\n\n`);
