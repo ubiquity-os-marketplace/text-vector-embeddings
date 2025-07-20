@@ -16,7 +16,7 @@ export default {
       (context) => {
         return runPlugin({
           ...context,
-          adapters: {} as ReturnType<typeof createAdapters>,
+          adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
         });
       },
       manifest as Manifest,

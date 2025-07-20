@@ -21,5 +21,5 @@ export type SupportedEvents =
   | "issues.closed";
 
 export type Context<TEvents extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, Command, TEvents> & {
-  adapters: ReturnType<typeof createAdapters>;
+  adapters: Awaited<ReturnType<typeof createAdapters>>;
 };

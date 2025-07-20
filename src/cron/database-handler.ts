@@ -1,3 +1,5 @@
+import { parseGitHubUrl } from "../helpers/github";
+
 export const KV_PREFIX = "cron";
 
 export class CronDatabase {
@@ -7,44 +9,46 @@ export class CronDatabase {
     this._kv = kv;
   }
 
-  async getIssueIds(organization: string, repository: string): Promise<number[]> {
-    const key = [KV_PREFIX, organization, repository];
+  async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
+    const key = [KV_PREFIX, owner, repo];
     const result = await this._kv.get<number[]>(key);
     return result.value || [];
   }
 
-  async addIssueId(organization: string, repository: string, issueId: number): Promise<void> {
-    const key = [KV_PREFIX, organization, repository];
-    const currentIds = await this.getIssueIds(organization, repository);
+  async addIssue(url: string): Promise<void> {
+    const { owner, repo, issue_number } = parseGitHubUrl(url);
+    const key = [KV_PREFIX, owner, repo];
+    const currentIds = await this.getIssueNumbers(owner, repo);
 
-    if (!currentIds.includes(issueId)) {
-      currentIds.push(issueId);
+    if (!currentIds.includes(issue_number)) {
+      currentIds.push(issue_number);
       await this._kv.set(key, currentIds);
     }
   }
 
-  async removeIssueId(organization: string, repository: string, issueId: number): Promise<void> {
-    const key = [KV_PREFIX, organization, repository];
-    const currentIds = await this.getIssueIds(organization, repository);
-    const filteredIds = currentIds.filter((id) => id !== issueId);
+  async removeIssue(url: string): Promise<void> {
+    const { owner, repo, issue_number } = parseGitHubUrl(url);
+    const key = [KV_PREFIX, owner, repo];
+    const currentNumbers = await this.getIssueNumbers(owner, repo);
+    const filteredNumbers = currentNumbers.filter((id) => id !== issue_number);
 
-    if (filteredIds.length === 0) {
+    if (filteredNumbers.length === 0) {
       await this._kv.delete(key);
     } else {
-      await this._kv.set(key, filteredIds);
+      await this._kv.set(key, filteredNumbers);
     }
   }
 
-  async getAllRepositories(): Promise<Array<{ organization: string; repository: string; issueIds: number[] }>> {
-    const repositories: Array<{ organization: string; repository: string; issueIds: number[] }> = [];
+  async getAllRepositories(): Promise<Array<{ owner: string; repo: string; issueNumbers: number[] }>> {
+    const repositories: Array<{ owner: string; repo: string; issueNumbers: number[] }> = [];
     const iter = this._kv.list({ prefix: [KV_PREFIX] });
 
     for await (const entry of iter) {
       if (entry.key.length >= 3) {
-        const organization = entry.key[1] as string;
-        const repository = entry.key[2] as string;
-        const issueIds = entry.value as number[];
-        repositories.push({ organization, repository, issueIds });
+        const owner = entry.key[1] as string;
+        const repo = entry.key[2] as string;
+        const issueNumbers = entry.value as number[];
+        repositories.push({ owner, repo, issueNumbers });
       }
     }
 

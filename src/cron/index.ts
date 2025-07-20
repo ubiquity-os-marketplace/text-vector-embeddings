@@ -1,12 +1,12 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { LOG_LEVEL, Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import pkg from "../../package.json" with { type: "json" };
 import { createCronDatabase } from "./database-handler";
 
 async function main() {
-  const logger = new Logs(process.env.LOG_LEVEL ?? LOG_LEVEL.INFO);
+  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
   const octokit = new Octokit({
     authStrategy: createAppAuth,
     auth: {
@@ -23,27 +23,27 @@ async function main() {
     repositories: repositories.length,
   });
 
-  for (const { organization, repository, issueIds } of repositories) {
-    if (issueIds.length === 0) {
+  for (const { owner, repo, issueNumbers } of repositories) {
+    if (issueNumbers.length === 0) {
       continue;
     }
 
     try {
       logger.info(`Triggering update`, {
-        organization,
-        repository,
-        issueIds,
+        organization: owner,
+        repository: repo,
+        issueIds: issueNumbers,
       });
 
       const installation = await octokit.rest.apps.getRepoInstallation({
-        owner: organization,
-        repo: repository,
+        owner: owner,
+        repo: repo,
       });
 
-      const issueNumber = issueIds[issueIds.length - 1];
+      const issueNumber = issueNumbers[issueNumbers.length - 1];
 
       if (!issueNumber) {
-        logger.error(`No issue number found for repository ${organization}/${repository}`);
+        logger.error(`No issue number found for repository ${owner}/${repo}`);
         continue;
       }
 
@@ -59,27 +59,27 @@ async function main() {
       const {
         data: { body = "" },
       } = await repoOctokit.rest.issues.get({
-        owner: organization,
-        repo: repository,
+        owner: owner,
+        repo: repo,
         issue_number: issueNumber,
       });
 
       const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toLocaleString()} -->`;
-      logger.info(`Updated body ${issueNumber}`, { newBody });
+      logger.info(`Updated body of ${owner}/${repo}/${issueNumber}`, { newBody });
 
       await repoOctokit.rest.issues.update({
-        owner: organization,
-        repo: repository,
+        owner: owner,
+        repo: repo,
         issue_number: issueNumber,
         body: newBody,
       });
 
-      await db.removeIssueId(organization, repository, issueNumber);
+      await db.removeIssue(owner, repo, issueNumber);
     } catch (e) {
       logger.error("Failed to update the issue body", {
-        organization,
-        repository,
-        issueIds,
+        organization: owner,
+        repository: repo,
+        issueNumbers,
         e,
       });
     }
