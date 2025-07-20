@@ -3,7 +3,7 @@ name: Cron
 on:
   workflow_dispatch:
   schedule:
-    - cron: "1 0 * * *"
+    - cron: "0 * * * *"
 
 env:
   APP_ID: ${{ secrets.APP_ID }}
@@ -20,6 +20,7 @@ jobs:
 
     steps:
       - uses: oven-sh/setup-bun@v2
+      - uses: denoland/setup-deno@v2
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,6 +40,6 @@ jobs:
 
       - name: Run CRON job
         run: |
-          bun src/cron/index.ts
+          deno run --unstable-sloppy-imports --allow-all --env --unstable-kv src/cron/index.ts
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
