@@ -40,6 +40,6 @@ jobs:
 
       - name: Run CRON job
         run: |
-          deno run --unstable-sloppy-imports --allow-all --env --unstable-kv src/cron/index.ts
+          deno run --unstable-sloppy-imports --allow-all --unstable-kv src/cron/index.ts
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
