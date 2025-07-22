@@ -1,8 +1,8 @@
-import { createAdapters } from "../adapters";
+import { Context as PluginContext } from "@ubiquity-os/plugin-sdk";
+import { createAdapters } from "../adapters/index";
 import { Command } from "./command";
 import { Env } from "./env";
 import { PluginSettings } from "./plugin-input";
-import { Context as PluginContext } from "@ubiquity-os/plugin-sdk";
 
 /**
  * Update `manifest.json` with any events you want to support like so:
