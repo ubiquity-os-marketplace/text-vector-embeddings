@@ -39,6 +39,11 @@ export class CronDatabase {
     }
   }
 
+  async updateIssue(currentUrl: string, newUrl: string): Promise<void> {
+    await this.removeIssue(currentUrl);
+    await this.addIssue(newUrl);
+  }
+
   async getAllRepositories(): Promise<Array<{ owner: string; repo: string; issueNumbers: number[] }>> {
     const repositories: Array<{ owner: string; repo: string; issueNumbers: number[] }> = [];
     const iter = this._kv.list({ prefix: [KV_PREFIX] });

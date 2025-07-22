@@ -54,9 +54,13 @@ export async function runPlugin(context: Context) {
         await issueMatching(context as Context<"issues.opened">);
         return await issueChecker(context as Context<"issues.opened">);
       case "issues.edited":
-        await updateIssue(context as Context<"issues.edited">);
-        await issueMatching(context as Context<"issues.edited">);
-        return await issueChecker(context as Context<"issues.edited">);
+        if (context.payload.sender.type === "Bot") {
+          await issueMatching(context as Context<"issues.edited">);
+          await issueChecker(context as Context<"issues.edited">);
+        } else {
+          await updateIssue(context as Context<"issues.edited">);
+        }
+        return;
       case "issues.deleted":
         return await deleteIssues(context as Context<"issues.deleted">);
       case "issues.transferred":

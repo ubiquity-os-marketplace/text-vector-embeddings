@@ -187,7 +187,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const voyageClient = new VoyageAIClient({ apiKey: voyageApiKey });
-    const adapters = createAdapters(supabase, voyageClient, context);
+    const adapters = await createAdapters(supabase, voyageClient, context);
 
     const issues = await fetchUserIssues(context.octokit, username);
     const processedIssues: Array<{ issue: IssueMetadata; error?: string }> = [];
