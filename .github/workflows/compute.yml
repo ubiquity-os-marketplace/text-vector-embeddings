@@ -41,9 +41,7 @@ jobs:
       - uses: denoland/setup-deno@v2
 
       - name: Execute plugin
-        run: |
-          deno install
-          deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
+        run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
         env:
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
