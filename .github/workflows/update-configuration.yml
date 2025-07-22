@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Update Manifest and Commit Changes
-        uses: ubiquity-os/action-deploy-plugin@main
+        uses: ubiquity-os/action-deploy-plugin@fix/node
         with:
           treatAsEsm: true
-          sourcemap: false
+          sourcemap: true
           pluginEntry: ${{ github.workspace }}/src/main.ts
         env:
           APP_ID: ${{ secrets.APP_ID }}
