@@ -62,6 +62,6 @@ export class CronDatabase {
 }
 
 export async function createCronDatabase(): Promise<CronDatabase> {
-  const kv = await Deno.openKv();
+  const kv = await Deno.openKv(process.env.DENO_KV_URL);
   return new CronDatabase(kv);
 }

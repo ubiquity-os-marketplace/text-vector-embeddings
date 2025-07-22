@@ -9,6 +9,8 @@ env:
   APP_ID: ${{ secrets.APP_ID }}
   APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
   APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
+  DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_KV_ACCESS_TOKEN }}
+  DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
 
 jobs:
   run-cron:
