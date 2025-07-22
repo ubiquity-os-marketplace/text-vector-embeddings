@@ -38,13 +38,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.10.0"
+      - uses: denoland/setup-deno@v2
 
       - name: Execute plugin
-        run: node dist/index.js
+        run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
         env:
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
