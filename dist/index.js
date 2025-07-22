@@ -6,25 +6,32 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// We want to make sure that Node.js built-in modules are prefixed with 'node:'
 function fixNodeImports(content) {
   let fixed = content;
 
   builtinModules.forEach((module) => {
+    const escapedModule = module.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     const patterns = [
-      new RegExp(`require\\(['"]${module}['"]\\)`, "g"),
-      new RegExp(`require\\(['"]${module}/`, "g"),
-      new RegExp(`from ['"]${module}['"]`, "g"),
-      new RegExp(`from ['"]${module}/`, "g"),
-      new RegExp(`import\\(['"]${module}['"]\\)`, "g"),
-      new RegExp(`import\\(['"]${module}/`, "g"),
+      new RegExp(`require\\s*\\(\\s*["']${escapedModule}["']\\s*\\)`, "g"),
+      new RegExp(`require\\s*\\(\\s*["']${escapedModule}/`, "g"),
+      new RegExp(`from\\s+["']${escapedModule}["']`, "g"),
+      new RegExp(`from\\s+["']${escapedModule}/`, "g"),
+      new RegExp(`import\\s*\\(\\s*["']${escapedModule}["']\\s*\\)`, "g"),
+      new RegExp(`import\\s*\\(\\s*["']${escapedModule}/`, "g"),
+      new RegExp(`(\\}|\\s)from\\s*["']${escapedModule}["']`, "g"),
+      new RegExp(`(\\}|\\s)from\\s*["']${escapedModule}/`, "g"),
     ];
 
     patterns.forEach((pattern) => {
       fixed = fixed.replace(pattern, (match) => {
-        return match
-          .replace(`'${module}`, `'node:${module}`)
-          .replace(`"${module}`, `"node:${module}`);
+        return match.replace(
+          new RegExp(`["']${escapedModule}`, "g"),
+          (quoteMatch) => {
+            const quote = quoteMatch[0];
+            return `${quote}node:${module}`;
+          },
+        );
       });
     });
   });
@@ -38,7 +45,7 @@ async function reassembleParts(dir) {
     console.log("No files to reassemble.");
     return;
   }
-  let files = fs.readdirSync(dir);
+  const files = fs.readdirSync(dir);
   const partGroups = {};
   files.forEach((file) => {
     console.log("Checking file: " + file);
@@ -71,14 +78,15 @@ async function reassembleParts(dir) {
     console.log(`Reassembled ${outPath}`);
   }
 
-  files = fs.readdirSync(dir);
-  files.forEach((file) => {
+  const generatedFiles = fs.readdirSync(dir);
+  generatedFiles.forEach((file) => {
     console.log("[POST GENERATION] Checking file: " + file);
     if (file.endsWith(".js") || file.endsWith(".mjs")) {
-      console.log(`Fixing Node.js imports in ${file}`);
-      const content = fs.readFileSync(file, "utf8");
+      const filePath = path.join(dir, file);
+      console.log(`Fixing Node.js imports in ${filePath}`);
+      const content = fs.readFileSync(filePath, "utf8");
       const fixedContent = fixNodeImports(content);
-      fs.writeFileSync(file, fixedContent, "utf8");
+      fs.writeFileSync(filePath, fixedContent, "utf8");
       console.log(`Fixed Node.js imports in ${file}`);
     }
   });
