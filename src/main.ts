@@ -2,7 +2,7 @@ import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { createAdapters } from "./adapters/index";
 import { runPlugin } from "./plugin";
-import { SupportedEvents } from "./types";
+import { SupportedEvents } from "./types/index";
 import { Env, envSchema } from "./types/env";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 

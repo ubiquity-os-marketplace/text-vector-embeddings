@@ -8,7 +8,7 @@ import { STRINGS } from "./__mocks__/strings";
 import { createComment, createIssue, setupTests, fetchSimilarIssues } from "./__mocks__/helpers";
 import dotenv from "dotenv";
 import { runPlugin } from "../src/plugin";
-import { Env } from "../src/types";
+import { Env } from "../src/types/index";
 import { Context } from "../src/types/context";
 import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
 import { db } from "./__mocks__/db";

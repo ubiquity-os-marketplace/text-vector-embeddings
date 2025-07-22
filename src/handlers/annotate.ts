@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { Comment } from "../types/comment";
 import { processSimilarIssues, IssueGraphqlResponse, findMostSimilarSentence } from "./issue-deduplication";
 import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";

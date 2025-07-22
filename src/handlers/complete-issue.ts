@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { removeFootnotes } from "./issue-deduplication";
 
 export async function completeIssue(context: Context<"issues.closed">) {

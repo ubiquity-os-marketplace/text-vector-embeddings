@@ -12,7 +12,7 @@ import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
 import { updateIssue } from "./handlers/update-issue";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
-import { Context } from "./types";
+import { Context } from "./types/index";
 import { Database } from "./types/database";
 import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
 

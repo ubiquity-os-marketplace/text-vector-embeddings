@@ -1,5 +1,5 @@
 import { VoyageAIClient } from "voyageai";
-import { Context } from "../../../types";
+import { Context } from "../../../types/index";
 import { SuperVoyage } from "./voyage";
 import { EmbedRequestInputType } from "voyageai/api/types/EmbedRequestInputType";
 

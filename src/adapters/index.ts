@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { createCronDatabase } from "../cron/database-handler";
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { Comment } from "./supabase/helpers/comment";
 import { SuperSupabase } from "./supabase/helpers/supabase";
 import { Embedding as VoyageEmbedding } from "./voyage/helpers/embedding";

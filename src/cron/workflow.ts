@@ -1,6 +1,6 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { createCronDatabase } from "./database-handler";
 
 export async function updateCronState(context: Context) {

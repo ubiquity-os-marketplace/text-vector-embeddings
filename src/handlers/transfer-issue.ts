@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export async function issueTransfer(context: Context<"issues.transferred">) {
   const {
