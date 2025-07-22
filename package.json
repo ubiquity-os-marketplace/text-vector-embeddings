@@ -19,7 +19,7 @@
     "prepare": "husky install",
     "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
     "worker": "wrangler dev --env dev --port 4004",
-    "dev": "bun run --port 4004 --no-clear-screen --watch src/worker.ts",
+    "dev": " deno serve --port 4004 --unstable-sloppy-imports --allow-all --unstable-kv --watch src/worker.ts",
     "supabase:generate:local": "supabase gen types typescript --local > src/types/database.ts",
     "supabase:generate:remote": "cross-env-shell \"supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/types/database.ts\""
   },
@@ -43,7 +43,7 @@
     "hono": "^4.6.4",
     "markdown-it": "^14.1.0",
     "markdown-it-plain-text": "^0.3.0",
-    "voyageai": "^0.0.1-5"
+    "voyageai": "^0.0.4"
   },
   "devDependencies": {
     "@commitlint/cli": "19.3.0",

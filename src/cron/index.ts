@@ -64,8 +64,9 @@ async function main() {
         issue_number: issueNumber,
       });
 
-      const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toLocaleString()} -->`;
-      logger.info(`Updated body of ${owner}/${repo}/${issueNumber}`, { newBody });
+      const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
+      const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toISOString()} -->`;
+      logger.info(`Updated body of ${url}`, { newBody });
 
       await repoOctokit.rest.issues.update({
         owner: owner,
@@ -74,7 +75,7 @@ async function main() {
         body: newBody,
       });
 
-      await db.removeIssue(owner, repo, issueNumber);
+      await db.removeIssue(url);
     } catch (e) {
       logger.error("Failed to update the issue body", {
         organization: owner,

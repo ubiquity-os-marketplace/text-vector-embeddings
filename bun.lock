@@ -16,7 +16,7 @@
         "hono": "^4.6.4",
         "markdown-it": "^14.1.0",
         "markdown-it-plain-text": "^0.3.0",
-        "voyageai": "^0.0.1-5",
+        "voyageai": "^0.0.4",
       },
       "devDependencies": {
         "@commitlint/cli": "19.3.0",
@@ -1787,7 +1787,7 @@
 
     "vlq": ["vlq@0.2.3", "", {}, "sha512-DRibZL6DsNhIgYQ+wNdWDL2SL3bKPlVrRiBqV5yuMm++op8W4kGFtaQfCs4KEJn0wBZcHVHJ3eoywX8983k1ow=="],
 
-    "voyageai": ["voyageai@0.0.1-5", "", { "dependencies": { "form-data": "^4.0.0", "formdata-node": "^6.0.3", "js-base64": "3.7.2", "node-fetch": "2.7.0", "qs": "6.11.2", "readable-stream": "^4.5.2", "url-join": "4.0.1" } }, "sha512-IuXSXM3l9J3NIq+MLHXacG/yhswpEgWIu9eBqoFqMRnFiDx00dLL62OWg6WqVSipddZLwFeWH1Kaj56x5eqhOQ=="],
+    "voyageai": ["voyageai@0.0.4", "", { "dependencies": { "form-data": "^4.0.0", "formdata-node": "^6.0.3", "js-base64": "3.7.2", "node-fetch": "2.7.0", "qs": "6.11.2", "readable-stream": "^4.5.2", "url-join": "4.0.1" } }, "sha512-eHSwflQdhByXpudW49LNEjJr1cpz9GmTFADiGr+b5TgwNgewiRjJrgDS3X/s1wExCdAUXW+az1DrF9pfHrPyyA=="],
 
     "vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.12", "", {}, "sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA=="],
 
