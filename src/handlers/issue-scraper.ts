@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { VoyageAIClient } from "voyageai";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import markdownit from "markdown-it";
 import plainTextPlugin from "markdown-it-plain-text";
 import "dotenv/config";
-import { createAdapters } from "../adapters";
+import { VoyageAIClient } from "voyageai";
+import { createAdapters } from "../adapters/index";
 import { Context } from "../types/context";
 
 interface MarkdownItWithPlainText extends markdownit {

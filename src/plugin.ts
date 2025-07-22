@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
-import { createAdapters } from "./adapters";
+import { createAdapters } from "./adapters/index";
 import { addComments } from "./handlers/add-comments";
 import { addIssue } from "./handlers/add-issue";
 import { completeIssue } from "./handlers/complete-issue";
