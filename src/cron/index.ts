@@ -40,13 +40,6 @@ async function main() {
         repo: repo,
       });
 
-      const issueNumber = issueNumbers[issueNumbers.length - 1];
-
-      if (!issueNumber) {
-        logger.error(`No issue number found for repository ${owner}/${repo}`);
-        continue;
-      }
-
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
         auth: {
@@ -56,30 +49,42 @@ async function main() {
         },
       });
 
-      const {
-        data: { body = "" },
-      } = await repoOctokit.rest.issues.get({
-        owner: owner,
-        repo: repo,
-        issue_number: issueNumber,
-      });
+      for (const issueNumber of issueNumbers) {
+        const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
+        try {
+          const {
+            data: { body = "" },
+          } = await repoOctokit.rest.issues.get({
+            owner: owner,
+            repo: repo,
+            issue_number: issueNumber,
+          });
 
-      const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
-      const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toISOString()} -->`;
-      logger.info(`Updated body of ${url}`, { newBody });
+          const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toISOString()} -->`;
+          logger.info(`Updated body of ${url}`, { newBody });
 
-      await repoOctokit.rest.issues.update({
-        owner: owner,
-        repo: repo,
-        issue_number: issueNumber,
-        body: newBody,
-      });
+          await repoOctokit.rest.issues.update({
+            owner: owner,
+            repo: repo,
+            issue_number: issueNumber,
+            body: newBody,
+          });
 
-      await db.removeIssue(url);
+          await db.removeIssue(url);
+        } catch (err) {
+          logger.error("Failed to update individual issue", {
+            organization: owner,
+            repository: repo,
+            issueNumber,
+            url,
+            err,
+          });
+        }
+      }
     } catch (e) {
-      logger.error("Failed to update the issue body", {
-        organization: owner,
-        repository: repo,
+      logger.error("Failed to process repository", {
+        owner,
+        repo,
         issueNumbers,
         e,
       });
