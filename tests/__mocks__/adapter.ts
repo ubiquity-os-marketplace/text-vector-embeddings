@@ -84,7 +84,8 @@ export function createMockAdapters(context: Context) {
 
       issue: {
         getIssue: jest.fn(async (issueId: string) => {
-          return issueMap.get(issueId) || null;
+          if (!issueMap.has(issueId)) return null;
+          return issueMap.get(issueId);
         }),
         findSimilarIssues: jest.fn(async (issueContent: string, threshold: number, currentIssueId: string) => {
           // Return empty array for first issue in each test

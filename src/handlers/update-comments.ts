@@ -8,6 +8,7 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
     adapters: { supabase },
     octokit,
     payload,
+    config,
   } = context;
   const markdown = payload.comment.body;
   const authorId = payload.comment.user?.id || -1;
@@ -36,6 +37,11 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
         body: cleanedComment,
       });
     }
+    if (config.demoFlag) {
+      logger.info("Demo mode active - skipping comment update in database", { comment: payload.comment.id, comment_url: payload.comment.html_url });
+      return;
+    }
+
     await supabase.comment.updateComment({ markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
     logger.ok(`Successfully updated comment! ${payload.comment.id}`, payload.comment);
   } catch (error) {
