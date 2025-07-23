@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.1.0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/compare/v1.0.0...v1.1.0) (2025-07-23)
+
+
+### Features
+
+* **demoflag:** add demoflag to config ([f643197](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/f64319767bdbc725f9fb02efce856304162844c4))
+
+
+### Bug Fixes
+
+* add issue/comment url to log when ignoring ([cb43a9c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/cb43a9c794090d69eda92e3b4352e91a7115e9bc))
+* add issue/comment url to log when ignoring ([2c67723](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2c6772329f2526566a1064b83bd58ecc519ad343))
+* add optional flag mentions ([5ced789](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5ced789d8d0641e0dfee040b695e939d309eaea0))
+* add optional flag mentions ([886f8c7](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/886f8c76cde312130d90ca3831173b942fe6a817))
+* adjust footnote insertion for code blocks and update dev script ([99a17e1](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/99a17e1a3aba9d4f12232b47e24b0ba0d889ec43))
+* footnotes display properly with code blocks ([155ea07](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/155ea07ae8c975ae62b726fec29e99ba6118d479))
+* jest ([af1d31e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/af1d31e313b0a9bea000424fd609b9b354d06aeb))
+* jest ([2b19964](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2b19964b14a3379f2d5e53cdce4fbf02475f160f))
+* remove optional from demo flag ([0992b3f](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0992b3fcd46602736dd747fc2bd741aa7dce1d29))
+* set environment main for main branch and tags ([86bab28](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/86bab28c18c5f7b929cc6e0d8953be178b9bad36))
+* set environment main for main branch and tags ([aaecabe](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/aaecabeac21b21a5e26edc0bf3bfa3019a8b3341))
+* set environment main for main branch and tags ([c96ea16](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/c96ea16252bf5c488c73a1f9fcc835a076cdb907))
+
 ## 1.0.0 (2025-07-02)
 
 
