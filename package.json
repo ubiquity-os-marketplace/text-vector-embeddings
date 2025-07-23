@@ -4,7 +4,7 @@
   "description": "Generates vector embeddings of GitHub comments and stores them in Supabase.",
   "author": "Ubiquity DAO",
   "license": "MIT",
-  "main": "src/worker.ts",
+  "main": "src/main.ts",
   "type": "module",
   "engines": {
     "node": ">=20.10.0"

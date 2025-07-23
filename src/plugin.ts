@@ -12,8 +12,9 @@ import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
 import { updateIssue } from "./handlers/update-issue";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
-import { Context } from "./types/index";
+import { isPluginEdit } from "./helpers/plugin-utils";
 import { Database } from "./types/database";
+import { Context } from "./types/index";
 import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
 
 /**
@@ -54,7 +55,8 @@ export async function runPlugin(context: Context) {
         await issueMatching(context as Context<"issues.opened">);
         return await issueChecker(context as Context<"issues.opened">);
       case "issues.edited":
-        if (context.payload.sender.type === "Bot") {
+        if (isPluginEdit(context as Context<"issues.edited">)) {
+          logger.info("Plugin edit detected, will run issue matching and checker.");
           await issueMatching(context as Context<"issues.edited">);
           await issueChecker(context as Context<"issues.edited">);
         } else {
