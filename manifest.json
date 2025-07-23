@@ -1,6 +1,7 @@
 {
   "name": "Text Vector Embeddings",
   "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
+  "skipBotEvents": false,
   "ubiquity:listeners": [
     "issue_comment.created",
     "issue_comment.edited",
