@@ -7,11 +7,12 @@ import { Env, envSchema } from "./types/env";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 
 createActionsPlugin<PluginSettings, Env, null, SupportedEvents>(
-  (context) => {
-    return runPlugin({
+  async (context) => {
+    await runPlugin({
       ...context,
       adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
     });
+    process.exit(0);
   },
   {
     logLevel: (process.env.LOG_LEVEL as LogLevel) ?? "info",
