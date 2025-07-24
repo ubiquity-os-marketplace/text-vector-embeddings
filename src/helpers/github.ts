@@ -1,5 +1,3 @@
-export type GitHubUrl = ReturnType<typeof parseGitHubUrl>;
-
 export function parseGitHubUrl(url: string) {
   const path = new URL(url).pathname.split("/");
   if (path.length !== 5) {
