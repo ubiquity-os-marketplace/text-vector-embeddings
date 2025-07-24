@@ -1,4 +1,4 @@
-name: Run Jest testing suite
+name: Run Bun testing suite
 on:
   workflow_dispatch:
   pull_request:
@@ -11,10 +11,6 @@ jobs:
     permissions: write-all
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20.10.0"
-
       - uses: actions/checkout@master
         with:
           fetch-depth: 0
@@ -25,9 +21,63 @@ jobs:
       - name: Install toolchain
         run: bun install --frozen-lockfile
 
-      - name: Jest With Coverage
-        run: bun run test
+      - name: Bun Test With Coverage
+        run: bun test --coverage --reporter=junit --reporter-outfile=./junit.xml
 
-      - name: Add Jest Report to Summary
+      - name: Generate Markdown Dashboard from JUnit XML
+        run: |
+          bun add fast-xml-parser@4.2.5
+          cat <<'EOF' > junit-to-md.ts
+          import { readFileSync, writeFileSync } from "fs";
+          import { XMLParser } from "fast-xml-parser";
+
+          function formatDuration(sec: number) {
+            return sec > 1 ? `${sec.toFixed(3)} s` : `${(sec * 1000).toFixed(0)} ms`;
+          }
+
+          const xml = readFileSync("junit.xml", "utf8");
+          const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
+          const data = parser.parse(xml);
+
+          const suites = data.testsuites;
+          const suiteList = Array.isArray(suites.testsuite) ? suites.testsuite : [suites.testsuite];
+          const totalTests = Number(suites.tests);
+          const totalFailures = Number(suites.failures);
+          const totalSkipped = Number(suites.skipped);
+          const totalTime = Number(suites.time);
+
+          let md = `Test Dashboard
+          🕙 Start time\t⌛ Duration
+          ${new Date().toLocaleString()}\t${formatDuration(totalTime)}
+
+          ✅ Passed\t❌ Failed\t🚧 Todo\t⚪ Total
+          Test Suites\t${suiteList.length}\t${totalFailures}\t-\t${suiteList.length}
+          Tests\t${totalTests - totalFailures - totalSkipped}\t${totalFailures}\t${totalSkipped}\t${totalTests}
+          `;
+
+          for (const suite of suiteList) {
+            const file = suite.file || suite.name;
+            const cases = suite.testsuite?.testcase || suite.testcase || [];
+            const testcases = Array.isArray(cases) ? cases : [cases];
+            const passed = testcases.filter(tc => !tc.failure && !tc.skipped).length;
+            const failed = testcases.filter(tc => !!tc.failure).length;
+            const skipped = testcases.filter(tc => !!tc.skipped).length;
+            const suiteTime = Number(suite.time || 0);
+
+            md += `\n[${file}](./${file})\n${passed} passed, ${failed} failed, ${skipped} todo, done in ${formatDuration(suiteTime)}\n`;
+
+            for (const tc of testcases) {
+              let status = "✅";
+              if (tc.failure) status = "❌";
+              else if (tc.skipped) status = "🚧";
+              md += `${status} ${tc.name}\n`;
+            }
+          }
+
+          writeFileSync("test-dashboard.md", md);
+          EOF
+          bun run junit-to-md.ts
+
+      - name: Add Bun Report to Summary
         if: always()
         run: echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY

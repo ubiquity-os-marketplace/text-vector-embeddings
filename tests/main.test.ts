@@ -4,16 +4,16 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest 
 import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
-import { STRINGS } from "./__mocks__/strings";
-import { createComment, createIssue, setupTests, fetchSimilarIssues } from "./__mocks__/helpers";
 import dotenv from "dotenv";
+import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
 import { runPlugin } from "../src/plugin";
-import { Env } from "../src/types/index";
 import { Context } from "../src/types/context";
+import { Env } from "../src/types/index";
 import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
 import { db } from "./__mocks__/db";
+import { createComment, createIssue, fetchSimilarIssues, setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
-import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
+import { STRINGS } from "./__mocks__/strings";
 import annotateComment from "./__sample__/comment_annotate.json";
 
 // Constants to avoid duplication

@@ -17,7 +17,7 @@
     "knip": "knip --config .github/knip.ts",
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
     "prepare": "husky install",
-    "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
+    "test": "bun test",
     "worker": "wrangler dev --env dev --port 4004",
     "dev": " deno serve --port 4004 --unstable-sloppy-imports --allow-all --unstable-kv --watch src/worker.ts",
     "supabase:generate:local": "supabase gen types typescript --local > src/types/database.ts",
