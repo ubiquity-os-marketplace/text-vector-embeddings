@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
 import { createAdapters } from "./adapters/index";
+import { updateCronState } from "./cron/workflow";
 import { addComments } from "./handlers/add-comments";
 import { addIssue } from "./handlers/add-issue";
 import { completeIssue } from "./handlers/complete-issue";
@@ -75,5 +76,6 @@ export async function runPlugin(context: Context) {
   } else {
     logger.error(`Unsupported event: ${eventName}`);
   }
+  await updateCronState(context);
   logger.ok(`Exiting plugin`);
 }

@@ -1,11 +1,10 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Context } from "../types/index";
-import { createCronDatabase } from "./database-handler";
 
 export async function updateCronState(context: Context) {
   context.logger.debug("Updating the cron KV workflow state.");
-  const db = await createCronDatabase();
+  const db = context.adapters.kv;
 
   if (!process.env.GITHUB_REPOSITORY) {
     context.logger.error("Can't update the Action Workflow state as GITHUB_REPOSITORY is missing from the env.");
