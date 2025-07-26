@@ -1,10 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { VoyageAIClient } from "voyageai";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import markdownit from "markdown-it";
 import plainTextPlugin from "markdown-it-plain-text";
 import "dotenv/config";
-import { createAdapters } from "../adapters";
+import { VoyageAIClient } from "voyageai";
+import { createAdapters } from "../adapters/index";
 import { Context } from "../types/context";
 
 interface MarkdownItWithPlainText extends markdownit {
@@ -187,7 +187,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const voyageClient = new VoyageAIClient({ apiKey: voyageApiKey });
-    const adapters = createAdapters(supabase, voyageClient, context);
+    const adapters = await createAdapters(supabase, voyageClient, context);
 
     const issues = await fetchUserIssues(context.octokit, username);
     const processedIssues: Array<{ issue: IssueMetadata; error?: string }> = [];

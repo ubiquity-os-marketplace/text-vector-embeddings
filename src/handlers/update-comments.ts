@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { checkIfAnnotateFootNoteExists, removeAnnotateFootnotes } from "./annotate";
 

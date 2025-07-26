@@ -1,4 +1,4 @@
-import { Context } from "../../src/types";
+import { Context } from "../../src/types/index";
 import { Comment, CommentData } from "../../src/adapters/supabase/helpers/comment";
 import { STRINGS } from "./strings";
 import { jest } from "@jest/globals";

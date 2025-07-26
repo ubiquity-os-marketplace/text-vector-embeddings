@@ -1,5 +1,5 @@
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export interface IssueGraphqlResponse {
   node: {
