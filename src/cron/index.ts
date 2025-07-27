@@ -1,5 +1,4 @@
 import { createAppAuth } from "@octokit/auth-app";
-import { Octokit } from "@octokit/rest";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import pkg from "../../package.json" with { type: "json" };
@@ -7,7 +6,7 @@ import { createCronDatabase } from "./database-handler";
 
 async function main() {
   const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
-  const octokit = new Octokit({
+  const octokit = new customOctokit({
     authStrategy: createAppAuth,
     auth: {
       appId: Number(process.env.APP_ID),
