@@ -720,4 +720,8 @@ describe("Plugin tests", () => {
 
     return { context, repo, issue };
   }
+
+  it("Should fail on dummy test", () => {
+    expect(true).toBe(false);
+  });
 });
