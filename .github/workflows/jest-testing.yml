@@ -22,13 +22,13 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Bun Test With Coverage
-        run: bun test --coverage --reporter=junit --reporter-outfile=./junit.xml
+        run: bun test
 
-      - name: Generate Markdown Dashboard from JUnit XML
-        run: |
-          bun add fast-xml-parser@4.2.5
-          bun run scripts/junit-to-md.ts
-
-      - name: Add Bun Report to Summary
-        if: always()
-        run: echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY
+#      - name: Generate Markdown Dashboard from JUnit XML
+#        run: |
+#          bun add fast-xml-parser@4.2.5
+#          bun run scripts/junit-to-md.ts
+#
+#      - name: Add Bun Report to Summary
+#        if: always()
+#        run: echo "$(cat test-dashboard.md)" >> $GITHUB_STEP_SUMMARY
