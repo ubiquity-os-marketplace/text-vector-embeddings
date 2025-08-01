@@ -7,7 +7,7 @@ import { addIssue } from "./handlers/add-issue";
 import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
 import { deleteIssues } from "./handlers/delete-issue";
-import { issueChecker } from "./handlers/issue-deduplication";
+import { issueDedupe } from "./handlers/issue-deduplication";
 import { issueMatching } from "./handlers/issue-matching";
 import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
@@ -52,14 +52,12 @@ export async function runPlugin(context: Context) {
   } else if (isIssueEvent(context)) {
     switch (eventName) {
       case "issues.opened":
-        await addIssue(context as Context<"issues.opened">);
-        await issueMatching(context as Context<"issues.opened">);
-        return await issueChecker(context as Context<"issues.opened">);
+        return await addIssue(context as Context<"issues.opened">);
       case "issues.edited":
         if (isPluginEdit(context as Context<"issues.edited">)) {
           logger.info("Plugin edit detected, will run issue matching and checker.");
           await issueMatching(context as Context<"issues.edited">);
-          await issueChecker(context as Context<"issues.edited">);
+          await issueDedupe(context as Context<"issues.edited">);
         } else {
           await updateIssue(context as Context<"issues.edited">);
         }

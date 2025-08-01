@@ -23,7 +23,7 @@ export interface IssueGraphqlResponse {
  * If a similar issue is found, a footnote is added to the current issue.
  * @param context The context object
  **/
-export async function issueChecker(context: Context<"issues.opened" | "issues.edited">) {
+export async function issueDedupe(context: Context<"issues.opened" | "issues.edited">) {
   const {
     logger,
     adapters: { supabase },
