@@ -126,6 +126,9 @@ export function createMockAdapters(context: Context) {
         createIssue: jest.fn(async (issue: IssueData) => {
           issueMap.set(issue.id, issue);
         }),
+        updateIssue: jest.fn(async (issue: IssueData) => {
+          issueMap.set(issue.id, issue);
+        }),
       },
       fetchComments: jest.fn(async (issueId: string) => {
         return Array.from(commentMap.values()).filter((comment) => comment.issue_id === issueId);
@@ -140,6 +143,9 @@ export function createMockAdapters(context: Context) {
           return new Array(3072).fill(0);
         }),
       } as unknown as number[],
+    },
+    kv: {
+      addIssue: jest.fn(),
     },
   };
 }

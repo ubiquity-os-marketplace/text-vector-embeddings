@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest 
 import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { mock } from "bun:test";
 import dotenv from "dotenv";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
 import { runPlugin } from "../src/plugin";
@@ -20,6 +21,7 @@ import annotateComment from "./__sample__/comment_annotate.json";
 const DEFAULT_HOOK = "issue_comment.created";
 const DEFAULT_ISSUE_ID = "1";
 const DEFAULT_BODY = "Test issue body";
+const ISSUES_EDITED_EVENT_NAME = "issues.edited";
 
 dotenv.config();
 const octokit = new Octokit();
@@ -37,6 +39,9 @@ describe("Plugin tests", () => {
   beforeEach(async () => {
     drop(db);
     await setupTests();
+    await mock.module("../src/helpers/plugin-utils", () => ({
+      isPluginEdit: jest.fn(() => true),
+    }));
   });
 
   it("When a comment is created it should add it to the database", async () => {
@@ -113,89 +118,95 @@ describe("Plugin tests", () => {
     await expect(context.adapters.supabase.comment.getComment("sasasDelete")).rejects.toThrow("Comment does not exist");
   });
 
-  it("When an issue is created with similarity above warning threshold but below match threshold, it should update the issue body with footnotes", async () => {
-    const [warningThresholdIssue1, warningThresholdIssue2] = fetchSimilarIssues("warning_threshold_75");
-    const { context } = createContextIssues(warningThresholdIssue1.issue_body, "warning1", 3, warningThresholdIssue1.title);
+  it(
+    "When an issue is created with similarity above warning threshold but below match threshold, it should" + " update the issue body with footnotes",
+    async () => {
+      const [warningThresholdIssue1, warningThresholdIssue2] = fetchSimilarIssues("warning_threshold_75");
+      const { context } = createContextIssues(warningThresholdIssue1.issue_body, "warning1", 3, warningThresholdIssue1.title);
+      context.eventName = ISSUES_EDITED_EVENT_NAME;
 
-    context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
-    context.adapters.supabase.issue.createIssue = jest.fn(async () => {
-      createIssue(
-        warningThresholdIssue1.issue_body,
-        "warning1",
-        warningThresholdIssue1.title,
-        3,
-        { login: "test", id: 1 },
-        "open",
-        null,
-        STRINGS.TEST_REPO,
-        STRINGS.USER_1
-      );
-    });
+      context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
+      context.adapters.supabase.issue.createIssue = jest.fn(async () => {
+        createIssue(
+          warningThresholdIssue1.issue_body,
+          "warning1",
+          warningThresholdIssue1.title,
+          3,
+          { login: "test", id: 1 },
+          "open",
+          null,
+          STRINGS.TEST_REPO,
+          STRINGS.USER_1
+        );
+      });
 
-    await runPlugin(context);
+      await runPlugin(context);
 
-    const { context: context2 } = createContextIssues(warningThresholdIssue2.issue_body, "warning2", 4, warningThresholdIssue2.title);
-    context2.adapters.supabase.issue.findSimilarIssues = jest
-      .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
-      .mockResolvedValue([{ issue_id: "warning1", similarity: 0.8 }] as unknown as IssueSimilaritySearchResult[]);
+      const { context: context2 } = createContextIssues(warningThresholdIssue2.issue_body, "warning2", 4, warningThresholdIssue2.title);
+      context2.eventName = ISSUES_EDITED_EVENT_NAME;
+      context2.adapters.supabase.issue.findSimilarIssues = jest
+        .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
+        .mockResolvedValue([{ issue_id: "warning1", similarity: 0.8 }] as unknown as IssueSimilaritySearchResult[]);
 
-    context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
-      node: {
-        __typename: "Issue",
-        title: STRINGS.SIMILAR_ISSUE,
-        url: STRINGS.ISSUE_URL,
-        number: 3,
-        lastEditedAt: "2020-01-12T17:52:02Z",
-        body: warningThresholdIssue1.issue_body,
-        repository: {
-          name: STRINGS.TEST_REPO,
-          owner: {
-            login: STRINGS.USER_1,
+      context2.octokit.graphql = jest.fn<typeof context2.octokit.graphql>().mockResolvedValue({
+        node: {
+          __typename: "Issue",
+          title: STRINGS.SIMILAR_ISSUE,
+          url: STRINGS.ISSUE_URL,
+          number: 3,
+          lastEditedAt: "2020-01-12T17:52:02Z",
+          body: warningThresholdIssue1.issue_body,
+          repository: {
+            name: STRINGS.TEST_REPO,
+            owner: {
+              login: STRINGS.USER_1,
+            },
           },
         },
-      },
-    }) as unknown as typeof context2.octokit.graphql;
+      }) as unknown as typeof context2.octokit.graphql;
 
-    context2.adapters.supabase.issue.createIssue = jest.fn(async () => {
-      createIssue(
-        warningThresholdIssue2.issue_body,
-        "warning2",
-        warningThresholdIssue2.title,
-        4,
-        { login: "test", id: 1 },
-        "open",
-        null,
-        STRINGS.TEST_REPO,
-        STRINGS.USER_1
-      );
-    });
-
-    context2.octokit.rest.issues.update = jest.fn(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
-      // Find the most similar sentence (first sentence in this case)
-      const updatedBody =
-        warningThresholdIssue2.issue_body.replace(STRINGS.SIMILAR_ISSUE_TITLE, `${STRINGS.SIMILAR_ISSUE_TITLE}[^01^]`) +
-        `\n\n[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
-
-      db.issue.update({
-        where: {
-          number: { equals: params.issue_number },
-        },
-        data: {
-          body: updatedBody,
-        },
+      context2.adapters.supabase.issue.createIssue = jest.fn(async () => {
+        createIssue(
+          warningThresholdIssue2.issue_body,
+          "warning2",
+          warningThresholdIssue2.title,
+          4,
+          { login: "test", id: 1 },
+          "open",
+          null,
+          STRINGS.TEST_REPO,
+          STRINGS.USER_1
+        );
       });
-    }) as unknown as typeof octokit.rest.issues.update;
 
-    await runPlugin(context2);
+      context2.octokit.rest.issues.update = jest.fn(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+        // Find the most similar sentence (first sentence in this case)
+        const updatedBody =
+          warningThresholdIssue2.issue_body.replace(STRINGS.SIMILAR_ISSUE_TITLE, `${STRINGS.SIMILAR_ISSUE_TITLE}[^01^]`) +
+          `\n\n[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
 
-    const issue = db.issue.findFirst({ where: { node_id: { equals: "warning2" } } }) as unknown as Context["payload"]["issue"];
-    expect(issue.state).toBe("open");
-    expect(issue.body).toContain(`[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
-  });
+        db.issue.update({
+          where: {
+            number: { equals: params.issue_number },
+          },
+          data: {
+            body: updatedBody,
+          },
+        });
+      }) as unknown as typeof octokit.rest.issues.update;
+
+      await runPlugin(context2);
+
+      const issue = db.issue.findFirst({ where: { node_id: { equals: "warning2" } } }) as unknown as Context["payload"]["issue"];
+      expect(issue.state).toBe("open");
+      expect(issue.body).toContain(`[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    }
+  );
 
   it("When an issue is created with similarity above match threshold, it should close the issue and add a caution alert", async () => {
     const [matchThresholdIssue1, matchThresholdIssue2] = fetchSimilarIssues("match_threshold_95");
     const { context } = createContextIssues(matchThresholdIssue1.issue_body, "match1", 3, matchThresholdIssue1.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
     context.adapters.supabase.issue.findSimilarIssues = jest.fn<typeof context.adapters.supabase.issue.findSimilarIssues>().mockResolvedValue([]);
     context.adapters.supabase.issue.createIssue = jest.fn(async () => {
       createIssue(
@@ -212,6 +223,7 @@ describe("Plugin tests", () => {
     });
     await runPlugin(context);
     const { context: context2 } = createContextIssues(matchThresholdIssue2.issue_body, "match2", 4, matchThresholdIssue2.title);
+    context2.eventName = ISSUES_EDITED_EVENT_NAME;
 
     // Mock the findSimilarIssues function to return a result with similarity above match threshold
     context2.adapters.supabase.issue.findSimilarIssues = jest
@@ -275,6 +287,7 @@ describe("Plugin tests", () => {
   it("When issue matching is triggered, it should suggest contributors based on similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete", 3, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
 
     context.adapters.supabase.issue.createIssue = jest.fn(async () => {
       createIssue(
@@ -319,6 +332,7 @@ describe("Plugin tests", () => {
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
 
     // Override config to enable alwaysRecommend
     context.config = {
@@ -386,9 +400,13 @@ describe("Plugin tests", () => {
       );
     });
 
-    await runPlugin(context);
+    await runPlugin({
+      ...context,
+      eventName: "issues.opened",
+    });
 
     const { context: context2 } = createContextIssues(markdownLinkIssue1.issue_body, "markdown2", 8, markdownLinkIssue1.title);
+    context2.eventName = ISSUES_EDITED_EVENT_NAME;
     context2.adapters.supabase.issue.findSimilarIssues = jest
       .fn<typeof context2.adapters.supabase.issue.findSimilarIssues>()
       .mockResolvedValue([{ issue_id: "markdown1", similarity: 0.8 }] as unknown as IssueSimilaritySearchResult[]);
@@ -703,7 +721,8 @@ describe("Plugin tests", () => {
       id: number;
     } = { login: "test", id: 1 },
     issueState: string = "open",
-    issueCloseReason: string | null = null
+    issueCloseReason: string | null = null,
+    eventName: Context["eventName"] = "issues.opened"
   ) {
     const repo = db.repo.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["repository"];
     const sender = db.users.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["sender"];
@@ -714,7 +733,7 @@ describe("Plugin tests", () => {
       where: { node_id: { equals: issueNodeId } },
     }) as unknown as Context["payload"]["issue"];
 
-    const context = createContextInner(repo, sender, issue, undefined, "issues.opened");
+    const context = createContextInner(repo, sender, issue, undefined, eventName);
     context.adapters = createMockAdapters(context) as unknown as Context["adapters"];
 
     return { context, repo, issue };
