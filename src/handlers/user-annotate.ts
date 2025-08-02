@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { annotate } from "./annotate";
 
 export async function commandHandler(context: Context) {

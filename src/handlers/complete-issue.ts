@@ -1,10 +1,10 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { removeFootnotes } from "./issue-deduplication";
 
 export async function completeIssue(context: Context<"issues.closed">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
     payload,
   } = context;
 
@@ -57,6 +57,7 @@ export async function completeIssue(context: Context<"issues.closed">) {
         isPrivate,
         author_id: authorId,
       });
+      await kv.removeIssue(payload.issue.html_url);
       logger.ok(`Successfully updated completed issue! ${payload.issue.id}`, payload.issue);
     } else {
       // Create new issue if it doesn't exist

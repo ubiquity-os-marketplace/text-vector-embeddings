@@ -1,7 +1,7 @@
 import { VoyageAIClient } from "voyageai";
-import { Context } from "../../../types";
+import { EmbedRequestInputType } from "voyageai/api/types/EmbedRequestInputType.js";
+import { Context } from "../../../types/index";
 import { SuperVoyage } from "./voyage";
-import { EmbedRequestInputType } from "voyageai/api/types/EmbedRequestInputType";
 
 export class Embedding extends SuperVoyage {
   protected context: Context;

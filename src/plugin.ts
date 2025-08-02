@@ -1,20 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
-import { createAdapters } from "./adapters";
+import { createAdapters } from "./adapters/index";
+import { updateCronState } from "./cron/workflow";
 import { addComments } from "./handlers/add-comments";
 import { addIssue } from "./handlers/add-issue";
+import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
 import { deleteIssues } from "./handlers/delete-issue";
-import { issueChecker } from "./handlers/issue-deduplication";
+import { issueDedupe } from "./handlers/issue-deduplication";
 import { issueMatching } from "./handlers/issue-matching";
+import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
 import { updateIssue } from "./handlers/update-issue";
-import { Context } from "./types";
-import { Database } from "./types/database";
-import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
-import { issueTransfer } from "./handlers/transfer-issue";
-import { completeIssue } from "./handlers/complete-issue";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
+import { isPluginEdit } from "./helpers/plugin-utils";
+import { Database } from "./types/database";
+import { Context } from "./types/index";
+import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -27,7 +29,7 @@ export async function runPlugin(context: Context) {
     const voyageClient = new VoyageAIClient({
       apiKey: env.VOYAGEAI_API_KEY,
     });
-    context.adapters = createAdapters(supabase, voyageClient, context);
+    context.adapters = await createAdapters(supabase, voyageClient, context);
     //Check the supabase adapter
     const isConnectionValid = await context.adapters.supabase.super.checkConnection();
     context.logger[isConnectionValid ? "ok" : "error"](`Supabase connection ${isConnectionValid ? "successful" : "failed"}`);
@@ -50,13 +52,16 @@ export async function runPlugin(context: Context) {
   } else if (isIssueEvent(context)) {
     switch (eventName) {
       case "issues.opened":
-        await addIssue(context as Context<"issues.opened">);
-        await issueMatching(context as Context<"issues.opened">);
-        return await issueChecker(context as Context<"issues.opened">);
+        return await addIssue(context as Context<"issues.opened">);
       case "issues.edited":
-        await updateIssue(context as Context<"issues.edited">);
-        await issueMatching(context as Context<"issues.edited">);
-        return await issueChecker(context as Context<"issues.edited">);
+        if (isPluginEdit(context as Context<"issues.edited">)) {
+          logger.info("Plugin edit detected, will run issue matching and checker.");
+          await issueMatching(context as Context<"issues.edited">);
+          await issueDedupe(context as Context<"issues.edited">);
+        } else {
+          await updateIssue(context as Context<"issues.edited">);
+        }
+        return;
       case "issues.deleted":
         return await deleteIssues(context as Context<"issues.deleted">);
       case "issues.transferred":
@@ -69,5 +74,6 @@ export async function runPlugin(context: Context) {
   } else {
     logger.error(`Unsupported event: ${eventName}`);
   }
+  await updateCronState(context);
   logger.ok(`Exiting plugin`);
 }

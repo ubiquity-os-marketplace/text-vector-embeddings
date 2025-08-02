@@ -1,6 +1,7 @@
 {
   "name": "Text Vector Embeddings",
   "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
+  "skipBotEvents": false,
   "ubiquity:listeners": [
     "issue_comment.created",
     "issue_comment.edited",
@@ -33,11 +34,6 @@
       "jobMatchingThreshold": {
         "default": 0.75,
         "description": "The minimum similarity score when considering users to be suitable for a job.",
-        "type": "number"
-      },
-      "editTimeout": {
-        "default": 1800000,
-        "description": "The timeout period in milliseconds before running deduplication after an edit (default 30 minutes)",
         "type": "number"
       },
       "alwaysRecommend": {

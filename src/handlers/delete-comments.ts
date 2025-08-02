@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export async function deleteComment(context: Context<"issue_comment.deleted">) {
   const {

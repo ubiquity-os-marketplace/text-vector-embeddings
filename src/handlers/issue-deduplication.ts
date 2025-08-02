@@ -1,5 +1,5 @@
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export interface IssueGraphqlResponse {
   node: {
@@ -18,59 +18,12 @@ export interface IssueGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
-interface IssueResponse {
-  node: {
-    lastEditedAt: string | null; // This will be a string or null, depending on the API response
-  };
-}
-
-/**
- * Sleep for the specified duration
- * @param ms duration in milliseconds
- */
-function sleep(ms: number, context: Context): Promise<void> {
-  context.logger.info("Sleeping for " + ms + " milliseconds");
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
-  try {
-    // Directly type the response using the IssueResponse interface
-    const data: IssueResponse = await context.octokit.graphql(
-      /* GraphQL */
-      `
-        query ($issueNodeId: ID!) {
-          node(id: $issueNodeId) {
-            ... on Issue {
-              lastEditedAt
-            }
-          }
-        }
-      `,
-      { issueNodeId }
-    );
-
-    // Check if the node exists
-    if (!data.node) {
-      context.logger.error("Issue does not exist", { issueNodeId });
-      return null;
-    }
-
-    // Return lastEditedAt if available; otherwise return null
-    return data.node.lastEditedAt || null;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
-    return null;
-  }
-}
-
 /**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar issue is found, a footnote is added to the current issue.
  * @param context The context object
  **/
-export async function issueChecker(context: Context<"issues.opened" | "issues.edited">) {
+export async function issueDedupe(context: Context<"issues.opened" | "issues.edited">) {
   const {
     logger,
     adapters: { supabase },
@@ -79,33 +32,6 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
   } = context;
 
   const originalIssue = payload.issue;
-
-  // Wait for the configured timeout period
-  await sleep(context.config.editTimeout, context);
-
-  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
-
-  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
-
-  if (lastEditedAt === null) {
-    logger.info("Last edited time is null, skipping deduplication check", {
-      issueNumber: originalIssue.number,
-    });
-    return;
-  }
-
-  const latestEventTime = new Date(lastEditedAt).getTime();
-
-  // Event should only proceed if it's the most recent action
-  if (currentEventTime < latestEventTime) {
-    logger.info("Event superseded by newer changes, skipping deduplication check", {
-      issueNumber: originalIssue.number,
-      currentEventType: context.eventName,
-      currentEventTime: new Date(currentEventTime).toISOString(),
-      latestUpdateTime: new Date(latestEventTime).toISOString(),
-    });
-    return;
-  }
 
   // Use the latest issue data
   let issueBody = originalIssue.body;
