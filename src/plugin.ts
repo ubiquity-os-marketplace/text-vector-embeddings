@@ -65,16 +65,20 @@ export async function runPlugin(context: Context) {
         }
         break;
       case "issues.deleted":
-        return await deleteIssues(context as Context<"issues.deleted">);
+        await deleteIssues(context as Context<"issues.deleted">);
+        break;
       case "issues.transferred":
-        return await issueTransfer(context as Context<"issues.transferred">);
+        await issueTransfer(context as Context<"issues.transferred">);
+        break;
       case "issues.closed":
-        return await completeIssue(context as Context<"issues.closed">);
+        await completeIssue(context as Context<"issues.closed">);
+        break;
     }
   } else if (eventName == "issues.labeled") {
     return await issueMatching(context as Context<"issues.labeled">);
   } else {
     logger.error(`Unsupported event: ${eventName}`);
+    return;
   }
   await updateCronState(context);
   logger.ok(`Exiting plugin`);

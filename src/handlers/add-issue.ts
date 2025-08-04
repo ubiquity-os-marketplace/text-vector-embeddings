@@ -4,7 +4,7 @@ import { removeFootnotes } from "./issue-deduplication";
 export async function addIssue(context: Context<"issues.opened">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
     payload,
     config,
   } = context;
@@ -27,6 +27,7 @@ export async function addIssue(context: Context<"issues.opened">) {
     }
 
     await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId });
+    await kv.addIssue(issue.html_url);
     logger.ok(`Successfully created issue!`, issue);
   } catch (error) {
     if (error instanceof Error) {
