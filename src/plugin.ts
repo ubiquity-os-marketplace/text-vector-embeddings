@@ -52,7 +52,9 @@ export async function runPlugin(context: Context) {
   } else if (isIssueEvent(context)) {
     switch (eventName) {
       case "issues.opened":
-        return await addIssue(context as Context<"issues.opened">);
+        await addIssue(context as Context<"issues.opened">);
+        await issueMatching(context as Context<"issues.opened">);
+        break;
       case "issues.edited":
         if (isPluginEdit(context as Context<"issues.edited">)) {
           logger.info("Plugin edit detected, will run issue matching and checker.");
@@ -61,7 +63,7 @@ export async function runPlugin(context: Context) {
         } else {
           await updateIssue(context as Context<"issues.edited">);
         }
-        return;
+        break;
       case "issues.deleted":
         return await deleteIssues(context as Context<"issues.deleted">);
       case "issues.transferred":
