@@ -93,7 +93,7 @@ if (isIssueCommentEvent(context)) {
     case "issues.opened":
       await addIssue(context);
       await issueMatching(context);
-      return await issueChecker(context);
+      return await issueDedupe(context);
     // ... other issue events
   }
 }

@@ -1,5 +1,43 @@
-const fs = require("fs");
-const path = require("path");
+import fs from "node:fs";
+import { builtinModules } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function fixNodeImports(content) {
+  let fixed = content;
+
+  builtinModules.forEach((module) => {
+    const escapedModule = module.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const patterns = [
+      new RegExp(`require\\s*\\(\\s*["']${escapedModule}["']\\s*\\)`, "g"),
+      new RegExp(`require\\s*\\(\\s*["']${escapedModule}/`, "g"),
+      new RegExp(`from\\s+["']${escapedModule}["']`, "g"),
+      new RegExp(`from\\s+["']${escapedModule}/`, "g"),
+      new RegExp(`import\\s*\\(\\s*["']${escapedModule}["']\\s*\\)`, "g"),
+      new RegExp(`import\\s*\\(\\s*["']${escapedModule}/`, "g"),
+      new RegExp(`(\\}|\\s)from\\s*["']${escapedModule}["']`, "g"),
+      new RegExp(`(\\}|\\s)from\\s*["']${escapedModule}/`, "g"),
+    ];
+
+    patterns.forEach((pattern) => {
+      fixed = fixed.replace(pattern, (match) => {
+        return match.replace(
+          new RegExp(`["']${escapedModule}`, "g"),
+          (quoteMatch) => {
+            const quote = quoteMatch[0];
+            return `${quote}node:${module}`;
+          },
+        );
+      });
+    });
+  });
+
+  return fixed;
+}
 
 async function reassembleParts(dir) {
   console.log("Reassembling parts in: " + dir);
@@ -40,9 +78,21 @@ async function reassembleParts(dir) {
     console.log(`Reassembled ${outPath}`);
   }
 
+  const generatedFiles = fs.readdirSync(dir);
+  generatedFiles.forEach((file) => {
+    console.log("[POST GENERATION] Checking file: " + file);
+    if (file.endsWith(".js") || file.endsWith(".mjs")) {
+      const filePath = path.join(dir, file);
+      console.log(`Fixing Node.js imports in ${filePath}`);
+      const content = fs.readFileSync(filePath, "utf8");
+      const fixedContent = fixNodeImports(content);
+      fs.writeFileSync(filePath, fixedContent, "utf8");
+      console.log(`Fixed Node.js imports in ${file}`);
+    }
+  });
+
   try {
-    const pluginPath = path.join(dir, "index.js");
-    require(pluginPath);
+    await import("./plugin/index.js");
     console.log("Plugin loaded successfully");
   } catch (err) {
     console.error("Failed to load plugin:", err);

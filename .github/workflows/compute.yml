@@ -32,17 +32,19 @@ jobs:
       VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
+      DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
+      DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+      LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.10.0"
+      - uses: denoland/setup-deno@v2
 
       - name: Execute plugin
-        run: node dist/index.js
+        run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
         env:
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -50,3 +52,8 @@ jobs:
           VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
+          DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
+          DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}

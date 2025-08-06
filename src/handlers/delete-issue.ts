@@ -1,15 +1,16 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export async function deleteIssues(context: Context<"issues.deleted">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
     payload,
   } = context;
   const nodeId = payload.issue.node_id;
 
   try {
     await supabase.issue.deleteIssue(nodeId);
+    await kv.removeIssue(payload.issue.html_url);
     logger.ok(`Successfully deleted issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {
     if (error instanceof Error) {

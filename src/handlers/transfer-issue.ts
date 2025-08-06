@@ -1,9 +1,9 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export async function issueTransfer(context: Context<"issues.transferred">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
   } = context;
   const { changes, issue } = context.payload;
   const nodeId = issue.node_id;
@@ -19,6 +19,7 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
   try {
     await supabase.issue.deleteIssue(nodeId);
     await supabase.issue.createIssue({ id: newIssueNodeId, payload: new_issue, isPrivate, markdown, author_id: authorId });
+    await kv.updateIssue(issue.html_url, new_issue.html_url);
     logger.ok(`Successfully transferred issue!`, new_issue);
   } catch (error) {
     if (error instanceof Error) {
