@@ -1,3 +1,5 @@
+import { JSDOM } from "jsdom";
+import markdownit from "markdown-it";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
 
@@ -39,9 +41,9 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     logger.info("Issue body is empty", { originalIssue });
     return;
   }
-  issueBody = removeFootnotes(issueBody);
+  issueBody = await cleanContent(issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: originalIssue.title + removeFootnotes(issueBody),
+    markdown: originalIssue.title + issueBody,
     currentId: originalIssue.node_id,
     threshold: context.config.dedupeWarningThreshold,
   });
@@ -300,7 +302,7 @@ function findEditDistance(sentenceA: string, sentenceB: string): number {
  * @param content The content of the issue
  * @returns The content without footnotes
  */
-export function removeFootnotes(content: string): string {
+function removeFootnotes(content: string): string {
   const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   let contentWithoutFootnotes = content.replace(footnoteDefRegex, "");
@@ -312,6 +314,43 @@ export function removeFootnotes(content: string): string {
   }
   contentWithoutFootnotes = removeCautionMessages(contentWithoutFootnotes);
   return contentWithoutFootnotes;
+}
+
+async function handleAnchorAndImgElements(content: string) {
+  const md = new markdownit();
+  const html = md.render(content);
+  const jsDom = new JSDOM(html);
+  const htmlElement = jsDom.window.document;
+  const anchors = htmlElement.getElementsByTagName("a");
+  const images = htmlElement.getElementsByTagName("img");
+
+  async function processElement(element: HTMLAnchorElement | HTMLImageElement, isImage: boolean) {
+    const url = isImage ? (element as HTMLImageElement).getAttribute("src") : (element as HTMLAnchorElement).getAttribute("href");
+    if (!url) return;
+
+    try {
+      const linkResponse = await fetch(url);
+      if (!linkResponse.ok) {
+        return null;
+      }
+      const contentType = linkResponse.headers.get("content-type");
+      if (!contentType?.startsWith("image/")) return null;
+    } catch {
+      return null;
+    }
+  }
+
+  for (const anchor of anchors) {
+    await processElement(anchor, false);
+  }
+  for (const image of images) {
+    await processElement(image, true);
+  }
+}
+
+export async function cleanContent(content: string): Promise<string> {
+  await handleAnchorAndImgElements(content);
+  return removeFootnotes(content);
 }
 
 export function removeCautionMessages(content: string): string {

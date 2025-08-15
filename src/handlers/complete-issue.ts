@@ -1,5 +1,5 @@
 import { Context } from "../types/index";
-import { removeFootnotes } from "./issue-deduplication";
+import { cleanContent } from "./issue-deduplication";
 
 export async function completeIssue(context: Context<"issues.closed">) {
   const {
@@ -32,7 +32,7 @@ export async function completeIssue(context: Context<"issues.closed">) {
     }
 
     // Clean issue by removing footnotes
-    const cleanedIssue = removeFootnotes(markdown);
+    const cleanedIssue = await cleanContent(markdown);
 
     // Add completed status to payload
     const updatedPayload = {
