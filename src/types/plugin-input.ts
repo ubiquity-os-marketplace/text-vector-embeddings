@@ -24,7 +24,7 @@ export const pluginSettingsSchema = T.Object(
     llm: T.Object(
       {
         model: T.String({
-          default: "deepseek/deepseek-chat-v3-0324:free",
+          default: "google/gemini-2.5-flash-lite",
           description: "The LLM model to use for generating responses.",
           examples: llmList,
         }),
