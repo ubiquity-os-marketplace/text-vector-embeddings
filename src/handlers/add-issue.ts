@@ -19,7 +19,7 @@ export async function addIssue(context: Context<"issues.opened">) {
       logger.error("Issue body is empty", { issue });
       return;
     }
-    const cleanedIssue = await cleanContent(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });

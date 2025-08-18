@@ -32,7 +32,7 @@ export async function completeIssue(context: Context<"issues.closed">) {
     }
 
     // Clean issue by removing footnotes
-    const cleanedIssue = await cleanContent(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     // Add completed status to payload
     const updatedPayload = {

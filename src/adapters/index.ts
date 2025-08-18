@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { createCronDatabase } from "../cron/database-handler";
 import { Context } from "../types/index";
+import { LlmAdapter } from "./llm";
 import { Comment } from "./supabase/helpers/comment";
 import { SuperSupabase } from "./supabase/helpers/supabase";
 import { Embedding as VoyageEmbedding } from "./voyage/helpers/embedding";
@@ -20,5 +21,6 @@ export async function createAdapters(supabaseClient: SupabaseClient, voyage: Voy
       super: new SuperVoyage(voyage, context),
     },
     kv: await createCronDatabase(),
+    llm: new LlmAdapter(context),
   };
 }

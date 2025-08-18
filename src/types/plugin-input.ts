@@ -20,6 +20,22 @@ export const pluginSettingsSchema = T.Object(
       T.Number({ default: 0, description: "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score." })
     ),
     demoFlag: T.Boolean({ default: false, description: "When true, disables storing issues and comments in the database." }),
+    llm: T.Object(
+      {
+        model: T.String({
+          default: "deepseek/deepseek-chat-v3-0324:free",
+          description: "The LLM model to use for generating responses.",
+          examples: ["deepseek/deepseek-chat-v3-0324:free", "openai/gpt-4o", "openai/o1-mini"],
+        }),
+        endpoint: T.String({
+          default: "https://openrouter.ai/api/v1",
+          description: "The LLM API endpoint.",
+          examples: ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+        }),
+        maxRetries: T.Number({ default: 5, description: "The maximum number of retries for LLM requests.", minimum: 0 }),
+      },
+      { default: {} }
+    ),
   },
   { default: {} }
 );

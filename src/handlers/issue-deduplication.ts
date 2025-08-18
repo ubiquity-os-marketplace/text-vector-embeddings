@@ -41,7 +41,7 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     logger.info("Issue body is empty", { originalIssue });
     return;
   }
-  issueBody = await cleanContent(issueBody);
+  issueBody = await cleanContent(context, issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
     markdown: originalIssue.title + issueBody,
     currentId: originalIssue.node_id,
@@ -316,7 +316,7 @@ function removeFootnotes(content: string): string {
   return contentWithoutFootnotes;
 }
 
-async function handleAnchorAndImgElements(content: string) {
+async function handleAnchorAndImgElements(context: Context, content: string) {
   const md = new markdownit();
   const html = md.render(content);
   const jsDom = new JSDOM(html);
@@ -335,6 +335,7 @@ async function handleAnchorAndImgElements(content: string) {
       }
       const contentType = linkResponse.headers.get("content-type");
       if (!contentType?.startsWith("image/")) return null;
+      await context.adapters.llm.createCompletion(linkResponse);
     } catch {
       return null;
     }
@@ -348,8 +349,8 @@ async function handleAnchorAndImgElements(content: string) {
   }
 }
 
-export async function cleanContent(content: string): Promise<string> {
-  await handleAnchorAndImgElements(content);
+export async function cleanContent(context: Context, content: string): Promise<string> {
+  await handleAnchorAndImgElements(context, content);
   return removeFootnotes(content);
 }
 

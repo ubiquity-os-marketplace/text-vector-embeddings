@@ -16,6 +16,7 @@ export const envSchema = T.Object({
   DENO_KV_URL: T.String(),
   LOG_LEVEL: T.Optional(T.String()),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
+  OPENROUTER_API_KEY: T.String(),
 });
 
 export type Env = StaticDecode<typeof envSchema>;
