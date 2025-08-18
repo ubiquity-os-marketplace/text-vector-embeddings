@@ -21,7 +21,6 @@ export const llmList = [
   "anthropic/claude-3.5-sonnet",
   "anthropic/claude-3.5-sonnet-20240620",
   "anthropic/claude-3.7-sonnet",
-  "anthropic/claude-3.7-sonnet:beta",
   "anthropic/claude-3.7-sonnet:thinking",
   "anthropic/claude-opus-4",
   "anthropic/claude-opus-4.1",

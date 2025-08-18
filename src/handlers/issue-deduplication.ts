@@ -1,6 +1,6 @@
 import he from "he";
 import { JSDOM } from "jsdom";
-import markdownit from "markdown-it";
+import { marked } from "marked";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
 
@@ -318,8 +318,7 @@ function removeFootnotes(content: string): string {
 }
 
 async function handleAnchorAndImgElements(context: Context, content: string) {
-  const md = new markdownit();
-  const html = md.render(content);
+  const html = await marked(content);
   const jsDom = new JSDOM(html);
   const htmlElement = jsDom.window.document;
   const anchors = htmlElement.getElementsByTagName("a");
