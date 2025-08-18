@@ -21,7 +21,8 @@
     "worker": "wrangler dev --env dev --port 4004",
     "dev": " deno serve --port 4004 --unstable-sloppy-imports --allow-all --unstable-kv --watch src/worker.ts",
     "supabase:generate:local": "supabase gen types typescript --local > src/types/database.ts",
-    "supabase:generate:remote": "cross-env-shell \"supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/types/database.ts\""
+    "supabase:generate:remote": "cross-env-shell \"supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/types/database.ts\"",
+    "postinstall": "bun run scripts/update-models.ts && bun prettier --write src/types/openrouter-types.ts"
   },
   "keywords": [
     "typescript",

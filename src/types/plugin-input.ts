@@ -1,4 +1,5 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
+import { llmList } from "./openrouter-types";
 
 /**
  * This should contain the properties of the bot config
@@ -25,7 +26,7 @@ export const pluginSettingsSchema = T.Object(
         model: T.String({
           default: "deepseek/deepseek-chat-v3-0324:free",
           description: "The LLM model to use for generating responses.",
-          examples: ["deepseek/deepseek-chat-v3-0324:free", "openai/gpt-4o", "openai/o1-mini"],
+          examples: llmList,
         }),
         endpoint: T.String({
           default: "https://openrouter.ai/api/v1",
