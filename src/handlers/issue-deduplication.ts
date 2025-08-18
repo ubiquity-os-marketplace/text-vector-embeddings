@@ -324,6 +324,7 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
   const anchors = htmlElement.getElementsByTagName("a");
   const images = htmlElement.getElementsByTagName("img");
 
+  console.log("++++> 2", anchors.length, images.length);
   async function processElement(element: HTMLAnchorElement | HTMLImageElement, isImage: boolean) {
     const url = isImage ? (element as HTMLImageElement).getAttribute("src") : (element as HTMLAnchorElement).getAttribute("href");
     if (!url) return;
@@ -331,10 +332,14 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
     try {
       const linkResponse = await fetch(url);
       if (!linkResponse.ok) {
+        context.logger.warn(`Failed to fetch ${url}`, { linkResponse });
         return null;
       }
       const contentType = linkResponse.headers.get("content-type");
-      if (!contentType?.startsWith("image/")) return null;
+      if (!contentType?.startsWith("image/")) {
+        context.logger.warn(`Content type is not an image: ${contentType}, will skip ${url}`);
+        return null;
+      }
       await context.adapters.llm.createCompletion(linkResponse);
     } catch {
       return null;
@@ -350,6 +355,7 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
 }
 
 export async function cleanContent(context: Context, content: string): Promise<string> {
+  console.log("++++> 1");
   await handleAnchorAndImgElements(context, content);
   return removeFootnotes(content);
 }

@@ -8,7 +8,8 @@ export class LlmAdapter {
   constructor(
     protected context: Context,
     private _llm: OpenAI = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: process.env.OPENROUTER_API_KEY,
+      baseURL: context.config.llm.endpoint,
     })
   ) {}
 
@@ -45,7 +46,12 @@ export class LlmAdapter {
           // @ts-expect-error Supported by OpenRouter: https://openrouter.ai/docs/features/message-transforms
           transforms: ["middle-out"],
         };
-        await this._llm.chat.completions.create(prompt);
+        const response = await this._llm.chat.completions.create(prompt);
+        if (!response.choices?.length) {
+          throw this.context.logger.warn("Failed to get a completion from the LLM.");
+        }
+        this.context.logger.debug("LLM response", { response });
+        return response.choices[0].message.content;
       },
       {
         maxRetries: config.llm.maxRetries,

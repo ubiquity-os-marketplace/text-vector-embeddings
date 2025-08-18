@@ -1,3 +1,5 @@
+import { TypeBoxError } from "@sinclair/typebox";
+import { LogReturn } from "@ubiquity-os/ubiquity-os-logger";
 import ms, { StringValue } from "ms";
 import { OpenAI } from "openai";
 
@@ -16,5 +18,5 @@ export function checkLlmRetryableState(error: unknown) {
       return Number.isFinite(retryAfter) ? retryAfter : true;
     }
   }
-  return false;
+  return error instanceof SyntaxError || error instanceof TypeBoxError || error instanceof LogReturn;
 }
