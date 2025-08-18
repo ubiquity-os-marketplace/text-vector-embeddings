@@ -45,6 +45,30 @@
         "default": false,
         "description": "When true, disables storing issues and comments in the database.",
         "type": "boolean"
+      },
+      "llm": {
+        "default": {},
+        "type": "object",
+        "properties": {
+          "model": {
+            "default": "deepseek/deepseek-chat-v3-0324:free",
+            "description": "The LLM model to use for generating responses.",
+            "examples": ["deepseek/deepseek-chat-v3-0324:free", "openai/gpt-4o", "openai/o1-mini"],
+            "type": "string"
+          },
+          "endpoint": {
+            "default": "https://openrouter.ai/api/v1",
+            "description": "The LLM API endpoint.",
+            "examples": ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+            "type": "string"
+          },
+          "maxRetries": {
+            "default": 5,
+            "description": "The maximum number of retries for LLM requests.",
+            "minimum": 0,
+            "type": "number"
+          }
+        }
       }
     }
   },
