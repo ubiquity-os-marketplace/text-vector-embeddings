@@ -1,3 +1,6 @@
+import he from "he";
+import { JSDOM } from "jsdom";
+import { marked } from "marked";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
 
@@ -39,9 +42,9 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     logger.info("Issue body is empty", { originalIssue });
     return;
   }
-  issueBody = removeFootnotes(issueBody);
+  issueBody = await cleanContent(context, issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: originalIssue.title + removeFootnotes(issueBody),
+    markdown: originalIssue.title + issueBody,
     currentId: originalIssue.node_id,
     threshold: context.config.dedupeWarningThreshold,
   });
@@ -300,7 +303,7 @@ function findEditDistance(sentenceA: string, sentenceB: string): number {
  * @param content The content of the issue
  * @returns The content without footnotes
  */
-export function removeFootnotes(content: string): string {
+function removeFootnotes(content: string): string {
   const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   let contentWithoutFootnotes = content.replace(footnoteDefRegex, "");
@@ -312,6 +315,64 @@ export function removeFootnotes(content: string): string {
   }
   contentWithoutFootnotes = removeCautionMessages(contentWithoutFootnotes);
   return contentWithoutFootnotes;
+}
+
+async function handleAnchorAndImgElements(context: Context, content: string) {
+  const html = await marked(content);
+  const jsDom = new JSDOM(html);
+  const htmlElement = jsDom.window.document;
+  const anchors = htmlElement.getElementsByTagName("a");
+  const images = htmlElement.getElementsByTagName("img");
+
+  async function processElement(element: HTMLAnchorElement | HTMLImageElement, isImage: boolean) {
+    const url = isImage ? (element as HTMLImageElement).getAttribute("src") : (element as HTMLAnchorElement).getAttribute("href");
+    if (!url) return;
+
+    try {
+      const linkResponse = await fetch(url);
+      if (!linkResponse.ok) {
+        context.logger.warn(`Failed to fetch ${url}`, { linkResponse });
+        return;
+      }
+      const contentType = linkResponse.headers.get("content-type");
+      if (!contentType?.startsWith("image/")) {
+        context.logger.warn(`Content type is not an image: ${contentType}, will skip ${url}`);
+        return;
+      }
+
+      const altContent = await context.adapters.llm.createCompletion(linkResponse);
+
+      if (!altContent) return;
+
+      const escapedSrc = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const imageHtmlRegex = new RegExp(`<img([^>]*?)src="${escapedSrc}"([^>]*?)\\s*/?>`, "g");
+      content = content.replace(imageHtmlRegex, (match, beforeSrc, afterSrc) => {
+        if (match.includes("alt=")) {
+          return match.replace(/alt="[^"]*"/, `alt="${he.encode(altContent)}"`);
+        } else {
+          return `<img${beforeSrc}alt="${he.encode(altContent)}" src="${url}"${afterSrc} />`;
+        }
+      });
+      const linkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedSrc}\\)`, "g");
+      content = content.replace(linkRegex, `[$1](${url} "${he.encode(altContent)}")`);
+    } catch (e) {
+      context.logger.warn(`Failed to process ${url}`, { e });
+    }
+  }
+
+  for (const anchor of anchors) {
+    await processElement(anchor, false);
+  }
+  for (const image of images) {
+    await processElement(image, true);
+  }
+
+  context.logger.debug("Enriched comment content with image descriptions.", { content });
+  return content;
+}
+
+export async function cleanContent(context: Context, content: string): Promise<string> {
+  return removeFootnotes(await handleAnchorAndImgElements(context, content));
 }
 
 export function removeCautionMessages(content: string): string {

@@ -10,7 +10,8 @@
     "./src/types/database.ts",
     "./supabase/config.toml",
     "dist/**",
-    "bun.lockb"
+    "bun.lockb",
+    "scripts/http"
   ],
   "useGitignore": true,
   "language": "en",
@@ -41,7 +42,10 @@
     "Ubiquibot",
     "REPONAME",
     "hono",
-    "issuecomment"
+    "issuecomment",
+    "openrouter",
+    "ratelimit",
+    "retryable"
   ],
   "dictionaries": ["typescript", "node", "software-terms"],
   "import": ["@cspell/dict-typescript/cspell-ext.json", "@cspell/dict-node/cspell-ext.json", "@cspell/dict-software-terms"],
