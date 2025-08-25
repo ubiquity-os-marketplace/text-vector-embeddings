@@ -1,5 +1,5 @@
 import { Context } from "../types/index";
-import { removeFootnotes } from "./issue-deduplication";
+import { cleanContent } from "./issue-deduplication";
 
 export async function updateIssue(context: Context<"issues.edited">) {
   const {
@@ -19,7 +19,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
       return;
     }
     //clean issue by removing footnotes
-    const cleanedIssue = removeFootnotes(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });

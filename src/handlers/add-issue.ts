@@ -1,5 +1,5 @@
 import { Context } from "../types/index";
-import { removeFootnotes } from "./issue-deduplication";
+import { cleanContent } from "./issue-deduplication";
 
 export async function addIssue(context: Context<"issues.opened">) {
   const {
@@ -19,7 +19,7 @@ export async function addIssue(context: Context<"issues.opened">) {
       logger.error("Issue body is empty", { issue });
       return;
     }
-    const cleanedIssue = removeFootnotes(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
