@@ -386,7 +386,10 @@
           "endpoint": {
             "default": "https://openrouter.ai/api/v1",
             "description": "The LLM API endpoint.",
-            "examples": ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+            "examples": [
+              "https://openrouter.ai/api/v1",
+              "https://api.openai.com/v1"
+            ],
             "type": "string"
           },
           "maxRetries": {
@@ -399,5 +402,5 @@
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev"
+  "homepage_url": "https://text-vector-embeddings-mai.deno.dev"
 }
