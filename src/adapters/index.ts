@@ -1,13 +1,13 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { VoyageAIClient } from "voyageai";
 import { createCronDatabase } from "../cron/database-handler";
 import { Context } from "../types/index";
-import { LlmAdapter } from "./llm";
+import { LlmAdapter } from "./llm/index";
 import { Comment } from "./supabase/helpers/comment";
+import { Issue } from "./supabase/helpers/issues";
 import { SuperSupabase } from "./supabase/helpers/supabase";
 import { Embedding as VoyageEmbedding } from "./voyage/helpers/embedding";
 import { SuperVoyage } from "./voyage/helpers/voyage";
-import { VoyageAIClient } from "voyageai";
-import { Issue } from "./supabase/helpers/issues";
 
 export async function createAdapters(supabaseClient: SupabaseClient, voyage: VoyageAIClient, context: Context) {
   return {
