@@ -1,10 +1,10 @@
-import { Context } from "../types";
-import { removeFootnotes } from "./issue-deduplication";
+import { Context } from "../types/index";
+import { cleanContent } from "./issue-deduplication";
 
 export async function updateIssue(context: Context<"issues.edited">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
     payload,
     config,
   } = context;
@@ -19,7 +19,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
       return;
     }
     //clean issue by removing footnotes
-    const cleanedIssue = removeFootnotes(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
@@ -27,6 +27,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
     }
 
     await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId });
+    await kv.addIssue(payload.issue.html_url);
     logger.ok(`Successfully updated issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {
     if (error instanceof Error) {

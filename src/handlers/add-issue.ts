@@ -1,10 +1,10 @@
-import { Context } from "../types";
-import { removeFootnotes } from "./issue-deduplication";
+import { Context } from "../types/index";
+import { cleanContent } from "./issue-deduplication";
 
 export async function addIssue(context: Context<"issues.opened">) {
   const {
     logger,
-    adapters: { supabase },
+    adapters: { supabase, kv },
     payload,
     config,
   } = context;
@@ -19,7 +19,7 @@ export async function addIssue(context: Context<"issues.opened">) {
       logger.error("Issue body is empty", { issue });
       return;
     }
-    const cleanedIssue = removeFootnotes(markdown);
+    const cleanedIssue = await cleanContent(context, markdown);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
@@ -27,6 +27,7 @@ export async function addIssue(context: Context<"issues.opened">) {
     }
 
     await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId });
+    await kv.addIssue(issue.html_url);
     logger.ok(`Successfully created issue!`, issue);
   } catch (error) {
     if (error instanceof Error) {

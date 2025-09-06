@@ -1,8 +1,8 @@
 // @ts-check
-import tsEslint from "typescript-eslint";
 import eslint from "@eslint/js";
-import sonarjs from "eslint-plugin-sonarjs";
 import checkFile from "eslint-plugin-check-file";
+import sonarjs from "eslint-plugin-sonarjs";
+import tsEslint from "typescript-eslint";
 
 export default tsEslint.config({
   plugins: {
@@ -14,7 +14,7 @@ export default tsEslint.config({
   languageOptions: {
     parser: tsEslint.parser,
     parserOptions: {
-      project: ["./tsconfig.json"],
+      project: ["./tsconfig.json", "./tests/tsconfig.json"],
     },
   },
   rules: {

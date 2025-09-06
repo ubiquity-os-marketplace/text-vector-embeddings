@@ -1,5 +1,8 @@
+import he from "he";
+import { JSDOM } from "jsdom";
+import { marked } from "marked";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 export interface IssueGraphqlResponse {
   node: {
@@ -18,59 +21,12 @@ export interface IssueGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
-interface IssueResponse {
-  node: {
-    lastEditedAt: string | null; // This will be a string or null, depending on the API response
-  };
-}
-
-/**
- * Sleep for the specified duration
- * @param ms duration in milliseconds
- */
-function sleep(ms: number, context: Context): Promise<void> {
-  context.logger.info("Sleeping for " + ms + " milliseconds");
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function fetchLastEditTime(context: Context, issueNodeId: string): Promise<string | null> {
-  try {
-    // Directly type the response using the IssueResponse interface
-    const data: IssueResponse = await context.octokit.graphql(
-      /* GraphQL */
-      `
-        query ($issueNodeId: ID!) {
-          node(id: $issueNodeId) {
-            ... on Issue {
-              lastEditedAt
-            }
-          }
-        }
-      `,
-      { issueNodeId }
-    );
-
-    // Check if the node exists
-    if (!data.node) {
-      context.logger.error("Issue does not exist", { issueNodeId });
-      return null;
-    }
-
-    // Return lastEditedAt if available; otherwise return null
-    return data.node.lastEditedAt || null;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    context.logger.error("Failed to fetch issue details", { stack: errorMessage });
-    return null;
-  }
-}
-
 /**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar issue is found, a footnote is added to the current issue.
  * @param context The context object
  **/
-export async function issueChecker(context: Context<"issues.opened" | "issues.edited">) {
+export async function issueDedupe(context: Context<"issues.opened" | "issues.edited">) {
   const {
     logger,
     adapters: { supabase },
@@ -80,42 +36,15 @@ export async function issueChecker(context: Context<"issues.opened" | "issues.ed
 
   const originalIssue = payload.issue;
 
-  // Wait for the configured timeout period
-  await sleep(context.config.editTimeout, context);
-
-  const currentEventTime = context.eventName === "issues.opened" ? new Date(originalIssue.created_at).getTime() : new Date(originalIssue.updated_at).getTime();
-
-  const lastEditedAt = await fetchLastEditTime(context, originalIssue.node_id);
-
-  if (lastEditedAt === null) {
-    logger.info("Last edited time is null, skipping deduplication check", {
-      issueNumber: originalIssue.number,
-    });
-    return;
-  }
-
-  const latestEventTime = new Date(lastEditedAt).getTime();
-
-  // Event should only proceed if it's the most recent action
-  if (currentEventTime < latestEventTime) {
-    logger.info("Event superseded by newer changes, skipping deduplication check", {
-      issueNumber: originalIssue.number,
-      currentEventType: context.eventName,
-      currentEventTime: new Date(currentEventTime).toISOString(),
-      latestUpdateTime: new Date(latestEventTime).toISOString(),
-    });
-    return;
-  }
-
   // Use the latest issue data
   let issueBody = originalIssue.body;
   if (!issueBody) {
     logger.info("Issue body is empty", { originalIssue });
     return;
   }
-  issueBody = removeFootnotes(issueBody);
+  issueBody = await cleanContent(context, issueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: originalIssue.title + removeFootnotes(issueBody),
+    markdown: originalIssue.title + issueBody,
     currentId: originalIssue.node_id,
     threshold: context.config.dedupeWarningThreshold,
   });
@@ -374,7 +303,7 @@ function findEditDistance(sentenceA: string, sentenceB: string): number {
  * @param content The content of the issue
  * @returns The content without footnotes
  */
-export function removeFootnotes(content: string): string {
+function removeFootnotes(content: string): string {
   const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   let contentWithoutFootnotes = content.replace(footnoteDefRegex, "");
@@ -386,6 +315,64 @@ export function removeFootnotes(content: string): string {
   }
   contentWithoutFootnotes = removeCautionMessages(contentWithoutFootnotes);
   return contentWithoutFootnotes;
+}
+
+async function handleAnchorAndImgElements(context: Context, content: string) {
+  const html = await marked(content);
+  const jsDom = new JSDOM(html);
+  const htmlElement = jsDom.window.document;
+  const anchors = htmlElement.getElementsByTagName("a");
+  const images = htmlElement.getElementsByTagName("img");
+
+  async function processElement(element: HTMLAnchorElement | HTMLImageElement, isImage: boolean) {
+    const url = isImage ? (element as HTMLImageElement).getAttribute("src") : (element as HTMLAnchorElement).getAttribute("href");
+    if (!url) return;
+
+    try {
+      const linkResponse = await fetch(url);
+      if (!linkResponse.ok) {
+        context.logger.warn(`Failed to fetch ${url}`, { linkResponse });
+        return;
+      }
+      const contentType = linkResponse.headers.get("content-type");
+      if (!contentType?.startsWith("image/")) {
+        context.logger.warn(`Content type is not an image: ${contentType}, will skip ${url}`);
+        return;
+      }
+
+      const altContent = await context.adapters.llm.createCompletion(linkResponse);
+
+      if (!altContent) return;
+
+      const escapedSrc = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const imageHtmlRegex = new RegExp(`<img([^>]*?)src="${escapedSrc}"([^>]*?)\\s*/?>`, "g");
+      content = content.replace(imageHtmlRegex, (match, beforeSrc, afterSrc) => {
+        if (match.includes("alt=")) {
+          return match.replace(/alt="[^"]*"/, `alt="${he.encode(altContent)}"`);
+        } else {
+          return `<img${beforeSrc}alt="${he.encode(altContent)}" src="${url}"${afterSrc} />`;
+        }
+      });
+      const linkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedSrc}\\)`, "g");
+      content = content.replace(linkRegex, `[$1](${url} "${he.encode(altContent)}")`);
+    } catch (e) {
+      context.logger.warn(`Failed to process ${url}`, { e });
+    }
+  }
+
+  for (const anchor of anchors) {
+    await processElement(anchor, false);
+  }
+  for (const image of images) {
+    await processElement(image, true);
+  }
+
+  context.logger.debug("Enriched comment content with image descriptions.", { content });
+  return content;
+}
+
+export async function cleanContent(context: Context, content: string): Promise<string> {
+  return removeFootnotes(await handleAnchorAndImgElements(context, content));
 }
 
 export function removeCautionMessages(content: string): string {

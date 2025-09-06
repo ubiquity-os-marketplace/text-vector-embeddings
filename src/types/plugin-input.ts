@@ -1,4 +1,5 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
+import { llmList } from "./openrouter-types";
 
 /**
  * This should contain the properties of the bot config
@@ -16,14 +17,26 @@ export const pluginSettingsSchema = T.Object(
       description: "The minimum similarity score for including similar issues as annotations in the comment footnotes.",
     }),
     jobMatchingThreshold: T.Number({ default: 0.75, description: "The minimum similarity score when considering users to be suitable for a job." }),
-    editTimeout: T.Number({
-      default: 1800000,
-      description: "The timeout period in milliseconds before running deduplication after an edit (default 30 minutes)",
-    }),
     alwaysRecommend: T.Optional(
       T.Number({ default: 0, description: "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score." })
     ),
     demoFlag: T.Boolean({ default: false, description: "When true, disables storing issues and comments in the database." }),
+    llm: T.Object(
+      {
+        model: T.String({
+          default: "google/gemini-2.5-flash-lite",
+          description: "The LLM model to use for generating responses.",
+          examples: llmList,
+        }),
+        endpoint: T.String({
+          default: "https://openrouter.ai/api/v1",
+          description: "The LLM API endpoint.",
+          examples: ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+        }),
+        maxRetries: T.Number({ default: 5, description: "The maximum number of retries for LLM requests.", minimum: 0 }),
+      },
+      { default: {} }
+    ),
   },
   { default: {} }
 );
