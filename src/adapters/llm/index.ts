@@ -2,7 +2,7 @@ import { retry } from "@ubiquity-os/plugin-sdk/helpers";
 import { OpenAI } from "openai";
 import { ChatCompletionCreateParamsNonStreaming } from "openai/resources";
 import { checkLlmRetryableState } from "../../helpers/llm";
-import { Context } from "../../types";
+import { Context } from "../../types/index";
 
 export class LlmAdapter {
   constructor(
