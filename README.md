@@ -1,6 +1,6 @@
-# `@ubiquity-os/issue-comment-embeddings`
+# `@ubiquity-os/text-vector-embeddings`
 
-This is a plugin for [Ubiquibot](https://github.com/ubiquity-os/ubiquity-os-kernel). It listens for issue comments, and adds them to a vector store. It handles comment edits and deletions as well.
+This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-kernel). It listens for issue comments, and adds them to a vector store. It handles comment edits and deletions as well.
 
 ## Configuration
 
