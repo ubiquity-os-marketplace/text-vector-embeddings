@@ -12,7 +12,7 @@ export async function getAuthenticatedOctokit({
   appPrivateKey: string;
   owner: string;
   repo: string;
-}): InstanceType<typeof customOctokit> {
+}): Promise<InstanceType<typeof customOctokit>> {
   const appOctokit = new customOctokit({
     authStrategy: createAppAuth,
     auth: {
