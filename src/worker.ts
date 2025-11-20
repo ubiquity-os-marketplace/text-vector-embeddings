@@ -1,6 +1,6 @@
 import { swaggerUI } from "@hono/swagger-ui";
 import { Value } from "@sinclair/typebox/value";
-import { createPlugin } from "@ubiquity-os/plugin-sdk";
+import { CommentHandler, createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
@@ -69,14 +69,19 @@ export default {
           const octokit = new customOctokit();
           const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
+          const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
           const ctx: Context<"issues.opened"> = {
+            eventName: "issues.opened",
+            command: null,
+            commentHandler: new CommentHandler(),
             payload: {
               issue: issue.data,
-            },
+            } as Context<"issues.opened">["payload"],
             octokit,
             env: env(c),
             config,
-            logger: new Logs("info"),
+            logger,
+            adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
           };
           ctx.adapters = await initAdapters(ctx);
           const result = await issueMatching(ctx);
