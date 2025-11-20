@@ -86,7 +86,6 @@ export default {
           }
           const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
-          const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
           const ctx: Context<"issues.opened"> = {
             eventName: "issues.opened",
             command: null,
