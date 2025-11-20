@@ -71,7 +71,7 @@ export default {
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
           const ctx: Context<"issues.opened"> = {
             payload: {
-              issue,
+              issue: issue.data,
             },
             octokit,
             env: env(c),
