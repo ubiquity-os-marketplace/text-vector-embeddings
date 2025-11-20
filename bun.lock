@@ -9,7 +9,7 @@
         "@octokit/auth-app": "^8.0.2",
         "@octokit/openapi-types": "^23.0.1",
         "@octokit/plugin-rest-endpoint-methods": "^13.2.6",
-        "@sinclair/typebox": "0.34.3",
+        "@sinclair/typebox": "0.34.41",
         "@supabase/supabase-js": "^2.45.2",
         "@types/markdown-it": "^14.1.2",
         "@ubiquity-os/plugin-sdk": "^3.4.2",
@@ -424,7 +424,7 @@
 
     "@pkgr/core": ["@pkgr/core@0.1.2", "", {}, "sha512-fdDH1LSGfZdTH2sxdpVMw31BanV28K/Gry0cVFxaNP77neJSkd82mM8ErPNYs9e+0O7SdHBLTDzDgwUuy18RnQ=="],
 
-    "@sinclair/typebox": ["@sinclair/typebox@0.34.3", "", {}, "sha512-fEgncmnqn6WGibPn34deH5PwmMTuNCZ2clwlwevgFn8rP0l38zzWRg3KVYhoOZwkZ2Ew3yhZ/STdGDuMig66oQ=="],
+    "@sinclair/typebox": ["@sinclair/typebox@0.34.41", "", {}, "sha512-6gS8pZzSXdyRHTIqoqSVknxolr1kzfy4/CeDnrzsVz8TTIWUbOBr6gnzOmTYJ3eXQNh4IYHIGi5aIL7sOZ2G/g=="],
 
     "@snyk/github-codeowners": ["@snyk/github-codeowners@1.1.0", "", { "dependencies": { "commander": "^4.1.1", "ignore": "^5.1.8", "p-map": "^4.0.0" }, "bin": { "github-codeowners": "dist/cli.js" } }, "sha512-lGFf08pbkEac0NYgVf4hdANpAgApRjNByLXB+WBip3qj1iendOIyAwP2GKkKbQMNVy2r1xxDf0ssfWscoiC+Vw=="],
 

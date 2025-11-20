@@ -1,27 +1,35 @@
 import { swaggerUI } from "@hono/swagger-ui";
+import { Value } from "@sinclair/typebox/value";
 import { createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
-import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
-import type { ExecutionContext } from "hono";
+import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
+import { env } from "hono/adapter";
 import * as v from "valibot";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
 import { createAdapters } from "./adapters/index";
-import { runPlugin } from "./plugin";
+import { issueMatching } from "./handlers/issue-matching";
+import { parseGitHubUrl } from "./helpers/github";
+import { initAdapters, runPlugin } from "./plugin";
 import { Command } from "./types/command";
 import { SupportedEvents } from "./types/context";
 import { Env, envSchema } from "./types/env";
+import { Context } from "./types/index";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 
+const urlSchema = v.pipe(v.string(), v.url(), v.regex(/https:\/\/github\.com\/[^/]+\/[^/]+\/(issues|pull)\/\d+$/));
+
 const querySchema = v.object({
-  issueUrl: v.union([v.array(v.string()), v.string()]),
+  issueUrls: v.union([v.array(urlSchema), urlSchema]),
 });
 
 const responseSchema = v.array(v.object({ userId: v.string(), score: v.number() }));
 
 export default {
-  async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
+  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
     const honoApp = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin({
@@ -34,8 +42,8 @@ export default {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: env.LOG_LEVEL as LogLevel,
-        kernelPublicKey: env.KERNEL_PUBLIC_KEY,
+        logLevel: environment.LOG_LEVEL as LogLevel,
+        kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
         bypassSignatureVerification: process.env.NODE_ENV === "local",
       }
     );
@@ -54,7 +62,32 @@ export default {
         },
       }),
       validator("query", querySchema),
-      () => new Response("OK")
+      async (c) => {
+        const urls = c.req.queries("issueUrls") as string[];
+        async function handleUrl(url: string) {
+          const { owner, repo, issue_number } = parseGitHubUrl(url);
+          const octokit = new customOctokit();
+          const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
+          const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
+          const ctx: Context<"issues.opened"> = {
+            payload: {
+              issue,
+            },
+            octokit,
+            env: env(c),
+            config,
+            logger: new Logs("info"),
+          };
+          ctx.adapters = await initAdapters(ctx);
+          const result = await issueMatching(ctx);
+          if (!result) {
+            return { [url]: [] };
+          }
+          return { [url]: result };
+        }
+        const res = await Promise.all(urls.map(handleUrl));
+        return new Response(JSON.stringify(res), { status: 200 });
+      }
     );
     honoApp.get(
       "/openapi",
@@ -72,7 +105,7 @@ export default {
         },
       })
     );
-    honoApp.get("/ui", swaggerUI({ url: "/openapi" }));
+    honoApp.get("/docs", swaggerUI({ url: "/openapi" }));
 
     return honoApp.fetch(request, env, executionCtx);
   },

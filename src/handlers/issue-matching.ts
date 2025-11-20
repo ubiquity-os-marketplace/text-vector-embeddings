@@ -25,6 +25,67 @@ export interface IssueGraphqlResponse {
   similarity: number;
 }
 
+export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
+  const { logger, octokit, payload } = context;
+  const issue = payload.issue;
+  const commentStart = ">The following contributors may be suitable for this task:";
+
+  const result = await issueMatching(context);
+
+  if (!result) {
+    return;
+  }
+
+  const { matchResultArray, sortedContributors } = result;
+
+  // Fetch if any previous comment exists
+  const listIssues: RestEndpointMethodTypes["issues"]["listComments"]["response"] = await octokit.rest.issues.listComments({
+    owner: payload.repository.owner.login,
+    repo: payload.repository.name,
+    issue_number: issue.number,
+  });
+
+  //Check if the comment already exists
+  const existingComment = listIssues.data.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
+
+  if (matchResultArray.size === 0) {
+    if (existingComment) {
+      // If the comment already exists, delete it
+      await octokit.rest.issues.deleteComment({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        comment_id: existingComment.id,
+      });
+    }
+    logger.debug("No suitable contributors found");
+    return;
+  }
+
+  // Use alwaysRecommend if specified
+  const numToShow = context.config.alwaysRecommend || 3;
+  const limitedContributors = new Map(sortedContributors.slice(0, numToShow).map(({ login, matches }) => [login, matches]));
+
+  const comment = commentBuilder(limitedContributors);
+
+  logger.debug("Comment to be added", { comment });
+
+  if (existingComment) {
+    await context.octokit.rest.issues.updateComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      comment_id: existingComment.id,
+      body: comment,
+    });
+  } else {
+    await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: payload.issue.number,
+      body: comment,
+    });
+  }
+}
+
 /**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar completed issue is found, it will add a comment to the issue with the assignee(s) of the similar issue.
@@ -34,12 +95,10 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
   const {
     logger,
     adapters: { supabase },
-    octokit,
     payload,
   } = context;
   const issue = payload.issue;
   const issueContent = issue.body + issue.title;
-  const commentStart = ">The following contributors may be suitable for this task:";
   const matchResultArray: Map<string, Array<string>> = new Map();
 
   // If alwaysRecommend is enabled, use a lower threshold to ensure we get enough recommendations
@@ -120,29 +179,7 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
       }
     });
 
-    // Fetch if any previous comment exists
-    const listIssues: RestEndpointMethodTypes["issues"]["listComments"]["response"] = await octokit.rest.issues.listComments({
-      owner: payload.repository.owner.login,
-      repo: payload.repository.name,
-      issue_number: issue.number,
-    });
-    //Check if the comment already exists
-    const existingComment = listIssues.data.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
-
     logger.debug("Matched issues", { matchResultArray, length: matchResultArray.size });
-
-    if (matchResultArray.size === 0) {
-      if (existingComment) {
-        // If the comment already exists, delete it
-        await octokit.rest.issues.deleteComment({
-          owner: payload.repository.owner.login,
-          repo: payload.repository.name,
-          comment_id: existingComment.id,
-        });
-      }
-      logger.debug("No suitable contributors found");
-      return;
-    }
 
     // Convert Map to array and sort by highest similarity
     const sortedContributors = Array.from(matchResultArray.entries())
@@ -154,33 +191,12 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
       .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
 
     logger.debug("Sorted contributors", { sortedContributors });
-
-    // Use alwaysRecommend if specified
-    const numToShow = context.config.alwaysRecommend || 3;
-    const limitedContributors = new Map(sortedContributors.slice(0, numToShow).map(({ login, matches }) => [login, matches]));
-
-    const comment = commentBuilder(limitedContributors);
-
-    logger.debug("Comment to be added", { comment });
-
-    if (existingComment) {
-      await context.octokit.rest.issues.updateComment({
-        owner: payload.repository.owner.login,
-        repo: payload.repository.name,
-        comment_id: existingComment.id,
-        body: comment,
-      });
-    } else {
-      await context.octokit.rest.issues.createComment({
-        owner: payload.repository.owner.login,
-        repo: payload.repository.name,
-        issue_number: payload.issue.number,
-        body: comment,
-      });
-    }
+    return { matchResultArray, similarIssues, sortedContributors };
   }
 
   logger.info(`Exiting issueMatching handler!`, { similarIssues: similarIssues || "No similar issues found" });
+
+  return null;
 }
 
 /**
