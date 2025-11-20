@@ -1,4 +1,5 @@
 import { swaggerUI } from "@hono/swagger-ui";
+import { createAppAuth } from "@octokit/auth-app";
 import { Value } from "@sinclair/typebox/value";
 import { CommentHandler, createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
@@ -26,7 +27,7 @@ const querySchema = v.object({
   issueUrls: v.union([v.array(urlSchema), urlSchema]),
 });
 
-const responseSchema = v.array(v.object({ userId: v.string(), score: v.number() }));
+const responseSchema = v.array(v.unknown());
 
 export default {
   async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
@@ -66,7 +67,15 @@ export default {
         const urls = c.req.queries("issueUrls") as string[];
         async function handleUrl(url: string) {
           const { owner, repo, issue_number } = parseGitHubUrl(url);
-          const octokit = new customOctokit();
+          const honoEnv = env(c);
+          const octokit = new customOctokit({
+            authStrategy: createAppAuth,
+            auth: {
+              appId: honoEnv.APP_ID,
+              privateKey: honoEnv.APP_PRIVATE_KEY,
+              installationId: honoEnv.APP_INSTALLATION_ID,
+            },
+          });
           const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
           const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
@@ -78,7 +87,7 @@ export default {
               issue: issue.data,
             } as Context<"issues.opened">["payload"],
             octokit,
-            env: env(c),
+            env: honoEnv as Context<"issues.opened">["env"],
             config,
             logger,
             adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
