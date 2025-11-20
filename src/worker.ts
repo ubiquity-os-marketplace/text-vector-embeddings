@@ -1,5 +1,4 @@
 import { swaggerUI } from "@hono/swagger-ui";
-import { createAppAuth } from "@octokit/auth-app";
 import { Value } from "@sinclair/typebox/value";
 import { CommentHandler, createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
@@ -12,6 +11,7 @@ import * as v from "valibot";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
 import { createAdapters } from "./adapters/index";
+import { getAuthenticatedOctokit } from "./cron/workflow";
 import { issueMatching } from "./handlers/issue-matching";
 import { parseGitHubUrl } from "./helpers/github";
 import { initAdapters, runPlugin } from "./plugin";
@@ -68,14 +68,22 @@ export default {
         async function handleUrl(url: string) {
           const { owner, repo, issue_number } = parseGitHubUrl(url);
           const honoEnv = env(c);
-          const octokit = new customOctokit({
-            authStrategy: createAppAuth,
-            auth: {
-              appId: honoEnv.APP_ID,
-              privateKey: honoEnv.APP_PRIVATE_KEY,
-              installationId: honoEnv.APP_INSTALLATION_ID,
-            },
-          });
+          const appId = honoEnv.APP_ID;
+          const appPrivateKey = honoEnv.APP_PRIVATE_KEY;
+          const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
+          let octokit;
+
+          if (!appId || !appPrivateKey) {
+            logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
+            octokit = new customOctokit();
+          } else {
+            octokit = await getAuthenticatedOctokit({
+              appId: honoEnv.APP_ID as string,
+              appPrivateKey: honoEnv.APP_PRIVATE_KEY as string,
+              owner,
+              repo,
+            });
+          }
           const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
           const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];

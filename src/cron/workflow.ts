@@ -2,6 +2,38 @@ import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Context } from "../types/index";
 
+export async function getAuthenticatedOctokit({
+  appPrivateKey,
+  appId,
+  owner,
+  repo,
+}: {
+  appId: string;
+  appPrivateKey: string;
+  owner: string;
+  repo: string;
+}): InstanceType<typeof customOctokit> {
+  const appOctokit = new customOctokit({
+    authStrategy: createAppAuth,
+    auth: {
+      appId: appId,
+      privateKey: appPrivateKey,
+    },
+  });
+  const { data: installation } = await appOctokit.rest.apps.getRepoInstallation({
+    owner,
+    repo,
+  });
+  return new customOctokit({
+    authStrategy: createAppAuth,
+    auth: {
+      appId: process.env.APP_ID,
+      privateKey: process.env.APP_PRIVATE_KEY,
+      installationId: installation.id,
+    },
+  });
+}
+
 export async function updateCronState(context: Context) {
   context.logger.debug("Updating the cron KV workflow state.");
   const db = context.adapters.kv;
@@ -14,30 +46,16 @@ export async function updateCronState(context: Context) {
   const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
 
   try {
-    const appOctokit = new customOctokit({
-      authStrategy: createAppAuth,
-      auth: {
-        appId: process.env.APP_ID,
-        privateKey: process.env.APP_PRIVATE_KEY,
-      },
-    });
-
     let authOctokit;
     if (!process.env.APP_ID || !process.env.APP_PRIVATE_KEY) {
       context.logger.debug("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
       authOctokit = context.octokit;
     } else {
-      const { data: installation } = await appOctokit.rest.apps.getRepoInstallation({
+      authOctokit = await getAuthenticatedOctokit({
+        appId: process.env.APP_ID,
+        appPrivateKey: process.env.APP_PRIVATE_KEY,
         owner,
         repo,
-      });
-      authOctokit = new customOctokit({
-        authStrategy: createAppAuth,
-        auth: {
-          appId: process.env.APP_ID,
-          privateKey: process.env.APP_PRIVATE_KEY,
-          installationId: installation.id,
-        },
       });
     }
 
