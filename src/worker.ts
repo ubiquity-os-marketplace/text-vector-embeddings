@@ -57,7 +57,7 @@ const responseSchema = v.record(
 
 export default {
   async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
-    const environment = env(request as never);
+    const environment = env<Env>(request as never);
     const honoApp = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin({
@@ -104,12 +104,21 @@ export default {
       validator("query", querySchema),
       async (c) => {
         const urls = c.req.queries("issueUrls") as string[];
+        const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
         async function handleUrl(url: string) {
-          const { owner, repo, issue_number } = parseGitHubUrl(url);
+          let owner, repo, issueNumber;
+          try {
+            const urlParts = parseGitHubUrl(url);
+            owner = urlParts.owner;
+            repo = urlParts.repo;
+            issueNumber = urlParts.issue_number;
+          } catch (e) {
+            logger.warn("Failed to parse the GitHub url", { e });
+            return { [url]: null };
+          }
           const honoEnv = env(c);
           const appId = honoEnv.APP_ID;
           const appPrivateKey = honoEnv.APP_PRIVATE_KEY;
-          const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
           let octokit;
 
           if (!appId || !appPrivateKey) {
@@ -123,7 +132,7 @@ export default {
               repo,
             });
           }
-          const issue = await octokit.rest.issues.get({ owner, repo, issue_number });
+          const issue = await octokit.rest.issues.get({ owner, repo, issue_number: issueNumber });
           const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
           const ctx: Context<"issues.opened"> = {
             eventName: "issues.opened",
