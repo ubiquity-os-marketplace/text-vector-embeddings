@@ -56,7 +56,8 @@ const responseSchema = v.record(
 );
 
 export default {
-  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
+  async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
+    const environment = env(request as never);
     const honoApp = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin({
@@ -75,19 +76,17 @@ export default {
       }
     );
 
+    honoApp.use(cors());
     honoApp.use(
       rateLimiter({
         windowMs: 60 * 1000,
         limit: 1,
         standardHeaders: "draft-7",
         keyGenerator: (c) => {
-          console.log("here", process.env.NODE_ENV);
-          if (process.env.NODE_ENV === "local") return "local";
           return getConnInfo(c).remote.address ?? "";
         },
       })
     );
-    honoApp.use(cors());
 
     honoApp.get(
       "/recommendations",
@@ -165,6 +164,6 @@ export default {
     );
     honoApp.get("/docs", swaggerUI({ url: "/openapi" }));
 
-    return honoApp.fetch(request, env, executionCtx);
+    return honoApp.fetch(request, serverInfo, executionCtx);
   },
 };
