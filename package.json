@@ -47,6 +47,7 @@
     "he": "^1.2.0",
     "hono": "^4.10.6",
     "hono-openapi": "^1.1.1",
+    "hono-rate-limiter": "^0.4.2",
     "jsdom": "^26.1.0",
     "markdown-it": "^14.1.0",
     "markdown-it-plain-text": "^0.3.0",

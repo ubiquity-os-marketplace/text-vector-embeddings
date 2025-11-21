@@ -6,7 +6,11 @@ import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
+import { rateLimiter } from "hono-rate-limiter";
 import { env } from "hono/adapter";
+import { cors } from "hono/cors";
+import { getConnInfo } from "hono/deno";
+import process from "node:process";
 import * as v from "valibot";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
@@ -70,6 +74,20 @@ export default {
         bypassSignatureVerification: process.env.NODE_ENV === "local",
       }
     );
+
+    honoApp.use(
+      rateLimiter({
+        windowMs: 60 * 1000,
+        limit: 1,
+        standardHeaders: "draft-7",
+        keyGenerator: (c) => {
+          console.log("here", process.env.NODE_ENV);
+          if (process.env.NODE_ENV === "local") return "local";
+          return getConnInfo(c).remote.address ?? "";
+        },
+      })
+    );
+    honoApp.use(cors());
 
     honoApp.get(
       "/recommendations",
