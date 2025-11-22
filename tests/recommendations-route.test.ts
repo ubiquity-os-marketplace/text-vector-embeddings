@@ -81,7 +81,7 @@ describe("/recommendations route", () => {
     const matchResult: MatchResult = {
       matchResultArray: { "foo/bar": ["text"] },
       similarIssues: [{ id: "10", issue_id: "20", similarity: 0.92 }],
-      sortedContributors: [{ login: "octo", matches: ["text"], maxSimilarity: 0.92 }],
+      sortedContributors: [{ login: "octokit", matches: ["text"], maxSimilarity: 0.92 }],
     };
     const { recommendationsRoute, mocks } = await setupRoute({
       env: { APP_ID: "123", APP_PRIVATE_KEY: "key" },
