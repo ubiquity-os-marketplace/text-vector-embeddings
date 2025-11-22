@@ -6,7 +6,7 @@ import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
-import { rateLimiter } from "hono-rate-limiter";
+import { ClientRateLimitInfo, ConfigType, rateLimiter, Store } from "hono-rate-limiter";
 import { env } from "hono/adapter";
 import { cors } from "hono/cors";
 import { getConnInfo } from "hono/deno";
@@ -24,6 +24,61 @@ import { SupportedEvents } from "./types/context";
 import { Env, envSchema } from "./types/env";
 import { Context } from "./types/index";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
+
+class KvStore implements Store {
+  _options: ConfigType | undefined;
+  prefix = "rate-limiter";
+
+  constructor(readonly _store: Deno.Kv) {}
+
+  async decrement(key: string) {
+    const nowMs = Date.now();
+    const record = await this.get(key);
+
+    const existingResetTimeMs = record?.resetTime && new Date(record.resetTime).getTime();
+    const isActiveWindow = existingResetTimeMs && existingResetTimeMs > nowMs;
+
+    if (isActiveWindow && record) {
+      const payload: ClientRateLimitInfo = {
+        totalHits: Math.max(0, record.totalHits - 1),
+        resetTime: new Date(existingResetTimeMs),
+      };
+
+      await this.updateRecord(key, payload);
+    }
+  }
+
+  async resetKey(key: string) {
+    await this._store.delete([this.prefix, key]);
+  }
+
+  async increment(key: string): Promise<ClientRateLimitInfo> {
+    const nowMs = Date.now();
+    const record = await this.get(key);
+    const defaultResetTime = new Date(nowMs + (this._options?.windowMs ?? 60000));
+
+    const existingResetTimeMs = record?.resetTime && new Date(record.resetTime).getTime();
+    const isActiveWindow = existingResetTimeMs && existingResetTimeMs > nowMs;
+
+    const payload: ClientRateLimitInfo = {
+      totalHits: isActiveWindow ? record.totalHits + 1 : 1,
+      resetTime: isActiveWindow && existingResetTimeMs ? new Date(existingResetTimeMs) : defaultResetTime,
+    };
+
+    await this.updateRecord(key, payload);
+
+    return payload;
+  }
+
+  async get(key: string): Promise<ClientRateLimitInfo | undefined> {
+    const res = await this._store.get<ClientRateLimitInfo>([this.prefix, key]);
+    return res?.value ?? undefined;
+  }
+
+  async updateRecord(key: string, payload: ClientRateLimitInfo): Promise<void> {
+    await this._store.set([this.prefix, key], payload);
+  }
+}
 
 const urlSchema = v.pipe(v.string(), v.url(), v.regex(/https:\/\/github\.com\/[^/]+\/[^/]+\/(issues|pull)\/\d+$/));
 
@@ -77,14 +132,16 @@ export default {
     );
 
     honoApp.use(cors());
+    const kv = await Deno.openKv();
     honoApp.use(
       rateLimiter({
         windowMs: 60 * 1000,
-        limit: 1,
+        limit: 10,
         standardHeaders: "draft-7",
         keyGenerator: (c) => {
           return getConnInfo(c).remote.address ?? "";
         },
+        store: new KvStore(kv),
       })
     );
 
