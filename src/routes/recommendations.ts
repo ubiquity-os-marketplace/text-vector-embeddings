@@ -4,12 +4,12 @@ import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Context as HonoContext } from "hono";
 import { env } from "hono/adapter";
-import { createAdapters } from "../adapters";
+import { createAdapters } from "../adapters/index";
 import { getAuthenticatedOctokit } from "../cron/workflow";
 import { issueMatching } from "../handlers/issue-matching";
 import { parseGitHubUrl } from "../helpers/github";
 import { initAdapters } from "../plugin";
-import { Context, pluginSettingsSchema } from "../types";
+import { Context, pluginSettingsSchema } from "../types/index";
 
 export async function recommendationsRoute(c: HonoContext) {
   const urls = c.req.queries("issueUrls") as string[];
