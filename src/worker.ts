@@ -21,6 +21,8 @@ import { Env, envSchema } from "./types/env";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 import { querySchema, responseSchema } from "./validators";
 
+const kv = await Deno.openKv();
+
 export default {
   async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
     const environment = env<Env>(request as never);
@@ -43,7 +45,6 @@ export default {
     );
 
     honoApp.use(cors());
-    const kv = await Deno.openKv();
     honoApp.use(
       rateLimiter({
         windowMs: 60 * 1000,

@@ -27,8 +27,8 @@ export async function getAuthenticatedOctokit({
   return new customOctokit({
     authStrategy: createAppAuth,
     auth: {
-      appId: process.env.APP_ID,
-      privateKey: process.env.APP_PRIVATE_KEY,
+      appId: appId,
+      privateKey: appPrivateKey,
       installationId: installation.id,
     },
   });

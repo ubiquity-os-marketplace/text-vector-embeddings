@@ -61,5 +61,5 @@ export async function recommendationsRoute(c: HonoContext) {
     return { [url]: result };
   }
   const res = await Promise.all(urls.map(handleUrl));
-  return new Response(JSON.stringify(res.reduce((acc, curr) => ({ ...acc, ...curr }), {})), { status: 200 });
+  return new Response(JSON.stringify(res.reduce((acc, curr) => ({ ...acc, ...curr }), {})), { status: 200, headers: { "Content-Type": "application/json" } });
 }

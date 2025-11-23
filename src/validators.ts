@@ -10,7 +10,7 @@ export const responseSchema = v.record(
   v.string(),
   v.union([
     v.object({
-      matchResultArray: v.map(v.string(), v.array(v.string())),
+      matchResultArray: v.record(v.string(), v.array(v.string())),
       similarIssues: v.array(
         v.object({
           id: v.string(),
