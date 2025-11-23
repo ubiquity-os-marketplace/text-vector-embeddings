@@ -1,6 +1,4 @@
-import { Type as T } from "@sinclair/typebox";
-import { StaticDecode } from "@sinclair/typebox";
-import "dotenv/config";
+import { StaticDecode, Type as T } from "@sinclair/typebox";
 
 /**
  * Define sensitive environment variables here.
