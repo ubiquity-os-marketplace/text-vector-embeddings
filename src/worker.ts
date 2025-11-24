@@ -1,5 +1,5 @@
 import { swaggerUI } from "@hono/swagger-ui";
-import { createPlugin } from "@ubiquity-os/plugin-sdk";
+import { createPlugin, Options } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
@@ -35,8 +35,8 @@ export default {
       },
       manifest as Manifest,
       {
-        envSchema: envSchema as never,
-        settingsSchema: pluginSettingsSchema as never,
+        settingsSchema: pluginSettingsSchema as unknown as Options["settingsSchema"],
+        envSchema: envSchema as unknown as Options["envSchema"],
         postCommentOnError: true,
         logLevel: environment.LOG_LEVEL as LogLevel,
         kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
