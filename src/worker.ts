@@ -35,9 +35,9 @@ export default {
       },
       manifest as Manifest,
       {
-        envSchema: envSchema,
+        envSchema: envSchema as never,
+        settingsSchema: pluginSettingsSchema as never,
         postCommentOnError: true,
-        settingsSchema: pluginSettingsSchema,
         logLevel: environment.LOG_LEVEL as LogLevel,
         kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
         bypassSignatureVerification: process.env.NODE_ENV === "local",

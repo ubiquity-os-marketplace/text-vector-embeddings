@@ -30,7 +30,6 @@ export const llmList = [
   "anthropic/claude-opus-4.1",
   "anthropic/claude-sonnet-4",
   "anthropic/claude-sonnet-4.5",
-  "arcee-ai/afm-4.5b",
   "arcee-ai/coder-large",
   "arcee-ai/maestro-reasoning",
   "arcee-ai/spotlight",
