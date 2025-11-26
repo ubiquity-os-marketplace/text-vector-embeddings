@@ -9,11 +9,22 @@ import { getAuthenticatedOctokit } from "../cron/workflow";
 import { issueMatching } from "../handlers/issue-matching";
 import { parseGitHubUrl } from "../helpers/github";
 import { initAdapters } from "../plugin";
-import { Context, pluginSettingsSchema } from "../types/index";
+import { Context, envSchema, pluginSettingsSchema } from "../types/index";
+
+function getValidatedEnv(c: HonoContext) {
+  const honoEnv = env(c);
+  try {
+    return Value.Decode(envSchema, Value.Default(envSchema, honoEnv));
+  } catch (e) {
+    throw new Error(`Failed to decode the environment variables: ${e}`);
+  }
+}
 
 export async function recommendationsRoute(c: HonoContext) {
   const urls = c.req.queries("issueUrls") as string[];
   const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
+  const honoEnv = getValidatedEnv(c);
+
   async function handleUrl(url: string) {
     let owner, repo, issueNumber;
     try {
@@ -25,7 +36,6 @@ export async function recommendationsRoute(c: HonoContext) {
       logger.warn("Failed to parse the GitHub url", { e });
       return { [url]: null };
     }
-    const honoEnv = env(c);
     const appId = honoEnv.APP_ID;
     const appPrivateKey = honoEnv.APP_PRIVATE_KEY;
     let octokit;
@@ -35,8 +45,8 @@ export async function recommendationsRoute(c: HonoContext) {
       octokit = new customOctokit();
     } else {
       octokit = await getAuthenticatedOctokit({
-        appId: honoEnv.APP_ID as string,
-        appPrivateKey: honoEnv.APP_PRIVATE_KEY as string,
+        appId: honoEnv.APP_ID,
+        appPrivateKey: honoEnv.APP_PRIVATE_KEY,
         owner,
         repo,
       });
