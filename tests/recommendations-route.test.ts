@@ -34,6 +34,13 @@ async function setupRoute(options: SetupOptions = {}) {
   const envMock = mock(() => ({
     LOG_LEVEL: "debug",
     KERNEL_PUBLIC_KEY: "kernel",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_KEY: "supabase-key",
+    VOYAGEAI_API_KEY: "voyage",
+    DENO_KV_URL: "https://kv.example",
+    OPENROUTER_API_KEY: "openrouter-key",
+    APP_ID: "",
+    APP_PRIVATE_KEY: "",
     ...options.env,
   }));
   const issueMatchingMock = mock(async () => options.issueMatchingResult ?? createMatchResult());
@@ -121,6 +128,6 @@ describe("/recommendations route", () => {
 
     expect(payload).toEqual({ [invalidUrl]: null });
     expect(mocks.issueMatchingMock).not.toHaveBeenCalled();
-    expect(mocks.envMock).not.toHaveBeenCalled();
+    expect(mocks.envMock).toHaveBeenCalledTimes(1);
   });
 });
