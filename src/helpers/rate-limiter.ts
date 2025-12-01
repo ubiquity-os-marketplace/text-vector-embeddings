@@ -6,6 +6,10 @@ export class KvStore implements Store {
 
   constructor(readonly _store: Deno.Kv) {}
 
+  init(options: ConfigType) {
+    this._options = options;
+  }
+
   async decrement(key: string) {
     const nowMs = Date.now();
     const record = await this.get(key);
