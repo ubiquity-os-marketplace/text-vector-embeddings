@@ -88,6 +88,8 @@
               "arcee-ai/coder-large",
               "arcee-ai/maestro-reasoning",
               "arcee-ai/spotlight",
+              "arcee-ai/trinity-mini",
+              "arcee-ai/trinity-mini:free",
               "arcee-ai/virtuoso-large",
               "arliai/qwq-32b-arliai-rpr-v1",
               "baidu/ernie-4.5-21b-a3b",
@@ -114,11 +116,12 @@
               "deepseek/deepseek-r1-0528",
               "deepseek/deepseek-r1-0528-qwen3-8b",
               "deepseek/deepseek-r1-distill-llama-70b",
-              "deepseek/deepseek-r1-distill-qwen-14b",
               "deepseek/deepseek-r1-distill-qwen-32b",
               "deepseek/deepseek-v3.1-terminus",
               "deepseek/deepseek-v3.1-terminus:exacto",
+              "deepseek/deepseek-v3.2",
               "deepseek/deepseek-v3.2-exp",
+              "deepseek/deepseek-v3.2-speciale",
               "eleutherai/llemma_7b",
               "google/gemini-2.0-flash-001",
               "google/gemini-2.0-flash-exp:free",
@@ -404,5 +407,5 @@
     }
   },
   "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
-  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@development"
+  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@rest-api"
 }
