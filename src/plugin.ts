@@ -8,7 +8,7 @@ import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
 import { deleteIssues } from "./handlers/delete-issue";
 import { issueDedupe } from "./handlers/issue-deduplication";
-import { issueMatching } from "./handlers/issue-matching";
+import { issueMatchingWithComment } from "./handlers/issue-matching";
 import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
 import { updateIssue } from "./handlers/update-issue";
@@ -18,21 +18,29 @@ import { Database } from "./types/database";
 import { Context } from "./types/index";
 import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
 
+export async function initAdapters(context: Context) {
+  const { env } = context;
+
+  const supabase = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_KEY);
+  const voyageClient = new VoyageAIClient({
+    apiKey: env.VOYAGEAI_API_KEY,
+  });
+  const adapters = await createAdapters(supabase, voyageClient, context);
+  //Check the supabase adapter
+  const isConnectionValid = await adapters.supabase.super.checkConnection();
+  context.logger[isConnectionValid ? "ok" : "error"](`Supabase connection ${isConnectionValid ? "successful" : "failed"}`);
+
+  return adapters;
+}
+
 /**
  * The main plugin function. Split for easier testing.
  */
 export async function runPlugin(context: Context) {
-  const { logger, eventName, env } = context;
+  const { logger, eventName } = context;
 
   if (!context.adapters?.supabase && !context.adapters?.voyage) {
-    const supabase = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_KEY);
-    const voyageClient = new VoyageAIClient({
-      apiKey: env.VOYAGEAI_API_KEY,
-    });
-    context.adapters = await createAdapters(supabase, voyageClient, context);
-    //Check the supabase adapter
-    const isConnectionValid = await context.adapters.supabase.super.checkConnection();
-    context.logger[isConnectionValid ? "ok" : "error"](`Supabase connection ${isConnectionValid ? "successful" : "failed"}`);
+    context.adapters = await initAdapters(context);
   }
 
   if (context.command) {
@@ -53,12 +61,12 @@ export async function runPlugin(context: Context) {
     switch (eventName) {
       case "issues.opened":
         await addIssue(context as Context<"issues.opened">);
-        await issueMatching(context as Context<"issues.opened">);
+        await issueMatchingWithComment(context as Context<"issues.opened">);
         break;
       case "issues.edited":
         if (isPluginEdit(context as Context<"issues.edited">)) {
           logger.info("Plugin edit detected, will run issue matching and checker.");
-          await issueMatching(context as Context<"issues.edited">);
+          await issueMatchingWithComment(context as Context<"issues.edited">);
           await issueDedupe(context as Context<"issues.edited">);
         } else {
           await updateIssue(context as Context<"issues.edited">);
@@ -75,7 +83,7 @@ export async function runPlugin(context: Context) {
         break;
     }
   } else if (eventName == "issues.labeled") {
-    return await issueMatching(context as Context<"issues.labeled">);
+    return await issueMatchingWithComment(context as Context<"issues.labeled">);
   } else {
     logger.error(`Unsupported event: ${eventName}`);
     return;
