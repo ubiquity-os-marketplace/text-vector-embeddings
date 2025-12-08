@@ -14,6 +14,10 @@ import { Context, envSchema, pluginSettingsSchema } from "../types/index";
 function getValidatedEnv(c: HonoContext) {
   const honoEnv = env(c);
   try {
+    const errors = [...Value.Errors(envSchema, honoEnv)];
+    if (errors.length) {
+      console.dir(errors, { depth: null });
+    }
     return Value.Decode(envSchema, Value.Default(envSchema, honoEnv));
   } catch (e) {
     throw new Error(`Failed to decode the environment variables: ${e}`);
