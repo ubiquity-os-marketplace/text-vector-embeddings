@@ -1,6 +1,4 @@
-import { Type as T } from "@sinclair/typebox";
-import { StaticDecode } from "@sinclair/typebox";
-import "dotenv/config";
+import { StaticDecode, Type as T } from "@sinclair/typebox";
 
 /**
  * Define sensitive environment variables here.
@@ -17,6 +15,8 @@ export const envSchema = T.Object({
   LOG_LEVEL: T.Optional(T.String()),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
   OPENROUTER_API_KEY: T.String(),
+  APP_ID: T.String(),
+  APP_PRIVATE_KEY: T.String(),
 });
 
 export type Env = StaticDecode<typeof envSchema>;
