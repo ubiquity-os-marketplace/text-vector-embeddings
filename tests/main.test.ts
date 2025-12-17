@@ -6,7 +6,6 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import dotenv from "dotenv";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
-import { runPlugin } from "../src/plugin";
 import { Context } from "../src/types/context";
 import { Env } from "../src/types/index";
 import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
@@ -24,9 +23,13 @@ const ISSUES_EDITED_EVENT_NAME = "issues.edited";
 
 dotenv.config();
 const octokit = new Octokit();
+let runPlugin: typeof import("../src/plugin").runPlugin;
 
 beforeAll(() => {
   server.listen();
+  return import(`../src/plugin?t=${Date.now()}`).then((mod) => {
+    runPlugin = mod.runPlugin;
+  });
 });
 afterEach(() => {
   server.resetHandlers();

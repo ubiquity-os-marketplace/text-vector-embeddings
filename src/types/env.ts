@@ -14,9 +14,8 @@ export const envSchema = T.Object({
   DENO_KV_URL: T.Optional(T.String()),
   LOG_LEVEL: T.Optional(T.String()),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
-  OPENROUTER_API_KEY: T.String(),
-  APP_ID: T.String(),
-  APP_PRIVATE_KEY: T.String(),
+  APP_ID: T.Optional(T.String()),
+  APP_PRIVATE_KEY: T.Optional(T.String()),
 });
 
 export type Env = StaticDecode<typeof envSchema>;
