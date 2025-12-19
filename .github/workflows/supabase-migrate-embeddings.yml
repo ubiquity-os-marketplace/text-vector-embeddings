@@ -27,35 +27,34 @@ jobs:
           if [ -z "${{ secrets.SUPABASE_KEY }}" ]; then echo "Missing SUPABASE_KEY"; exit 1; fi
           if [ -z "${{ secrets.SUPABASE_TARGET_URL }}" ]; then echo "Missing SUPABASE_TARGET_URL"; exit 1; fi
           if [ -z "${{ secrets.SUPABASE_TARGET_KEY }}" ]; then echo "Missing SUPABASE_TARGET_KEY"; exit 1; fi
-          if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ secrets.SUPABASE_TARGET_DB_URL }}" ]; then echo "Missing SUPABASE_TARGET_DB_URL"; exit 1; fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}" ]; then echo "Missing SUPABASE_TARGET_DB_PASSWORD"; exit 1; fi
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - uses: supabase/setup-cli@v1
+        with:
+          version: latest
 
-      - name: Resolve IPv4 for Supabase DB
+      - name: Link Supabase project
         if: inputs.dry_run != 'true'
         run: |
           set -euo pipefail
           ref="${SUPABASE_TARGET_URL#https://}"
           ref="${ref%.supabase.co}"
-          host="db.${ref}.supabase.co"
-          ipv4=$(getent ahostsv4 "$host" | awk 'NR==1 {print $1}')
-          if [ -z "$ipv4" ]; then
-            echo "Failed to resolve IPv4 for $host"
-            exit 1
-          fi
-          echo "SUPABASE_TARGET_DB_URL=${SUPABASE_TARGET_DB_URL}?sslmode=require&hostaddr=${ipv4}" >> "$GITHUB_ENV"
+          supabase link --project-ref "$ref"
         env:
           SUPABASE_TARGET_URL: ${{ secrets.SUPABASE_TARGET_URL }}
-          SUPABASE_TARGET_DB_URL: ${{ secrets.SUPABASE_TARGET_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
 
       - name: Apply schema migrations
         if: inputs.dry_run != 'true'
-        run: supabase db push --db-url "$SUPABASE_TARGET_DB_URL"
+        run: supabase db push
         env:
-          SUPABASE_TARGET_DB_URL: ${{ secrets.SUPABASE_TARGET_DB_URL }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
 
       - name: Run migration
         run: bun run scripts/migrate-supabase.ts
