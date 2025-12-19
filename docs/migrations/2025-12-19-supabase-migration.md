@@ -4,7 +4,7 @@
 Migrate legacy text-vector-embeddings data into the main Supabase project:
 - Target project: wfzpewmlyiozupulbuur
 - Tables: public.issues, public.issue_comments
-- Embeddings are stored in the embedding columns on both tables.
+- Embeddings are stored in the `embedding` column (type `vector(1024)`) on both tables.
 
 ## Workflow run
 - Workflow: .github/workflows/supabase-migrate-embeddings.yml
@@ -16,8 +16,12 @@ Migrate legacy text-vector-embeddings data into the main Supabase project:
 Schema is created by scripts/bootstrap-schema.sql and includes:
 - vector extension
 - public.issues and public.issue_comments tables
+- row level security (RLS) enabled on public.issues and public.issue_comments
 - HNSW indexes for embedding search
-- matching/annotation helper SQL functions
+- helper SQL functions:
+  - find_similar_issues_to_match
+  - find_similar_issues_annotate
+  - find_similar_comments_annotate
 
 ## Migration results (from run logs)
 The migration script logs source and target counts and enforces target >= source.
