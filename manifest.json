@@ -403,6 +403,6 @@
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
+  "homepage_url": "https://text-vector-embeddings-cho.deno.dev",
   "short_name": "ubiquity-os-marketplace/text-vector-embeddings@development"
 }
