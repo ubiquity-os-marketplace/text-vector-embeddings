@@ -37,31 +37,49 @@ jobs:
         with:
           version: latest
 
-      - name: Link Supabase project
+      - name: Resolve Supavisor host
         if: inputs.dry_run != 'true'
         run: |
           set -euo pipefail
           ref="${SUPABASE_TARGET_URL#https://}"
           ref="${ref%.supabase.co}"
-          supabase link --project-ref "$ref"
+          project_json=$(supabase projects list --output json)
+          project=$(echo "$project_json" | jq -r --arg ref "$ref" '.[] | select(.ref == $ref)')
+          if [ -z "$project" ] || [ "$project" = "null" ]; then
+            echo "Unable to locate project ref $ref in Supabase projects list."
+            exit 1
+          fi
+          region=$(echo "$project" | jq -r '.region // empty')
+          cloud=$(echo "$project" | jq -r '.cloud_provider // .cloud // "aws"')
+          cloud=$(echo "$cloud" | tr '[:upper:]' '[:lower:]')
+          if [ -z "$region" ]; then
+            echo "Supabase project region not found."
+            exit 1
+          fi
+          pooler_host="${cloud}-0-${region}.pooler.supabase.com"
+          echo "SUPABASE_POOLER_HOST=$pooler_host" >> "$GITHUB_ENV"
+          echo "SUPABASE_PROJECT_REF=$ref" >> "$GITHUB_ENV"
         env:
           SUPABASE_TARGET_URL: ${{ secrets.SUPABASE_TARGET_URL }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
 
-      - name: Sync remote migration history
+      - name: Install Postgres client
         if: inputs.dry_run != 'true'
-        run: supabase migration fetch
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
-      - name: Apply schema migrations
+      - name: Apply schema bootstrap
         if: inputs.dry_run != 'true'
-        run: printf 'y\n' | supabase db push --include-all
+        run: |
+          set -euo pipefail
+          PGPASSWORD="$SUPABASE_TARGET_DB_PASSWORD" \
+            psql "postgresql://postgres.${SUPABASE_PROJECT_REF}@${SUPABASE_POOLER_HOST}:5432/postgres?sslmode=require" \
+              -v ON_ERROR_STOP=1 \
+              -f scripts/bootstrap-schema.sql
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
+          SUPABASE_TARGET_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
 
       - name: Run migration
         run: bun run scripts/migrate-supabase.ts
