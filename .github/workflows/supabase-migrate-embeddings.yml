@@ -58,7 +58,7 @@ jobs:
 
       - name: Apply schema migrations
         if: inputs.dry_run != 'true'
-        run: supabase db push --include-all --yes
+        run: printf 'y\n' | supabase db push --include-all
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}
