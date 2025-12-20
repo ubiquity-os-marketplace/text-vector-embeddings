@@ -85,12 +85,37 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   }
 }
 
+type IssueMatchingEvents = "issues.opened" | "issues.edited" | "issues.labeled" | "issue_comment.created";
+
 /**
  * Checks if the current issue is a duplicate of an existing issue.
  * If a similar completed issue is found, it will add a comment to the issue with the assignee(s) of the similar issue.
  * @param context The context object
  **/
-export async function issueMatching(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
+export async function issueMatching(context: Context<IssueMatchingEvents>) {
+  return issueMatchingInternal(context, {});
+}
+
+export async function issueMatchingForUsers(context: Context<IssueMatchingEvents>, users: string[]) {
+  const uniqueUsers = Array.from(new Set(users.map((u) => u.trim()).filter(Boolean)));
+  return issueMatchingInternal(context, {
+    allowedLogins: new Set(uniqueUsers),
+    ensureLogins: uniqueUsers,
+    forceThresholdZero: true,
+    topK: 50,
+    includeNonCompleted: true,
+  });
+}
+
+type IssueMatchingInternalOptions = {
+  allowedLogins?: Set<string>;
+  ensureLogins?: string[];
+  forceThresholdZero?: boolean;
+  topK?: number;
+  includeNonCompleted?: boolean;
+};
+
+async function issueMatchingInternal(context: Context<IssueMatchingEvents>, options: IssueMatchingInternalOptions) {
   const {
     logger,
     adapters: { supabase },
@@ -101,12 +126,14 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
   const matchResultArray: Map<string, Array<string>> = new Map();
 
   // If alwaysRecommend is enabled, use a lower threshold to ensure we get enough recommendations
-  const threshold = context.config.alwaysRecommend && context.config.alwaysRecommend > 0 ? 0 : context.config.jobMatchingThreshold;
+  const threshold =
+    options.forceThresholdZero || (context.config.alwaysRecommend && context.config.alwaysRecommend > 0) ? 0 : context.config.jobMatchingThreshold;
 
   const similarIssues = await supabase.issue.findSimilarIssuesToMatch({
     markdown: issueContent,
     threshold: threshold,
     currentId: issue.node_id,
+    topK: options.topK,
   });
 
   if (similarIssues && similarIssues.length > 0) {
@@ -157,10 +184,16 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
         return;
       }
       const issue = issuePromise.value as IssueGraphqlResponse;
-      // Only use completed issues that have assignees
-      if (issue.node.closed && issue.node.stateReason === "COMPLETED" && issue.node.assignees.nodes.length > 0) {
+      const hasAssignees = issue.node.assignees.nodes.length > 0;
+      const isCompletedWithAssignees = issue.node.closed && issue.node.stateReason === "COMPLETED" && hasAssignees;
+      const isEligible = options.includeNonCompleted ? hasAssignees : isCompletedWithAssignees;
+
+      if (isEligible) {
         const assignees = issue.node.assignees.nodes;
         assignees.forEach((assignee: { login: string; url: string }) => {
+          if (options.allowedLogins && !options.allowedLogins.has(assignee.login)) {
+            return;
+          }
           const similarityPercentage = Math.round(issue.similarity * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
           if (matchResultArray.has(assignee.login)) {
@@ -178,6 +211,14 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
       }
     });
 
+    if (options.ensureLogins) {
+      for (const login of options.ensureLogins) {
+        if (!matchResultArray.has(login)) {
+          matchResultArray.set(login, []);
+        }
+      }
+    }
+
     logger.debug("Matched issues", { matchResultArray, length: matchResultArray.size });
 
     // Convert Map to array and sort by highest similarity
@@ -185,12 +226,28 @@ export async function issueMatching(context: Context<"issues.opened" | "issues.e
       .map(([login, matches]) => ({
         login,
         matches,
-        maxSimilarity: Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))),
+        maxSimilarity: matches.length ? Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))) : 0,
       }))
       .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
 
     logger.debug("Sorted contributors", { sortedContributors });
     return { matchResultArray, similarIssues, sortedContributors };
+  }
+
+  if (options.ensureLogins && options.ensureLogins.length > 0) {
+    for (const login of options.ensureLogins) {
+      if (!matchResultArray.has(login)) {
+        matchResultArray.set(login, []);
+      }
+    }
+    const sortedContributors = Array.from(matchResultArray.entries())
+      .map(([login, matches]) => ({
+        login,
+        matches,
+        maxSimilarity: 0,
+      }))
+      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+    return { matchResultArray, similarIssues: [], sortedContributors };
   }
 
   logger.info(`Exiting issueMatching handler!`, { similarIssues: similarIssues || "No similar issues found" });

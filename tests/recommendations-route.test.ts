@@ -22,10 +22,18 @@ function createMatchResult(): MatchResult {
   };
 }
 
-function createContext(urls: string[]): HonoContext {
+function createContext(urls: string[], users: string[] = []): HonoContext {
   return {
     req: {
-      queries: mock(() => urls),
+      queries: mock((key: string) => {
+        if (key === "issueUrls") {
+          return urls;
+        }
+        if (key === "users") {
+          return users;
+        }
+        return [];
+      }),
     },
   } as unknown as HonoContext;
 }
@@ -44,6 +52,7 @@ async function setupRoute(options: SetupOptions = {}) {
     ...options.env,
   }));
   const issueMatchingMock = mock(async () => options.issueMatchingResult ?? createMatchResult());
+  const issueMatchingForUsersMock = mock(async () => options.issueMatchingResult ?? createMatchResult());
   const initAdaptersMock = mock(async () => ({}));
   const issuesGetMock = mock(async () => ({ data: { id: "issue", number: 7, title: "Issue", body: "body" } }));
   const customOctokitCtorMock = mock(() => undefined);
@@ -59,7 +68,7 @@ async function setupRoute(options: SetupOptions = {}) {
 
   await mock.module("hono/adapter", () => ({ env: envMock }));
   await mock.module("../src/cron/workflow", () => ({ getAuthenticatedOctokit: getAuthenticatedOctokitMock }));
-  await mock.module("../src/handlers/issue-matching", () => ({ issueMatching: issueMatchingMock }));
+  await mock.module("../src/handlers/issue-matching", () => ({ issueMatching: issueMatchingMock, issueMatchingForUsers: issueMatchingForUsersMock }));
   await mock.module("../src/plugin", () => ({ initAdapters: initAdaptersMock }));
   await mock.module("@ubiquity-os/plugin-sdk", () => ({ CommentHandler: class {} }));
   await mock.module("@ubiquity-os/plugin-sdk/octokit", () => ({ customOctokit: CustomOctokitMock }));
@@ -71,6 +80,7 @@ async function setupRoute(options: SetupOptions = {}) {
     mocks: {
       envMock,
       issueMatchingMock,
+      issueMatchingForUsersMock,
       initAdaptersMock,
       issuesGetMock,
       customOctokitCtorMock,
@@ -120,6 +130,29 @@ describe("/recommendations route", () => {
     expect(mocks.getAuthenticatedOctokitMock).not.toHaveBeenCalled();
   });
 
+  it("returns a result for every requested user", async () => {
+    const matchResult: MatchResult = {
+      matchResultArray: {
+        alice: ["> `80% Match` [foo/bar#1](https://www.github.com/foo/bar/issues/1)"],
+        bob: [],
+      },
+      similarIssues: [{ id: "10", issue_id: "20", similarity: 0.8 }],
+      sortedContributors: [
+        { login: "alice", matches: ["> `80% Match` [foo/bar#1](https://www.github.com/foo/bar/issues/1)"], maxSimilarity: 80 },
+        { login: "bob", matches: [], maxSimilarity: 0 },
+      ],
+    };
+    const { recommendationsRoute, mocks } = await setupRoute({ issueMatchingResult: matchResult });
+    const url = "https://github.com/foo/bar/issues/42";
+
+    const response = await recommendationsRoute(createContext([url], ["alice", "bob"]));
+    const payload = await response.json();
+
+    expect(payload).toEqual({ [url]: matchResult });
+    expect(mocks.issueMatchingForUsersMock).toHaveBeenCalledTimes(1);
+    expect(mocks.issueMatchingMock).not.toHaveBeenCalled();
+  });
+
   it("returns null results for invalid GitHub URLs", async () => {
     const { recommendationsRoute, mocks } = await setupRoute();
     const invalidUrl = "https://example.com/not-a-github-issue";
@@ -128,6 +161,7 @@ describe("/recommendations route", () => {
 
     expect(payload).toEqual({ [invalidUrl]: null });
     expect(mocks.issueMatchingMock).not.toHaveBeenCalled();
+    expect(mocks.issueMatchingForUsersMock).not.toHaveBeenCalled();
     expect(mocks.envMock).toHaveBeenCalledTimes(1);
   });
 });
