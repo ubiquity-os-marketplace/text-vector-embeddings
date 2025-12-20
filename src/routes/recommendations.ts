@@ -6,7 +6,7 @@ import { Context as HonoContext } from "hono";
 import { env } from "hono/adapter";
 import { createAdapters } from "../adapters/index";
 import { getAuthenticatedOctokit } from "../cron/workflow";
-import { issueMatching } from "../handlers/issue-matching";
+import { issueMatching, issueMatchingForUsers } from "../handlers/issue-matching";
 import { parseGitHubUrl } from "../helpers/github";
 import { initAdapters } from "../plugin";
 import { Context, envSchema, pluginSettingsSchema } from "../types/index";
@@ -30,6 +30,7 @@ type RecommendationsDeps = Readonly<{
   getAuthenticatedOctokit: typeof getAuthenticatedOctokit;
   initAdapters: typeof initAdapters;
   issueMatching: typeof issueMatching;
+  issueMatchingForUsers: typeof issueMatchingForUsers;
 }>;
 
 export function createRecommendationsRoute(overrides: Partial<RecommendationsDeps> = {}) {
@@ -39,12 +40,28 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
     getAuthenticatedOctokit: overrides.getAuthenticatedOctokit ?? getAuthenticatedOctokit,
     initAdapters: overrides.initAdapters ?? initAdapters,
     issueMatching: overrides.issueMatching ?? issueMatching,
+    issueMatchingForUsers: overrides.issueMatchingForUsers ?? issueMatchingForUsers,
   };
 
   return async function recommendationsRoute(c: HonoContext) {
     const urls = c.req.queries("issueUrls") as string[];
+    const users = ((c.req.queries("users") as string[] | undefined) ?? [])
+      .flatMap((segment) => segment.split(/[\s,]+/))
+      .map((user) => user.trim().replace(/^@/, ""))
+      .filter(Boolean);
     const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
     const honoEnv = deps.getEnv(c);
+
+    function serializeMatchResult(result: Awaited<ReturnType<typeof issueMatching>> | Awaited<ReturnType<typeof issueMatchingForUsers>>) {
+      if (!result) {
+        return null;
+      }
+      const matchResultArray = result.matchResultArray instanceof Map ? Object.fromEntries(result.matchResultArray.entries()) : result.matchResultArray;
+      return {
+        ...result,
+        matchResultArray,
+      };
+    }
 
     async function handleUrl(url: string) {
       let owner, repo, issueNumber;
@@ -88,8 +105,8 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
         adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
       };
       ctx.adapters = await deps.initAdapters(ctx);
-      const result = await deps.issueMatching(ctx);
-      return { [url]: result };
+      const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
+      return { [url]: serializeMatchResult(result) };
     }
 
     const res = await Promise.all(urls.map(handleUrl));
