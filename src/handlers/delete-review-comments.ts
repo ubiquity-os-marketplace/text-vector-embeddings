@@ -8,7 +8,10 @@ export async function deleteReviewComment(context: Context<"pull_request_review_
   } = context;
   const nodeId = payload.comment.node_id;
   if (payload.comment.user?.type !== "User") {
-    logger.debug("Deleting review comment from non-human author", { author: payload.comment.user?.login, type: payload.comment.user?.type });
+    logger.debug("Review comment is from non-human author; proceeding with deletion", {
+      author: payload.comment.user?.login,
+      type: payload.comment.user?.type,
+    });
   }
 
   try {

@@ -2,17 +2,25 @@ import { Context } from "../types/index";
 import { annotate } from "./annotate";
 import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
-function parseUserLogins(value: string | string[] | undefined): string[] {
-  let segments: string[] = [];
-  if (Array.isArray(value)) {
-    segments = value;
-  } else if (typeof value === "string") {
-    segments = [value];
-  }
+function normalizeUserLogins(segments: string[]): string[] {
   return segments
-    .flatMap((segment) => segment.split(/[\s,]+/))
+    .flatMap((segment) => segment.split(","))
     .map((user) => user.trim().replace(/^@/, ""))
     .filter(Boolean);
+}
+
+// GitHub usernames cannot include whitespace or commas, so splitting is safe.
+function parseUserLogins(value: string | string[] | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+  const segments = Array.isArray(value) ? value : [value];
+  const expanded = segments.flatMap((segment) => segment.split(/\s+/));
+  return normalizeUserLogins(expanded);
+}
+
+function parseUserLoginsFromTokens(tokens: string[]): string[] {
+  return normalizeUserLogins(tokens);
 }
 
 function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeof issueMatching>>>, requestedLogins: string[]): string {
@@ -64,8 +72,8 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
     const issue = context.payload.issue;
     const { owner, name: repo } = context.payload.repository;
     const requestedLoginsFromParams = parseUserLogins(context.command.parameters.users);
-    const requestedLogins =
-      requestedLoginsFromParams.length > 0 ? requestedLoginsFromParams : parseUserLogins(context.payload.comment.body.trim().split(/\s+/).slice(1));
+    const commentTokens = context.payload.comment.body.trim().split(/\s+/).slice(1);
+    const requestedLogins = requestedLoginsFromParams.length > 0 ? requestedLoginsFromParams : parseUserLoginsFromTokens(commentTokens);
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
@@ -122,7 +130,7 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
   if (commandName === "recommendation") {
     const issue = context.payload.issue;
     const { owner, name: repo } = context.payload.repository;
-    const requestedLogins = parseUserLogins(splitComment.slice(1));
+    const requestedLogins = parseUserLoginsFromTokens(splitComment.slice(1));
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {

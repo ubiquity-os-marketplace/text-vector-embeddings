@@ -16,6 +16,10 @@ function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
   );
 }
 
+function isChatCompletionLike(value: unknown): value is ChatCompletionLike {
+  return typeof value === "object" && value !== null && "choices" in value;
+}
+
 export class LlmAdapter {
   private static readonly _defaultMaxRetries = 5;
 
@@ -58,7 +62,11 @@ export class LlmAdapter {
           throw this.context.logger.error("Unexpected streaming response from the LLM.");
         }
 
-        const content = (response as ChatCompletionLike).choices?.[0]?.message?.content;
+        if (!isChatCompletionLike(response) || !Array.isArray(response.choices)) {
+          throw this.context.logger.error("Unexpected LLM response shape.", { responseType: typeof response });
+        }
+
+        const content = response.choices?.[0]?.message?.content;
         if (typeof content !== "string" || !content.trim()) {
           throw this.context.logger.warn("Failed to get a completion from the LLM.");
         }

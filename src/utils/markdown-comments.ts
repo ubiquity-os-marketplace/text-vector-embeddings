@@ -33,7 +33,7 @@ export function stripPluginUpdateComments(markdown: string): {
   matchCount: number;
 } {
   if (!markdown) {
-    return { cleaned: markdown ?? "", latestComment: null, matchCount: 0 };
+    return { cleaned: "", latestComment: null, matchCount: 0 };
   }
 
   const matches = Array.from(markdown.matchAll(UPDATE_COMMENT_REGEX));

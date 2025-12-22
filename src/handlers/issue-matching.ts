@@ -24,6 +24,8 @@ export interface IssueGraphqlResponse {
   similarity: number;
 }
 
+type IssueNodeResponse = IssueGraphqlResponse | { node: null };
+
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
   const { logger, octokit, payload } = context;
   const issue = payload.issue;
@@ -140,7 +142,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
     similarIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
     const fetchPromises = similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {
-        const issueObject: IssueGraphqlResponse = await context.octokit.graphql(
+        const issueObject: IssueNodeResponse = await context.octokit.graphql(
           /* GraphQL */
           `
             query ($issueNodeId: ID!) {
@@ -169,6 +171,10 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           `,
           { issueNodeId: issue.issue_id }
         );
+        if (!issueObject?.node) {
+          context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId: issue.issue_id });
+          return null;
+        }
         issueObject.similarity = issue.similarity;
         return issueObject;
       } catch (error) {

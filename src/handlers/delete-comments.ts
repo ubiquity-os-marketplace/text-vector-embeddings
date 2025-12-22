@@ -8,7 +8,10 @@ export async function deleteComment(context: Context<"issue_comment.deleted">) {
   } = context;
   const nodeId = payload.comment.node_id;
   if (payload.comment.user?.type !== "User") {
-    logger.debug("Deleting comment from non-human author", { author: payload.comment.user?.login, type: payload.comment.user?.type });
+    logger.debug("Comment is from non-human author; proceeding with deletion", {
+      author: payload.comment.user?.login,
+      type: payload.comment.user?.type,
+    });
   }
 
   try {
