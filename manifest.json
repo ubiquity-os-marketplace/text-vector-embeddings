@@ -70,5 +70,5 @@
     }
   },
   "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
-  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@development"
+  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@feat/ubiquity-ai"
 }
