@@ -3,7 +3,7 @@ import { Comment } from "../types/comment";
 import { processSimilarIssues, IssueGraphqlResponse, findMostSimilarSentence } from "./issue-deduplication";
 import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";
 import { stripHtmlComments } from "../utils/markdown-comments";
-import { appendFootnoteRefsToFirstLine } from "../utils/footnote-placement";
+import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
 
 interface CommentGraphqlResponse {
   node: {
@@ -169,7 +169,11 @@ async function handleSimilarIssuesAndComments(
         return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
       });
       if (beforeReplace === updatedBody) {
-        orphanRefs.push(footnoteRef);
+        const fallback = insertFootnoteRefNearSentence(updatedBody, sentence, footnoteRef);
+        updatedBody = fallback.updated;
+        if (!fallback.inserted) {
+          orphanRefs.push(footnoteRef);
+        }
       }
     }
 
@@ -195,7 +199,11 @@ async function handleSimilarIssuesAndComments(
         return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
       });
       if (beforeReplace === updatedBody) {
-        orphanRefs.push(footnoteRef);
+        const fallback = insertFootnoteRefNearSentence(updatedBody, sentence, footnoteRef);
+        updatedBody = fallback.updated;
+        if (!fallback.inserted) {
+          orphanRefs.push(footnoteRef);
+        }
       }
     }
 
