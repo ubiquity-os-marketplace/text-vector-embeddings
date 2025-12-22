@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface IssueType {
   id: string;
@@ -56,7 +57,8 @@ export class Issue extends SuperSupabase {
     }
 
     //Create the embedding for this issue
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown) : issueData.markdown;
+    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
@@ -83,7 +85,8 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData) {
     const { isPrivate } = issueData;
     //Create the embedding for this issue
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown) : issueData.markdown;
+    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
@@ -165,7 +168,8 @@ export class Issue extends SuperSupabase {
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown);
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
         query_embedding: embedding,
         current_id: currentId,
@@ -197,7 +201,8 @@ export class Issue extends SuperSupabase {
   async findSimilarIssuesToMatch({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown);
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
         current_id: currentId,
         query_embedding: embedding,
