@@ -16,6 +16,11 @@ export async function addComments(context: Context<"issue_comment.created">) {
   const isPrivate = payload.repository.private;
   const issueId = payload.issue.node_id;
 
+  if (comment.user?.type !== "User") {
+    logger.debug("Ignoring comment from non-human author", { author: comment.user?.login, type: comment.user?.type });
+    return;
+  }
+
   try {
     if (!markdown) {
       logger.error("Comment body is empty");

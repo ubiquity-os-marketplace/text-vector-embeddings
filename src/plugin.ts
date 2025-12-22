@@ -3,20 +3,23 @@ import { VoyageAIClient } from "voyageai";
 import { createAdapters } from "./adapters/index";
 import { updateCronState } from "./cron/workflow";
 import { addComments } from "./handlers/add-comments";
+import { addReviewComment } from "./handlers/add-review-comments";
 import { addIssue } from "./handlers/add-issue";
 import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
+import { deleteReviewComment } from "./handlers/delete-review-comments";
 import { deleteIssues } from "./handlers/delete-issue";
 import { issueDedupe } from "./handlers/issue-deduplication";
 import { issueMatchingWithComment } from "./handlers/issue-matching";
 import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
+import { updateReviewComment } from "./handlers/update-review-comments";
 import { updateIssue } from "./handlers/update-issue";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
 import { isPluginEdit } from "./helpers/plugin-utils";
 import { Database } from "./types/database";
 import { Context } from "./types/index";
-import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
+import { isIssueCommentEvent, isIssueEvent, isPullRequestReviewCommentEvent } from "./types/typeguards";
 
 export async function initAdapters(context: Context) {
   const { env } = context;
@@ -56,6 +59,15 @@ export async function runPlugin(context: Context) {
         return await deleteComment(context as Context<"issue_comment.deleted">);
       case "issue_comment.edited":
         return await updateComment(context as Context<"issue_comment.edited">);
+    }
+  } else if (isPullRequestReviewCommentEvent(context)) {
+    switch (eventName) {
+      case "pull_request_review_comment.created":
+        return await addReviewComment(context as Context<"pull_request_review_comment.created">);
+      case "pull_request_review_comment.edited":
+        return await updateReviewComment(context as Context<"pull_request_review_comment.edited">);
+      case "pull_request_review_comment.deleted":
+        return await deleteReviewComment(context as Context<"pull_request_review_comment.deleted">);
     }
   } else if (isIssueEvent(context)) {
     switch (eventName) {

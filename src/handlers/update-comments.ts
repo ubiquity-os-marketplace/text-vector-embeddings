@@ -16,6 +16,11 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
   const isPrivate = payload.repository.private;
   const issueId = payload.issue.node_id;
 
+  if (payload.comment.user?.type !== "User") {
+    logger.debug("Ignoring comment update from non-human author", { author: payload.comment.user?.login, type: payload.comment.user?.type });
+    return;
+  }
+
   // Fetch the previous comment and update it in the db
   try {
     if (!markdown) {
