@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface IssueType {
   id: string;
@@ -46,6 +47,7 @@ export class Issue extends SuperSupabase {
   async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown).trim() : null;
     //First Check if the issue already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issues").select("*").eq("id", issueData.id);
     if (existingError) {
@@ -64,10 +66,10 @@ export class Issue extends SuperSupabase {
 
     //Create the embedding for this issue
     let embedding: number[] | null = null;
-    if (!shouldDeferEmbedding && issueData.markdown && !isPrivate) {
-      embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
+    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
-    let plaintext: string | null = issueData.markdown ? markdownToPlainText(issueData.markdown) : null;
+    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -93,12 +95,13 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown).trim() : null;
     //Create the embedding for this issue
     let embedding: number[] | null = null;
-    if (!shouldDeferEmbedding && issueData.markdown && !isPrivate) {
-      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
+    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
-    let plaintext: string | null = issueData.markdown ? markdownToPlainText(issueData.markdown) : null;
+    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -182,7 +185,12 @@ export class Issue extends SuperSupabase {
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown).trim();
+      if (!embeddingSource) {
+        this.context.logger.warn("Skipping issue similarity search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
         query_embedding: embedding,
         current_id: currentId,
@@ -214,7 +222,12 @@ export class Issue extends SuperSupabase {
   async findSimilarIssuesToMatch({ markdown, currentId, threshold, topK }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown).trim();
+      if (!embeddingSource) {
+        this.context.logger.warn("Skipping issue match search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
         current_id: currentId,
         query_embedding: embedding,

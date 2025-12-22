@@ -3,6 +3,10 @@ import { JSDOM } from "jsdom";
 import { marked } from "marked";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
+import { appendPluginUpdateComment, normalizeWhitespace, stripHtmlComments, stripPluginUpdateComments } from "../utils/markdown-comments";
+import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
+import { stripDuplicateFootnotes } from "../utils/footnotes";
+import { findEditDistance } from "../utils/string-similarity";
 
 export interface IssueGraphqlResponse {
   node: {
@@ -26,30 +30,34 @@ export interface IssueGraphqlResponse {
  * If a similar issue is found, a footnote is added to the current issue.
  * @param context The context object
  **/
-export async function issueDedupe(context: Context<"issues.opened" | "issues.edited">) {
+export async function issueDedupe(context: Context<"issues.opened" | "issues.edited">, options: { keepUpdateComment?: boolean } = {}) {
   const {
     logger,
     adapters: { supabase },
     octokit,
     payload,
   } = context;
+  const shouldKeepUpdateComment = options.keepUpdateComment ?? false;
 
   const originalIssue = payload.issue;
 
   // Use the latest issue data
-  let issueBody = originalIssue.body;
+  const issueBody = originalIssue.body;
   if (!issueBody) {
     logger.info("Issue body is empty", { originalIssue });
     return;
   }
-  issueBody = await cleanContent(context, issueBody);
+  const { cleaned: bodyWithoutPluginUpdates, latestComment } = stripPluginUpdateComments(issueBody);
+  const updateComment = shouldKeepUpdateComment ? latestComment : null;
+  const cleanedIssueBody = await cleanContent(context, bodyWithoutPluginUpdates);
+  const issueBodyForMatching = stripHtmlComments(cleanedIssueBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: originalIssue.title + issueBody,
+    markdown: originalIssue.title + issueBodyForMatching,
     currentId: originalIssue.node_id,
     threshold: context.config.dedupeWarningThreshold,
   });
   if (similarIssues && similarIssues.length > 0) {
-    let processedIssues = await processSimilarIssues(similarIssues, context, issueBody);
+    let processedIssues = await processSimilarIssues(similarIssues, context, issueBodyForMatching);
     processedIssues = processedIssues.filter((issue) =>
       matchRepoOrgToSimilarIssueRepoOrg(payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
@@ -57,13 +65,20 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     if (matchIssues.length > 0) {
       logger.info(`Similar issue which matches more than ${context.config.dedupeMatchThreshold} already exists`, { matchIssues });
       //To the issue body, add a footnote with the link to the similar issue
-      const updatedBody = await handleMatchIssuesComment(context, payload, issueBody, processedIssues);
-      issueBody = updatedBody || issueBody;
+      const updatedBody = await handleMatchIssuesComment(context, payload, cleanedIssueBody, processedIssues);
+      const outputBody = updatedBody || cleanedIssueBody;
+      const nextBody = updateComment ? appendPluginUpdateComment(outputBody, updateComment) : outputBody;
+      const isBodyUnchanged = normalizeWhitespace(originalIssue.body ?? "") === normalizeWhitespace(nextBody);
+      const shouldClose = originalIssue.state !== "closed" || originalIssue.state_reason !== "not_planned";
+      if (isBodyUnchanged && !shouldClose) {
+        logger.info("Issue body unchanged after dedupe match update", { issueNumber: originalIssue.number });
+        return;
+      }
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
         issue_number: originalIssue.number,
-        body: issueBody,
+        body: nextBody,
         state: "closed",
         state_reason: "not_planned",
       });
@@ -71,18 +86,23 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     }
     if (processedIssues.length > 0) {
       logger.info(`Similar issue which matches more than ${context.config.dedupeWarningThreshold} already exists`, { processedIssues });
-      await handleSimilarIssuesComment(context, payload, issueBody, originalIssue.number, processedIssues);
+      await handleSimilarIssuesComment(context, payload, cleanedIssueBody, originalIssue.body ?? "", originalIssue.number, processedIssues, updateComment);
       return;
     }
   } else {
     //Use the IssueBody (Without footnotes) to update the issue when no similar issues are found
     //Only if the issue has "possible duplicate" footnotes, update the issue
-    if (checkIfDuplicateFootNoteExists(issueBody || "")) {
+    if (checkIfDuplicateFootNoteExists(cleanedIssueBody || "")) {
+      const outputBody = updateComment ? appendPluginUpdateComment(cleanedIssueBody, updateComment) : cleanedIssueBody;
+      if (normalizeWhitespace(originalIssue.body ?? "") === normalizeWhitespace(outputBody)) {
+        logger.info("Issue body unchanged after duplicate footnote cleanup", { issueNumber: originalIssue.number });
+        return;
+      }
       await octokit.rest.issues.update({
         owner: payload.repository.owner.login,
         repo: payload.repository.name,
         issue_number: originalIssue.number,
-        body: issueBody,
+        body: outputBody,
       });
     }
   }
@@ -146,8 +166,10 @@ async function handleSimilarIssuesComment(
   context: Context,
   payload: Context<"issues.opened" | "issues.edited">["payload"],
   issueBody: string,
+  currentBody: string,
   issueNumber: number,
-  issueList: IssueGraphqlResponse[]
+  issueList: IssueGraphqlResponse[],
+  latestComment: string | null
 ) {
   const relevantIssues = issueList.filter((issue) =>
     matchRepoOrgToSimilarIssueRepoOrg(payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
@@ -167,6 +189,7 @@ async function handleSimilarIssuesComment(
   const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = issueBody;
   const footnotes: string[] = [];
+  const orphanRefs: string[] = [];
   // Sort relevant issues by similarity in ascending order
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
@@ -175,26 +198,46 @@ async function handleSimilarIssuesComment(
     const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
-    const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
-    updatedBody = updatedBody.replace(sentencePattern, (match) => {
-      // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
-      const isAfterCodeBlock = /```\s*$/.test(match);
-      return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
-    });
+    if (!sentence.trim()) {
+      orphanRefs.push(footnoteRef);
+    } else {
+      const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+      const beforeReplace = updatedBody;
+      updatedBody = updatedBody.replace(sentencePattern, (match) => {
+        // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
+        const isAfterCodeBlock = /```\s*$/.test(match);
+        return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
+      });
+      if (beforeReplace === updatedBody) {
+        const fallback = insertFootnoteRefNearSentence(updatedBody, sentence, footnoteRef);
+        updatedBody = fallback.updated;
+        if (!fallback.inserted) {
+          orphanRefs.push(footnoteRef);
+        }
+      }
+    }
 
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ⚠ ${issue.similarity}% possible duplicate - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
   });
+  if (orphanRefs.length > 0) {
+    updatedBody = appendFootnoteRefsToFirstLine(updatedBody, orphanRefs);
+  }
   // Append new footnotes to the body, keeping the previous ones
   if (footnotes.length > 0) {
     updatedBody += "\n\n" + footnotes.join("");
   }
   // Update the issue with the modified body
+  const outputBody = latestComment ? appendPluginUpdateComment(updatedBody, latestComment) : updatedBody;
+  if (normalizeWhitespace(currentBody) === normalizeWhitespace(outputBody)) {
+    context.logger.info("Issue body unchanged after dedupe warning update", { issueNumber });
+    return;
+  }
   await context.octokit.rest.issues.update({
     owner: payload.repository.owner.login,
     repo: payload.repository.name,
     issue_number: issueNumber,
-    body: updatedBody,
+    body: outputBody,
   });
 }
 
@@ -254,7 +297,8 @@ export async function processSimilarIssues(similarIssues: IssueSimilaritySearchR
           { issueNodeId: issue.issue_id }
         );
         issueUrl.similarity = Math.round(issue.similarity * 100).toString();
-        issueUrl.mostSimilarSentence = findMostSimilarSentence(issueBody, issueUrl.node.body, context);
+        const similarBody = stripHtmlComments(issueUrl.node.body);
+        issueUrl.mostSimilarSentence = findMostSimilarSentence(issueBody, similarBody, context);
         return issueUrl;
       } catch (error) {
         context.logger.error(`Failed to fetch issue ${issue.issue_id}: ${error}`, { issue });
@@ -274,28 +318,7 @@ export async function processSimilarIssues(similarIssues: IssueSimilaritySearchR
  * @param sentenceB The second string
  * @returns The edit distance between the two strings
  */
-function findEditDistance(sentenceA: string, sentenceB: string): number {
-  const lengthA = sentenceA.length;
-  const lengthB = sentenceB.length;
-  const distanceMatrix: number[][] = Array.from({ length: lengthA + 1 }, () => Array.from({ length: lengthB + 1 }, () => 0));
-
-  for (let indexA = 0; indexA <= lengthA; indexA++) {
-    for (let indexB = 0; indexB <= lengthB; indexB++) {
-      if (indexA === 0) {
-        distanceMatrix[indexA][indexB] = indexB;
-      } else if (indexB === 0) {
-        distanceMatrix[indexA][indexB] = indexA;
-      } else if (sentenceA[indexA - 1] === sentenceB[indexB - 1]) {
-        distanceMatrix[indexA][indexB] = distanceMatrix[indexA - 1][indexB - 1];
-      } else {
-        distanceMatrix[indexA][indexB] =
-          1 + Math.min(distanceMatrix[indexA - 1][indexB], distanceMatrix[indexA][indexB - 1], distanceMatrix[indexA - 1][indexB - 1]);
-      }
-    }
-  }
-
-  return distanceMatrix[lengthA][lengthB];
-}
+// findEditDistance moved to utils/string-similarity
 
 /**
  * Removes all footnotes from the issue content.
@@ -303,19 +326,6 @@ function findEditDistance(sentenceA: string, sentenceB: string): number {
  * @param content The content of the issue
  * @returns The content without footnotes
  */
-function removeFootnotes(content: string): string {
-  const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
-  const footnotes = content.match(footnoteDefRegex);
-  let contentWithoutFootnotes = content.replace(footnoteDefRegex, "");
-  if (footnotes) {
-    footnotes.forEach((footnote) => {
-      const footnoteNumber = footnote.match(/\d+/)?.[0];
-      contentWithoutFootnotes = contentWithoutFootnotes.replace(new RegExp(`\\[\\^${footnoteNumber}\\^\\]`, "g"), "");
-    });
-  }
-  contentWithoutFootnotes = removeCautionMessages(contentWithoutFootnotes);
-  return contentWithoutFootnotes;
-}
 
 async function handleAnchorAndImgElements(context: Context, content: string) {
   const html = await marked(content);
@@ -372,12 +382,7 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
 }
 
 export async function cleanContent(context: Context, content: string): Promise<string> {
-  return removeFootnotes(await handleAnchorAndImgElements(context, content));
-}
-
-export function removeCautionMessages(content: string): string {
-  const cautionRegex = />[!CAUTION]\n> This issue may be a duplicate of the following issues:\n((> - \[[^\]]+\]\([^)]+\)\n)+)/g;
-  return content.replace(cautionRegex, "");
+  return stripDuplicateFootnotes(await handleAnchorAndImgElements(context, content));
 }
 
 /**

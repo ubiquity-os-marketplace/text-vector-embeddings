@@ -1,46 +1,36 @@
 import { createAppAuth } from "@octokit/auth-app";
-import { createClient } from "@supabase/supabase-js";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
-import { VoyageAIClient } from "voyageai";
-import pkg from "../../package.json" with { type: "json" };
 import { processPendingEmbeddings } from "./embedding-queue";
 import { createCronDatabase } from "./database-handler";
-import { Database } from "../types/database";
-import { Env } from "../types/env";
+import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
+import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
 
 async function main() {
   const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_KEY;
-  const voyageKey = process.env.VOYAGEAI_API_KEY;
+  let env;
+  try {
+    env = decodeEnv(process.env);
+  } catch (error) {
+    logger.error("Missing required env for reprocess; skipping cron run.", { error });
+    return;
+  }
+  const config = decodeConfig();
+  const clients = createReprocessClients(env);
+  const queueSettings = getEmbeddingQueueSettings(env);
 
-  if (supabaseUrl && supabaseKey && voyageKey) {
-    const supabase = createClient<Database>(supabaseUrl, supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
-    const voyage = new VoyageAIClient({ apiKey: voyageKey });
-    const queueEnv: Env = {
-      SUPABASE_URL: supabaseUrl,
-      SUPABASE_KEY: supabaseKey,
-      VOYAGEAI_API_KEY: voyageKey,
-      DENO_KV_URL: process.env.DENO_KV_URL,
-      LOG_LEVEL: process.env.LOG_LEVEL,
-      KERNEL_PUBLIC_KEY: process.env.KERNEL_PUBLIC_KEY,
-      APP_ID: process.env.APP_ID,
-      APP_PRIVATE_KEY: process.env.APP_PRIVATE_KEY,
-      EMBEDDINGS_QUEUE_ENABLED: process.env.EMBEDDINGS_QUEUE_ENABLED,
-      EMBEDDINGS_QUEUE_BATCH_SIZE: process.env.EMBEDDINGS_QUEUE_BATCH_SIZE,
-      EMBEDDINGS_QUEUE_DELAY_MS: process.env.EMBEDDINGS_QUEUE_DELAY_MS,
-      EMBEDDINGS_QUEUE_MAX_RETRIES: process.env.EMBEDDINGS_QUEUE_MAX_RETRIES,
-    };
-
-    try {
-      const result = await processPendingEmbeddings({ env: queueEnv, clients: { supabase, voyage }, logger });
-      logger.info("Embedding queue processed", result);
-    } catch (error) {
-      logger.error("Embedding queue failed", { error });
+  try {
+    const queueResult = await processPendingEmbeddings({ env, clients, logger });
+    logger.info("Embedding queue processed", queueResult);
+    if (queueResult.stoppedEarly) {
+      logger.warn("Embedding queue stopped early due to rate limiting; skipping reprocess run.");
+      return;
     }
-  } else {
-    logger.warn("Skipping embedding queue processing; SUPABASE_URL, SUPABASE_KEY, or VOYAGEAI_API_KEY is missing.");
+  } catch (error) {
+    logger.error("Embedding queue failed", { error });
+    if (queueSettings.enabled) {
+      return;
+    }
   }
 
   const octokit = new customOctokit({
@@ -85,36 +75,53 @@ async function main() {
         },
       });
 
+      const repoResponse = await repoOctokit.rest.repos.get({ owner, repo });
+      const repository = repoResponse.data;
+
       for (const issueNumber of issueNumbers) {
         const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
         try {
-          const {
-            data: { body = "" },
-          } = await repoOctokit.rest.issues.get({
-            owner: owner,
-            repo: repo,
+          const { data: issue } = await repoOctokit.rest.issues.get({
+            owner,
+            repo,
             issue_number: issueNumber,
           });
+          if (issue.pull_request) {
+            logger.info("Skipping pull request entry in cron list", { owner, repo, issueNumber });
+            await db.removeIssue(url);
+            continue;
+          }
 
-          const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toISOString()} -->`;
-          logger.info(`Updated body of ${url}`, { newBody });
+          const context = await createReprocessContext({
+            issue,
+            repository,
+            octokit: repoOctokit,
+            env,
+            config,
+            logger,
+            clients,
+          });
 
-          await repoOctokit.rest.issues.update({
-            owner: owner,
-            repo: repo,
-            issue_number: issueNumber,
-            body: newBody,
+          await reprocessIssue(context, {
+            updateIssue: false,
+            runMatching: true,
+            runDedupe: true,
+            keepUpdateComment: false,
           });
 
           await db.removeIssue(url);
         } catch (err) {
-          logger.error("Failed to update individual issue", {
+          logger.error("Failed to reprocess individual issue", {
             organization: owner,
             repository: repo,
             issueNumber,
             url,
             err,
           });
+        }
+
+        if (queueSettings.enabled) {
+          await sleep(queueSettings.delayMs);
         }
       }
     } catch (e) {

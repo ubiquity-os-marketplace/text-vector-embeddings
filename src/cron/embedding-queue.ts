@@ -7,7 +7,12 @@ import { Env } from "../types/env";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
 import { stripHtmlComments } from "../utils/markdown-comments";
 
-type QueueLogger = Context["logger"];
+type QueueLogger = {
+  debug: (message: string, context?: Record<string, unknown>) => void;
+  info: (message: string, context?: Record<string, unknown>) => void;
+  warn: (message: string, context?: Record<string, unknown>) => void;
+  error: (message: string, context?: Record<string, unknown>) => void;
+};
 
 type QueueClients = {
   supabase: SupabaseClient<Database>;
@@ -114,7 +119,7 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
     return { issuesProcessed: 0, commentsProcessed: 0, stoppedEarly: false };
   }
 
-  const embedder = new VoyageEmbedding(clients.voyage, { logger } as Context);
+  const embedder = new VoyageEmbedding(clients.voyage, { logger } as unknown as Context);
 
   const issueResult = await processPendingRows({
     table: "issues",

@@ -6,6 +6,7 @@ import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
 import { createAdapters } from "../adapters/index";
 import { Context } from "../types/context";
+import { stripHtmlComments } from "../utils/markdown-comments";
 
 interface MarkdownItWithPlainText extends markdownit {
   plainText: string;
@@ -13,9 +14,10 @@ interface MarkdownItWithPlainText extends markdownit {
 
 function markdownToPlainText(markdown: string | null): string | null {
   if (!markdown) return markdown;
+  const cleaned = stripHtmlComments(markdown);
   const md = markdownit() as MarkdownItWithPlainText;
   md.use(plainTextPlugin);
-  md.render(markdown);
+  md.render(cleaned);
   return md.plainText;
 }
 

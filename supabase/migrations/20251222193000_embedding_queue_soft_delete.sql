@@ -1,3 +1,6 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+SET search_path TO public, extensions;
+
 ALTER TABLE issues
   ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 
