@@ -25,9 +25,38 @@ type QueueStats = {
   stoppedEarly: boolean;
 };
 
+type JsonRecord = Record<string, unknown>;
+
 function isRateLimitError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? "");
   return message.toLowerCase().includes("rate limit");
+}
+
+function getNestedString(value: unknown, path: string[]): string | null {
+  let current: unknown = value;
+  for (const key of path) {
+    if (!current || typeof current !== "object") {
+      return null;
+    }
+    current = (current as JsonRecord)[key];
+  }
+  return typeof current === "string" ? current : null;
+}
+
+function getAuthorType(payload: unknown, table: "issues" | "issue_comments"): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  if (table === "issues") {
+    return (
+      getNestedString(payload, ["issue", "user", "type"]) ??
+      getNestedString(payload, ["pull_request", "user", "type"]) ??
+      getNestedString(payload, ["sender", "type"])
+    );
+  }
+
+  return getNestedString(payload, ["comment", "user", "type"]) ?? getNestedString(payload, ["sender", "type"]);
 }
 
 async function createEmbeddingWithRetry(
@@ -66,7 +95,7 @@ async function processPendingRows(params: {
   const { table, supabase, embedder, settings, logger } = params;
   const { data, error } = await supabase
     .from(table)
-    .select("id, markdown, modified_at")
+    .select("id, markdown, modified_at, payload")
     .is("embedding", null)
     .is("deleted_at", null)
     .not("markdown", "is", null)
@@ -84,6 +113,19 @@ async function processPendingRows(params: {
 
   let processed = 0;
   for (const row of data) {
+    const authorType = getAuthorType(row.payload, table);
+    if (authorType && authorType !== "User") {
+      logger.info("Skipping embedding for non-human author.", { table, id: row.id, authorType });
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ markdown: null, plaintext: null, modified_at: new Date().toISOString() })
+        .eq("id", row.id);
+      if (updateError) {
+        logger.error("Failed to clear markdown for non-human author.", { table, id: row.id, updateError });
+      }
+      continue;
+    }
+
     const markdown = typeof row.markdown === "string" ? row.markdown : "";
     const cleaned = stripHtmlComments(markdown).trim();
     if (!cleaned) {
