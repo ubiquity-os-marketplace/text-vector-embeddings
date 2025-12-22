@@ -7,7 +7,7 @@ type PullRequestPayload = {
   node_id?: string | null;
   title?: string | null;
   body?: string | null;
-  user?: { id?: number | null } | null;
+  user?: { id?: number | null; login?: string | null; type?: string | null } | null;
   html_url?: string | null;
 };
 
@@ -37,8 +37,19 @@ export async function ensurePullRequestIssue(context: ReviewContext, pullRequest
     return id;
   }
 
-  const markdown = buildPullRequestMarkdown(pullRequest);
-  if (!markdown) {
+  const authorType = pullRequest.user?.type ?? null;
+  const isHumanAuthor = authorType === "User";
+  const markdown = isHumanAuthor ? buildPullRequestMarkdown(pullRequest) : null;
+
+  if (!isHumanAuthor) {
+    logger.debug("Pull request author is not human; storing issue without embeddings.", {
+      author: pullRequest.user?.login ?? null,
+      type: authorType,
+      pullRequestUrl: pullRequest.html_url,
+    });
+  }
+
+  if (isHumanAuthor && !markdown) {
     logger.error("Pull request title/body is empty; skipping PR issue creation", { pullRequestUrl: pullRequest.html_url });
     return id;
   }

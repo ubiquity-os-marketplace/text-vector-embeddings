@@ -23,17 +23,28 @@ export async function completeIssue(context: Context<"issues.closed">) {
 
   const id = payload.issue.node_id;
   const isPrivate = payload.repository.private;
-  const markdown = payload.issue.body && payload.issue.title ? payload.issue.body + " " + payload.issue.title : null;
+  const authorType = payload.issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  let markdown = payload.issue.body && payload.issue.title ? payload.issue.body + " " + payload.issue.title : null;
   const authorId = payload.issue.user?.id || -1;
 
+  if (!isHumanAuthor) {
+    logger.debug("Issue author is not human; storing issue without embeddings.", {
+      author: payload.issue.user?.login,
+      type: authorType,
+      issue: payload.issue.number,
+    });
+    markdown = null;
+  }
+
   try {
-    if (!markdown) {
+    if (isHumanAuthor && !markdown) {
       logger.error("Issue body is empty");
       return;
     }
 
     // Clean issue by removing footnotes
-    const cleanedIssue = await cleanContent(context, markdown);
+    const cleanedIssue = isHumanAuthor && markdown ? await cleanContent(context, markdown) : null;
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     // Add completed status to payload

@@ -11,16 +11,28 @@ export async function updateIssue(context: Context<"issues.edited">) {
   } = context;
   const id = payload.issue.node_id;
   const isPrivate = payload.repository.private;
-  const markdown = payload.issue.body && payload.issue.title ? payload.issue.body + " " + payload.issue.title : null;
+  const authorType = payload.issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  let markdown = payload.issue.body && payload.issue.title ? payload.issue.body + " " + payload.issue.title : null;
   const authorId = payload.issue.user?.id || -1;
   // Fetch the previous issue and update it in the db
+
+  if (!isHumanAuthor) {
+    logger.debug("Issue author is not human; storing issue without embeddings.", {
+      author: payload.issue.user?.login,
+      type: authorType,
+      issue: payload.issue.number,
+    });
+    markdown = null;
+  }
+
   try {
-    if (!markdown) {
+    if (isHumanAuthor && !markdown) {
       logger.error("Issue body is empty");
       return;
     }
     //clean issue by removing footnotes
-    const cleanedIssue = await cleanContent(context, markdown);
+    const cleanedIssue = isHumanAuthor && markdown ? await cleanContent(context, markdown) : null;
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
@@ -29,7 +41,9 @@ export async function updateIssue(context: Context<"issues.edited">) {
     }
 
     await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId }, { deferEmbedding: queueSettings.enabled });
-    await kv.addIssue(payload.issue.html_url);
+    if (isHumanAuthor) {
+      await kv.addIssue(payload.issue.html_url);
+    }
     logger.ok(`Successfully updated issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {
     if (error instanceof Error) {

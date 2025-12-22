@@ -124,6 +124,16 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
     payload,
   } = context;
   const issue = payload.issue;
+  const authorType = issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  if (!isHumanAuthor) {
+    logger.debug("Skipping issue matching for non-human author.", {
+      author: issue.user?.login,
+      type: authorType,
+      issue: issue.number,
+    });
+    return null;
+  }
   const issueContent = issue.body + issue.title;
   const matchResultArray: Map<string, Array<string>> = new Map();
 

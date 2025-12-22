@@ -53,6 +53,7 @@ export async function setupTests() {
     user: {
       login: STRINGS.USER_1,
       id: 1,
+      type: "User",
     },
     owner: STRINGS.USER_1,
     repo: STRINGS.TEST_REPO,
@@ -86,6 +87,7 @@ export async function setupTests() {
     user: {
       login: STRINGS.USER_1,
       id: 1,
+      type: "User",
     },
     owner: STRINGS.USER_1,
     repo: STRINGS.TEST_REPO,
@@ -120,6 +122,7 @@ export function createIssue(
   issueUser: {
     login: string;
     id: number;
+    type?: string;
   },
   issueState: string,
   issueCloseReason: string | null,
@@ -143,7 +146,10 @@ export function createIssue(
       data: {
         body: issueBody,
         title: issueTitle,
-        user: issueUser,
+        user: {
+          ...issueUser,
+          type: issueUser.type ?? "User",
+        },
         updated_at: new Date().toISOString(),
         owner: owner,
         repo: repo,
@@ -156,7 +162,10 @@ export function createIssue(
       node_id: issueNodeId,
       body: issueBody,
       title: issueTitle,
-      user: issueUser,
+      user: {
+        ...issueUser,
+        type: issueUser.type ?? "User",
+      },
       number: issueNumber,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

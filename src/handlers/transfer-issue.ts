@@ -11,10 +11,21 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
   const { new_issue, new_repository } = changes;
   //Fetch the new details of the issue
   const newIssueNodeId = new_issue.node_id;
-  const markdown = new_issue.body && new_issue.title ? new_issue.body + " " + new_issue.title : null;
+  const authorType = new_issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  let markdown = new_issue.body && new_issue.title ? new_issue.body + " " + new_issue.title : null;
   const authorId = new_issue.user?.id || -1;
   const isPrivate = new_repository.private;
   const queueSettings = getEmbeddingQueueSettings(context.env);
+
+  if (!isHumanAuthor) {
+    logger.debug("Issue author is not human; storing issue without embeddings.", {
+      author: new_issue.user?.login,
+      type: authorType,
+      issue: new_issue.number,
+    });
+    markdown = null;
+  }
 
   //Delete the issue from the old repository
   //Create the new issue in the new repository
@@ -24,7 +35,11 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
       { id: newIssueNodeId, payload: new_issue, isPrivate, markdown, author_id: authorId },
       { deferEmbedding: queueSettings.enabled }
     );
-    await kv.updateIssue(issue.html_url, new_issue.html_url);
+    if (isHumanAuthor) {
+      await kv.updateIssue(issue.html_url, new_issue.html_url);
+    } else {
+      await kv.removeIssue(issue.html_url);
+    }
     logger.ok(`Successfully transferred issue!`, new_issue);
   } catch (error) {
     if (error instanceof Error) {

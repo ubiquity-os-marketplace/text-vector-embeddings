@@ -121,13 +121,13 @@ function parseBoolean(value: string | undefined): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
-async function fetchAuthorId(octokit: InstanceType<typeof Octokit>, login: string): Promise<number> {
+async function fetchAuthor(octokit: InstanceType<typeof Octokit>, login: string): Promise<{ id: number; type: string } | null> {
   try {
     const response = await octokit.rest.users.getByUsername({ username: login });
-    return response.data.id;
+    return { id: response.data.id, type: response.data.type ?? "User" };
   } catch (error) {
     console.error(`Error fetching author ID for ${login}:`, error);
-    return -1;
+    return null;
   }
 }
 
@@ -215,7 +215,16 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
     for (const issue of issues) {
       try {
-        const authorId = issue.author?.login ? await fetchAuthorId(context.octokit, issue.author.login) : -1;
+        const author = issue.author?.login ? await fetchAuthor(context.octokit, issue.author.login) : null;
+        if (!author || author.type !== "User") {
+          context.logger.info("Skipping issue from non-human author.", {
+            author: issue.author?.login ?? null,
+            type: author?.type ?? null,
+            issue: issue.number,
+          });
+          continue;
+        }
+        const authorId = author.id;
         const repoOwner = issue.repository.owner.login;
 
         const metadata: IssueMetadata = {

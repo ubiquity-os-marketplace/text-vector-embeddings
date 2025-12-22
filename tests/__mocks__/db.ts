@@ -70,6 +70,7 @@ export const db = factory({
     user: {
       login: String,
       id: Number,
+      type: nullable(String),
     },
     owner: String,
     repo: String,
