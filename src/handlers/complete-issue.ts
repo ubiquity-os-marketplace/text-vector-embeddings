@@ -1,5 +1,6 @@
 import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function completeIssue(context: Context<"issues.closed">) {
   const {
@@ -33,6 +34,7 @@ export async function completeIssue(context: Context<"issues.closed">) {
 
     // Clean issue by removing footnotes
     const cleanedIssue = await cleanContent(context, markdown);
+    const queueSettings = getEmbeddingQueueSettings(context.env);
 
     // Add completed status to payload
     const updatedPayload = {
@@ -50,24 +52,30 @@ export async function completeIssue(context: Context<"issues.closed">) {
 
     if (existingIssue && existingIssue.length > 0) {
       // Update existing issue
-      await supabase.issue.updateIssue({
-        markdown: cleanedIssue,
-        id,
-        payload: updatedPayload,
-        isPrivate,
-        author_id: authorId,
-      });
+      await supabase.issue.updateIssue(
+        {
+          markdown: cleanedIssue,
+          id,
+          payload: updatedPayload,
+          isPrivate,
+          author_id: authorId,
+        },
+        { deferEmbedding: queueSettings.enabled }
+      );
       await kv.removeIssue(payload.issue.html_url);
       logger.ok(`Successfully updated completed issue! ${payload.issue.id}`, payload.issue);
     } else {
       // Create new issue if it doesn't exist
-      await supabase.issue.createIssue({
-        id,
-        payload: updatedPayload,
-        isPrivate,
-        markdown: cleanedIssue,
-        author_id: authorId,
-      });
+      await supabase.issue.createIssue(
+        {
+          id,
+          payload: updatedPayload,
+          isPrivate,
+          markdown: cleanedIssue,
+          author_id: authorId,
+        },
+        { deferEmbedding: queueSettings.enabled }
+      );
       logger.ok(`Successfully created completed issue! ${payload.issue.id}`, payload.issue);
     }
   } catch (error) {

@@ -3,23 +3,21 @@ import { annotate } from "./annotate";
 import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
 function parseUserLogins(value: string | string[] | undefined): string[] {
-  const segments = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+  let segments: string[] = [];
+  if (Array.isArray(value)) {
+    segments = value;
+  } else if (typeof value === "string") {
+    segments = [value];
+  }
   return segments
     .flatMap((segment) => segment.split(/[\s,]+/))
     .map((user) => user.trim().replace(/^@/, ""))
     .filter(Boolean);
 }
 
-function buildRecommendationComment(
-  result: NonNullable<Awaited<ReturnType<typeof issueMatching>>>,
-  requestedLogins: string[]
-): string {
-  const lines: string[] = [
-    ">[!NOTE]",
-    requestedLogins.length > 0
-      ? `>Recommendation results (filtered): ${requestedLogins.map((login) => `@${login}`).join(", ")}`
-      : ">Recommendation results:",
-  ];
+function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeof issueMatching>>>, requestedLogins: string[]): string {
+  const formattedLogins = requestedLogins.map((login) => `@${login}`).join(", ");
+  const lines: string[] = [">[!NOTE]", requestedLogins.length > 0 ? `>Recommendation results (filtered): ${formattedLogins}` : ">Recommendation results:"];
 
   if (!result.sortedContributors.length) {
     lines.push("> _No suitable contributors found._");
@@ -40,12 +38,8 @@ function buildRecommendationComment(
   return lines.join("\n");
 }
 
-export async function commandHandler(context: Context) {
+export async function commandHandler(context: Context<"issue_comment.created">) {
   const { logger } = context;
-
-  if (context.eventName !== "issue_comment.created") {
-    return;
-  }
 
   if (!context.command) {
     return;
@@ -72,8 +66,7 @@ export async function commandHandler(context: Context) {
     const requestedLoginsFromParams = parseUserLogins(context.command.parameters.users);
     const requestedLogins =
       requestedLoginsFromParams.length > 0 ? requestedLoginsFromParams : parseUserLogins(context.payload.comment.body.trim().split(/\s+/).slice(1));
-    const result =
-      requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
+    const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
       await context.octokit.rest.issues.createComment({
@@ -130,8 +123,7 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
     const issue = context.payload.issue;
     const { owner, name: repo } = context.payload.repository;
     const requestedLogins = parseUserLogins(splitComment.slice(1));
-    const result =
-      requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
+    const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
       await context.octokit.rest.issues.createComment({

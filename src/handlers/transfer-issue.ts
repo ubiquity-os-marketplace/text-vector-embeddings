@@ -1,4 +1,5 @@
 import { Context } from "../types/index";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function issueTransfer(context: Context<"issues.transferred">) {
   const {
@@ -13,12 +14,16 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
   const markdown = new_issue.body && new_issue.title ? new_issue.body + " " + new_issue.title : null;
   const authorId = new_issue.user?.id || -1;
   const isPrivate = new_repository.private;
+  const queueSettings = getEmbeddingQueueSettings(context.env);
 
   //Delete the issue from the old repository
   //Create the new issue in the new repository
   try {
     await supabase.issue.deleteIssue(nodeId);
-    await supabase.issue.createIssue({ id: newIssueNodeId, payload: new_issue, isPrivate, markdown, author_id: authorId });
+    await supabase.issue.createIssue(
+      { id: newIssueNodeId, payload: new_issue, isPrivate, markdown, author_id: authorId },
+      { deferEmbedding: queueSettings.enabled }
+    );
     await kv.updateIssue(issue.html_url, new_issue.html_url);
     logger.ok(`Successfully transferred issue!`, new_issue);
   } catch (error) {

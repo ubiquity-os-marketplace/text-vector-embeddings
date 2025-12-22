@@ -64,12 +64,11 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
     }
 
     async function handleUrl(url: string) {
-      let owner, repo, issueNumber;
+      let owner: string;
+      let repo: string;
+      let issueNumber: number;
       try {
-        const urlParts = parseGitHubUrl(url);
-        owner = urlParts.owner;
-        repo = urlParts.repo;
-        issueNumber = urlParts.issue_number;
+        ({ owner, repo, issue_number: issueNumber } = parseGitHubUrl(url));
       } catch (e) {
         logger.warn("Failed to parse the GitHub url", { e });
         return { [url]: null };
@@ -94,6 +93,7 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
       const ctx: Context<"issues.opened"> = {
         eventName: "issues.opened",
         command: null,
+        authToken: "",
         commentHandler: new CommentHandler(),
         payload: {
           issue: issue.data,

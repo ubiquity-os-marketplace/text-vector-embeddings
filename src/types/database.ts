@@ -7,7 +7,8 @@ export type Database = {
         Row: {
           author_id: string;
           created_at: string;
-          embedding: string;
+          deleted_at: string | null;
+          embedding: string | null;
           id: string;
           issue_id: string | null;
           markdown: string | null;
@@ -18,7 +19,8 @@ export type Database = {
         Insert: {
           author_id: string;
           created_at?: string;
-          embedding: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
           id: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -29,7 +31,8 @@ export type Database = {
         Update: {
           author_id?: string;
           created_at?: string;
-          embedding?: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
           id?: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -51,7 +54,8 @@ export type Database = {
         Row: {
           author_id: string;
           created_at: string;
-          embedding: string;
+          deleted_at: string | null;
+          embedding: string | null;
           id: string;
           markdown: string | null;
           modified_at: string;
@@ -61,7 +65,8 @@ export type Database = {
         Insert: {
           author_id: string;
           created_at?: string;
-          embedding: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
           id: string;
           markdown?: string | null;
           modified_at?: string;
@@ -71,7 +76,8 @@ export type Database = {
         Update: {
           author_id?: string;
           created_at?: string;
-          embedding?: string;
+          deleted_at?: string | null;
+          embedding?: string | null;
           id?: string;
           markdown?: string | null;
           modified_at?: string;

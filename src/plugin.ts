@@ -46,8 +46,8 @@ export async function runPlugin(context: Context) {
     context.adapters = await initAdapters(context);
   }
 
-  if (context.command) {
-    return await commandHandler(context);
+  if (context.command && eventName === "issue_comment.created") {
+    return await commandHandler(context as Context<"issue_comment.created">);
   }
 
   if (isIssueCommentEvent(context)) {

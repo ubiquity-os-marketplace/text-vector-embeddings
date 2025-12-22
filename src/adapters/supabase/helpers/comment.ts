@@ -9,7 +9,8 @@ export interface CommentType {
   author_id: number;
   created_at: string;
   modified_at: string;
-  embedding: number[];
+  embedding: number[] | null;
+  deleted_at?: string | null;
 }
 
 export interface CommentData {
@@ -18,7 +19,11 @@ export interface CommentData {
   author_id: number;
   payload: Record<string, unknown> | null;
   isPrivate: boolean;
-  issue_id: string;
+  issue_id: string | null;
+}
+
+export interface CommentWriteOptions {
+  deferEmbedding?: boolean;
 }
 
 export interface CommentSimilaritySearchResult {
@@ -37,8 +42,9 @@ export class Comment extends SuperSupabase {
     super(supabase, context);
   }
 
-  async createComment(commentData: CommentData) {
+  async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
     //First Check if the comment already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issue_comments").select("*").eq("id", commentData.id);
     if (existingError) {
@@ -55,8 +61,11 @@ export class Comment extends SuperSupabase {
       return;
     }
     //Create the embedding for this comment
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown);
-    let plaintext: string | null = markdownToPlainText(commentData.markdown);
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && commentData.markdown && !isPrivate) {
+      embedding = await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown);
+    }
+    let plaintext: string | null = commentData.markdown ? markdownToPlainText(commentData.markdown) : null;
     let finalMarkdown = commentData.markdown;
     let finalPayload = commentData.payload;
 
@@ -86,11 +95,15 @@ export class Comment extends SuperSupabase {
     this.context.logger.info(`Comment created successfully with id: ${commentData.id}`, { data });
   }
 
-  async updateComment(commentData: CommentData) {
+  async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
     //Create the embedding for this comment
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown));
-    let plaintext: string | null = markdownToPlainText(commentData.markdown);
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && commentData.markdown && !isPrivate) {
+      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown));
+    }
+    let plaintext: string | null = commentData.markdown ? markdownToPlainText(commentData.markdown) : null;
     let finalMarkdown = commentData.markdown;
     let finalPayload = commentData.payload;
 
@@ -102,7 +115,7 @@ export class Comment extends SuperSupabase {
     const comments = await this.getComment(commentData.id);
     if (comments && comments.length == 0) {
       this.context.logger.info("Comment does not exist, creating a new one");
-      await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate });
+      await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
     } else {
       const { error } = await this.supabase
         .from("issue_comments")
@@ -136,7 +149,7 @@ export class Comment extends SuperSupabase {
   }
 
   async getComment(commentNodeId: string): Promise<CommentType[] | null> {
-    const { data, error } = await this.supabase.from("issue_comments").select("*").eq("id", commentNodeId);
+    const { data, error } = await this.supabase.from("issue_comments").select("*").eq("id", commentNodeId).is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting comment", {
         Error: error,
@@ -150,7 +163,10 @@ export class Comment extends SuperSupabase {
   }
 
   async deleteComment(commentNodeId: string) {
-    const { error } = await this.supabase.from("issue_comments").delete().eq("id", commentNodeId);
+    const { error } = await this.supabase
+      .from("issue_comments")
+      .update({ deleted_at: new Date().toISOString(), modified_at: new Date().toISOString() })
+      .eq("id", commentNodeId);
     if (error) {
       this.context.logger.error("Error deleting comment", {
         Error: error,

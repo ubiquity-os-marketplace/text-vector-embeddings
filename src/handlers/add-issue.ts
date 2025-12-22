@@ -1,5 +1,6 @@
 import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function addIssue(context: Context<"issues.opened">) {
   const {
@@ -20,13 +21,14 @@ export async function addIssue(context: Context<"issues.opened">) {
       return;
     }
     const cleanedIssue = await cleanContent(context, markdown);
+    const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
       return;
     }
 
-    await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId });
+    await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId }, { deferEmbedding: queueSettings.enabled });
     await kv.addIssue(issue.html_url);
     logger.ok(`Successfully created issue!`, issue);
   } catch (error) {

@@ -1,5 +1,6 @@
 import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function updateIssue(context: Context<"issues.edited">) {
   const {
@@ -20,13 +21,14 @@ export async function updateIssue(context: Context<"issues.edited">) {
     }
     //clean issue by removing footnotes
     const cleanedIssue = await cleanContent(context, markdown);
+    const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
       return;
     }
 
-    await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId });
+    await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId }, { deferEmbedding: queueSettings.enabled });
     await kv.addIssue(payload.issue.html_url);
     logger.ok(`Successfully updated issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {

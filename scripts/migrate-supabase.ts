@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type TableSpec = {
   name: string;
@@ -44,7 +44,7 @@ const target = createClient(targetUrl, targetKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function fetchCount(client: ReturnType<typeof createClient>, table: string): Promise<number | null> {
+async function fetchCount(client: SupabaseClient, table: string): Promise<number | null> {
   const { count, error } = await client.from(table).select("id", { count: "exact", head: true });
   if (error) {
     console.error(`Failed to count ${table}:`, error.message);

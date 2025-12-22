@@ -9,7 +9,8 @@ export interface IssueType {
   author_id: number;
   created_at: string;
   modified_at: string;
-  embedding: number[];
+  embedding: number[] | null;
+  deleted_at?: string | null;
 }
 
 export interface IssueSimilaritySearchResult {
@@ -26,6 +27,10 @@ export interface IssueData {
   isPrivate: boolean;
 }
 
+export interface IssueWriteOptions {
+  deferEmbedding?: boolean;
+}
+
 interface FindSimilarIssuesParams {
   markdown: string;
   currentId: string;
@@ -38,8 +43,9 @@ export class Issue extends SuperSupabase {
     super(supabase, context);
   }
 
-  async createIssue(issueData: IssueData) {
+  async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
     //First Check if the issue already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issues").select("*").eq("id", issueData.id);
     if (existingError) {
@@ -57,8 +63,11 @@ export class Issue extends SuperSupabase {
     }
 
     //Create the embedding for this issue
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
-    let plaintext: string | null = markdownToPlainText(issueData.markdown);
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && issueData.markdown && !isPrivate) {
+      embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
+    }
+    let plaintext: string | null = issueData.markdown ? markdownToPlainText(issueData.markdown) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -81,11 +90,15 @@ export class Issue extends SuperSupabase {
     this.context.logger.info(`Issue created successfully with id: ${issueData.id}`, { data });
   }
 
-  async updateIssue(issueData: IssueData) {
+  async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
     //Create the embedding for this issue
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
-    let plaintext: string | null = markdownToPlainText(issueData.markdown);
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && issueData.markdown && !isPrivate) {
+      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
+    }
+    let plaintext: string | null = issueData.markdown ? markdownToPlainText(issueData.markdown) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -98,7 +111,7 @@ export class Issue extends SuperSupabase {
     const issues = await this.getIssue(issueData.id);
     if (!issues || issues.length === 0) {
       this.context.logger.info("Issue does not exist, creating a new one");
-      await this.createIssue({ ...issueData, markdown: finalMarkdown, payload: finalPayload, isPrivate });
+      await this.createIssue({ ...issueData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
       return;
     }
 
@@ -141,7 +154,7 @@ export class Issue extends SuperSupabase {
   }
 
   async getIssue(issueNodeId: string): Promise<IssueType[] | null> {
-    const { data, error } = await this.supabase.from("issues").select("*").eq("id", issueNodeId);
+    const { data, error } = await this.supabase.from("issues").select("*").eq("id", issueNodeId).is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting issue", {
         Error: error,
@@ -155,7 +168,10 @@ export class Issue extends SuperSupabase {
   }
 
   async deleteIssue(issueNodeId: string) {
-    const { error } = await this.supabase.from("issues").delete().eq("id", issueNodeId);
+    const { error } = await this.supabase
+      .from("issues")
+      .update({ deleted_at: new Date().toISOString(), modified_at: new Date().toISOString() })
+      .eq("id", issueNodeId);
     if (error) {
       this.context.logger.error("Error deleting issue", { err: error });
       return;

@@ -21,7 +21,7 @@ interface CommentGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
-export async function annotate(context: Context, commentId: string | null, scope: string) {
+export async function annotate(context: Context<"issue_comment.created">, commentId: string | null, scope: string) {
   const { logger, octokit, payload } = context;
 
   const repository = payload.repository;
@@ -57,7 +57,7 @@ export async function annotate(context: Context, commentId: string | null, scope
  * @param comment The comment object
  * @param scope The scope of the annotation
  **/
-export async function commentChecker(context: Context, comment: Comment, scope: string) {
+export async function commentChecker(context: Context<"issue_comment.created">, comment: Comment, scope: string) {
   const {
     logger,
     adapters: { supabase },
@@ -130,8 +130,8 @@ function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: stri
 }
 
 async function handleSimilarIssuesAndComments(
-  context: Context,
-  payload: Context["payload"],
+  context: Context<"issue_comment.created">,
+  payload: Context<"issue_comment.created">["payload"],
   commentBody: string,
   commentId: number,
   issueList: IssueGraphqlResponse[],
