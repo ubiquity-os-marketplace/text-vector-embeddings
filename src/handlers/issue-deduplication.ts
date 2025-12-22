@@ -4,8 +4,9 @@ import { marked } from "marked";
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
 import { appendPluginUpdateComment, normalizeWhitespace, stripHtmlComments, stripPluginUpdateComments } from "../utils/markdown-comments";
-import { appendFootnoteRefsToFirstLine } from "../utils/footnote-placement";
+import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
 import { stripDuplicateFootnotes } from "../utils/footnotes";
+import { findEditDistance } from "../utils/string-similarity";
 
 export interface IssueGraphqlResponse {
   node: {
@@ -208,7 +209,11 @@ async function handleSimilarIssuesComment(
         return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
       });
       if (beforeReplace === updatedBody) {
-        orphanRefs.push(footnoteRef);
+        const fallback = insertFootnoteRefNearSentence(updatedBody, sentence, footnoteRef);
+        updatedBody = fallback.updated;
+        if (!fallback.inserted) {
+          orphanRefs.push(footnoteRef);
+        }
       }
     }
 
@@ -313,28 +318,7 @@ export async function processSimilarIssues(similarIssues: IssueSimilaritySearchR
  * @param sentenceB The second string
  * @returns The edit distance between the two strings
  */
-function findEditDistance(sentenceA: string, sentenceB: string): number {
-  const lengthA = sentenceA.length;
-  const lengthB = sentenceB.length;
-  const distanceMatrix: number[][] = Array.from({ length: lengthA + 1 }, () => Array.from({ length: lengthB + 1 }, () => 0));
-
-  for (let indexA = 0; indexA <= lengthA; indexA++) {
-    for (let indexB = 0; indexB <= lengthB; indexB++) {
-      if (indexA === 0) {
-        distanceMatrix[indexA][indexB] = indexB;
-      } else if (indexB === 0) {
-        distanceMatrix[indexA][indexB] = indexA;
-      } else if (sentenceA[indexA - 1] === sentenceB[indexB - 1]) {
-        distanceMatrix[indexA][indexB] = distanceMatrix[indexA - 1][indexB - 1];
-      } else {
-        distanceMatrix[indexA][indexB] =
-          1 + Math.min(distanceMatrix[indexA - 1][indexB], distanceMatrix[indexA][indexB - 1], distanceMatrix[indexA - 1][indexB - 1]);
-      }
-    }
-  }
-
-  return distanceMatrix[lengthA][lengthB];
-}
+// findEditDistance moved to utils/string-similarity
 
 /**
  * Removes all footnotes from the issue content.
