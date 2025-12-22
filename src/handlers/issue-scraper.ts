@@ -4,7 +4,7 @@ import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
-import { stripHtmlComments } from "../utils/markdown-comments";
+import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 interface IssueMetadata {
   nodeId: string;
   number: number;
@@ -244,8 +244,11 @@ export async function issueScraper(username: string, token?: string): Promise<st
         };
 
         const markdown = metadata.body + " " + metadata.title;
-        const cleanedMarkdown = stripHtmlComments(markdown).trim();
-        const embedding = shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
+        const cleanedMarkdown = cleanMarkdown(markdown);
+        const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
+        const embedding =
+          shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown || isShortIssue ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
+        const storedMarkdown = isShortIssue ? null : markdown;
 
         const payload = {
           issue: metadata,
@@ -274,7 +277,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
         const { error } = await supabase.from("issues").upsert({
           id: metadata.nodeId,
-          markdown,
+          markdown: storedMarkdown,
           embedding: embedding ? JSON.stringify(embedding) : null,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,

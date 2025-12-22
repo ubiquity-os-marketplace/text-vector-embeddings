@@ -5,7 +5,8 @@ import { Context } from "../types/context";
 import { Database } from "../types/database";
 import { Env } from "../types/env";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
-import { isCommandLikeContent, stripHtmlComments } from "../utils/markdown-comments";
+import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
+import { isCommandLikeContent } from "../utils/markdown-comments";
 
 type QueueLogger = {
   debug: (message: string, context?: Record<string, unknown>) => void;
@@ -123,8 +124,8 @@ async function processPendingRows(params: {
       continue;
     }
 
-    const markdown = typeof row.markdown === "string" ? row.markdown : "";
-    const cleaned = stripHtmlComments(markdown).trim();
+    const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
+    const minLength = table === "issues" ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
     if (table === "issue_comments" && isCommandLikeContent(cleaned)) {
       logger.info("Skipping embedding for command-like comment.", { table, id: row.id });
       const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
@@ -135,6 +136,14 @@ async function processPendingRows(params: {
     }
     if (!cleaned) {
       logger.warn("Skipping empty markdown embedding.", { table, id: row.id });
+      continue;
+    }
+    if (isTooShort(cleaned, minLength)) {
+      logger.info("Skipping embedding for short content.", { table, id: row.id, length: cleaned.length, minLength });
+      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+      if (updateError) {
+        logger.error("Failed to clear markdown for short content.", { table, id: row.id, updateError });
+      }
       continue;
     }
 

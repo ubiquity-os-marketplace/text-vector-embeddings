@@ -1,7 +1,8 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
-import { isCommandLikeContent, stripHtmlComments } from "../../../utils/markdown-comments";
+import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
+import { isCommandLikeContent } from "../../../utils/markdown-comments";
 
 export interface CommentType {
   id: string;
@@ -45,9 +46,11 @@ export class Comment extends SuperSupabase {
   async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const cleanedMarkdown = cleanMarkdown(commentData.markdown);
     const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
-    const embeddingSource = isCommandComment ? null : cleanedMarkdown;
+    const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
+    const shouldSkipEmbedding = isCommandComment || isShortComment;
+    const embeddingSource = shouldSkipEmbedding ? null : cleanedMarkdown;
     //First Check if the comment already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issue_comments").select("*").eq("id", commentData.id);
     if (existingError) {
@@ -68,7 +71,7 @@ export class Comment extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
-    let finalMarkdown = isCommandComment ? null : commentData.markdown;
+    let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
@@ -98,15 +101,17 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const cleanedMarkdown = cleanMarkdown(commentData.markdown);
     const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
-    const embeddingSource = isCommandComment ? null : cleanedMarkdown;
+    const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
+    const shouldSkipEmbedding = isCommandComment || isShortComment;
+    const embeddingSource = shouldSkipEmbedding ? null : cleanedMarkdown;
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
-    let finalMarkdown = isCommandComment ? null : commentData.markdown;
+    let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
@@ -181,9 +186,17 @@ export class Comment extends SuperSupabase {
   async findSimilarComments({ markdown, currentId, threshold }: FindSimilarCommentsParams): Promise<CommentSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embeddingSource = stripHtmlComments(markdown).trim();
+      const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
         this.context.logger.warn("Skipping comment similarity search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      if (isTooShort(embeddingSource, MIN_COMMENT_MARKDOWN_LENGTH)) {
+        this.context.logger.warn("Skipping comment similarity search because text is too short.", {
+          currentId,
+          length: embeddingSource.length,
+          minLength: MIN_COMMENT_MARKDOWN_LENGTH,
+        });
         return null;
       }
       const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);

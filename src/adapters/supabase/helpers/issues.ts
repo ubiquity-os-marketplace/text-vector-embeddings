@@ -1,7 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
-import { stripHtmlComments } from "../../../utils/markdown-comments";
+import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 
 export interface IssueType {
   id: string;
@@ -46,7 +46,9 @@ export class Issue extends SuperSupabase {
   async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown).trim() : null;
+    const cleanedMarkdown = cleanMarkdown(issueData.markdown);
+    const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
+    const embeddingSource = isShortIssue ? null : cleanedMarkdown;
     //First Check if the issue already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issues").select("*").eq("id", issueData.id);
     if (existingError) {
@@ -68,7 +70,7 @@ export class Issue extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
-    let finalMarkdown = issueData.markdown;
+    let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
     if (isPrivate) {
@@ -92,13 +94,15 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown).trim() : null;
+    const cleanedMarkdown = cleanMarkdown(issueData.markdown);
+    const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
+    const embeddingSource = isShortIssue ? null : cleanedMarkdown;
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
-    let finalMarkdown = issueData.markdown;
+    let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
     if (isPrivate) {
@@ -177,9 +181,17 @@ export class Issue extends SuperSupabase {
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embeddingSource = stripHtmlComments(markdown).trim();
+      const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
         this.context.logger.warn("Skipping issue similarity search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      if (isTooShort(embeddingSource, MIN_ISSUE_MARKDOWN_LENGTH)) {
+        this.context.logger.warn("Skipping issue similarity search because text is too short.", {
+          currentId,
+          length: embeddingSource.length,
+          minLength: MIN_ISSUE_MARKDOWN_LENGTH,
+        });
         return null;
       }
       const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
@@ -214,9 +226,17 @@ export class Issue extends SuperSupabase {
   async findSimilarIssuesToMatch({ markdown, currentId, threshold, topK }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embeddingSource = stripHtmlComments(markdown).trim();
+      const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
         this.context.logger.warn("Skipping issue match search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      if (isTooShort(embeddingSource, MIN_ISSUE_MARKDOWN_LENGTH)) {
+        this.context.logger.warn("Skipping issue match search because text is too short.", {
+          currentId,
+          length: embeddingSource.length,
+          minLength: MIN_ISSUE_MARKDOWN_LENGTH,
+        });
         return null;
       }
       const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
