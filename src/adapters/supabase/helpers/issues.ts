@@ -1,7 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
-import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
 import { stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface IssueType {
@@ -69,19 +68,17 @@ export class Issue extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
-    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
 
     const { data, error } = await this.supabase
       .from("issues")
-      .insert([{ id: issueData.id, plaintext, embedding, payload: finalPayload, author_id: issueData.author_id, markdown: finalMarkdown }]);
+      .insert([{ id: issueData.id, embedding, payload: finalPayload, author_id: issueData.author_id, markdown: finalMarkdown }]);
     if (error) {
       this.context.logger.error("Failed to create issue in database", {
         Error: error,
@@ -101,14 +98,12 @@ export class Issue extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
-    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
 
     const issues = await this.getIssue(issueData.id);
@@ -122,7 +117,6 @@ export class Issue extends SuperSupabase {
       .from("issues")
       .update({
         markdown: finalMarkdown,
-        plaintext,
         embedding,
         payload: finalPayload,
         modified_at: new Date(),
@@ -135,7 +129,6 @@ export class Issue extends SuperSupabase {
         issueData: {
           id: issueData.id,
           markdown: finalMarkdown,
-          plaintext,
           embedding,
           payload: finalPayload,
           modified_at: new Date(),
@@ -148,7 +141,6 @@ export class Issue extends SuperSupabase {
       issueData: {
         id: issueData.id,
         markdown: finalMarkdown,
-        plaintext,
         embedding,
         payload: finalPayload,
         modified_at: new Date(),

@@ -1,7 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
-import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
 import { isCommandLikeContent, stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface CommentType {
@@ -69,14 +68,12 @@ export class Comment extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
-    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = isCommandComment ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
     const { data, error } = await this.supabase.from("issue_comments").insert([
       {
@@ -86,7 +83,6 @@ export class Comment extends SuperSupabase {
         embedding,
         payload: finalPayload,
         issue_id: commentData.issue_id,
-        plaintext,
       },
     ]);
     if (error) {
@@ -110,14 +106,12 @@ export class Comment extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
-    let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
     let finalMarkdown = isCommandComment ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
     const comments = await this.getComment(commentData.id);
     if (comments && comments.length == 0) {
@@ -126,7 +120,7 @@ export class Comment extends SuperSupabase {
     } else {
       const { error } = await this.supabase
         .from("issue_comments")
-        .update({ markdown: finalMarkdown, plaintext, embedding: embedding, payload: finalPayload, modified_at: new Date() })
+        .update({ markdown: finalMarkdown, embedding: embedding, payload: finalPayload, modified_at: new Date() })
         .eq("id", commentData.id);
       if (error) {
         this.context.logger.error("Error updating comment", {
@@ -134,7 +128,6 @@ export class Comment extends SuperSupabase {
           commentData: {
             commentData,
             markdown: finalMarkdown,
-            plaintext,
             embedding,
             payload: finalPayload,
             modified_at: new Date(),
@@ -146,7 +139,6 @@ export class Comment extends SuperSupabase {
         commentData: {
           commentData,
           markdown: finalMarkdown,
-          plaintext,
           embedding,
           payload: finalPayload,
           modified_at: new Date(),

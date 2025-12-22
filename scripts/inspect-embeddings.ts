@@ -107,7 +107,7 @@ async function main() {
       }
 
       const nodeId = issue.node_id;
-      const { data, error } = await supabase.from("issues").select("id, plaintext, modified_at, embedding").eq("id", nodeId).limit(1);
+      const { data, error } = await supabase.from("issues").select("id, markdown, modified_at, embedding").eq("id", nodeId).limit(1);
       if (error) {
         console.error(`Supabase error for #${issueNumber}`, error);
         continue;
@@ -125,8 +125,8 @@ async function main() {
       console.log(`node_id: ${nodeId}`);
       console.log(`modified_at: ${record.modified_at ?? "unknown"}`);
       console.log(`embedding_length: ${embeddingLength}`);
-      console.log("plaintext:");
-      console.log(record.plaintext ?? "<null>");
+      console.log("markdown:");
+      console.log(record.markdown ?? "<null>");
       console.log("---");
     } catch (error) {
       console.error(`Failed to inspect #${issueNumber}`, error);

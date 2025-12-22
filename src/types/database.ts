@@ -14,7 +14,6 @@ export type Database = {
           markdown: string | null;
           modified_at: string;
           payload: Json | null;
-          plaintext: string | null;
         };
         Insert: {
           author_id: string;
@@ -26,7 +25,6 @@ export type Database = {
           markdown?: string | null;
           modified_at?: string;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Update: {
           author_id?: string;
@@ -38,7 +36,6 @@ export type Database = {
           markdown?: string | null;
           modified_at?: string;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Relationships: [
           {
@@ -60,7 +57,6 @@ export type Database = {
           markdown: string | null;
           modified_at: string;
           payload: Json | null;
-          plaintext: string | null;
         };
         Insert: {
           author_id: string;
@@ -71,7 +67,6 @@ export type Database = {
           markdown?: string | null;
           modified_at?: string;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Update: {
           author_id?: string;
@@ -82,7 +77,6 @@ export type Database = {
           markdown?: string | null;
           modified_at?: string;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Relationships: [];
       };
@@ -113,7 +107,6 @@ export type Database = {
         };
         Returns: {
           issue_id: string;
-          issue_plaintext: string;
           similarity: number;
         }[];
       };

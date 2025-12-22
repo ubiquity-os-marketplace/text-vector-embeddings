@@ -55,8 +55,7 @@ describe("Plugin tests", () => {
     // Verify the comment was created
     const comment = (await context.adapters.supabase.comment.getComment("sasasCreate")) as unknown as CommentMock;
     expect(comment).toBeDefined();
-    expect(comment?.plaintext).toBeDefined();
-    expect(comment?.plaintext).toContain(STRINGS.HELLO_WORLD);
+    expect(comment?.embedding).toBeDefined();
 
     // Try to create the same comment again
     const commentObject = null;
@@ -97,8 +96,7 @@ describe("Plugin tests", () => {
     // Verify the comment was updated
     const comment = (await supabase.comment.getComment(updateId)) as unknown as CommentMock;
     expect(comment).toBeDefined();
-    expect(comment?.plaintext).toBeDefined();
-    expect(comment?.plaintext).toContain("Updated Message");
+    expect(comment?.embedding).toBeDefined();
   });
 
   it("When a comment is deleted it should delete it from the database", async () => {
@@ -578,7 +576,7 @@ describe("Plugin tests", () => {
     // Verify the comment was stored in the database
     const comment = (await context.adapters.supabase.comment.getComment("normalComment")) as unknown as CommentMock;
     expect(comment).toBeDefined();
-    expect(comment.plaintext).toContain(DEFAULT_BODY);
+    expect(comment.embedding).toBeDefined();
   });
 
   it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {

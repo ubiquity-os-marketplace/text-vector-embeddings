@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
-import { markdownToPlainText } from "../adapters/utils/markdown-to-plaintext";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
 import { stripHtmlComments } from "../utils/markdown-comments";
@@ -246,8 +245,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
         const markdown = metadata.body + " " + metadata.title;
         const cleanedMarkdown = stripHtmlComments(markdown).trim();
-        const plaintext = cleanedMarkdown ? markdownToPlainText(cleanedMarkdown) : null;
-        const embedding = shouldSkipEmbeddings || !voyageEmbedding || !plaintext ? null : await voyageEmbedding.createEmbedding(plaintext);
+        const embedding = shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
 
         const payload = {
           issue: metadata,
@@ -277,7 +275,6 @@ export async function issueScraper(username: string, token?: string): Promise<st
         const { error } = await supabase.from("issues").upsert({
           id: metadata.nodeId,
           markdown,
-          plaintext,
           embedding: embedding ? JSON.stringify(embedding) : null,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,

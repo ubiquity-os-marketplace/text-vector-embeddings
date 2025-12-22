@@ -116,10 +116,7 @@ async function processPendingRows(params: {
     const authorType = getAuthorType(row.payload, table);
     if (authorType && authorType !== "User") {
       logger.info("Skipping embedding for non-human author.", { table, id: row.id, authorType });
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ markdown: null, plaintext: null, modified_at: new Date().toISOString() })
-        .eq("id", row.id);
+      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
         logger.error("Failed to clear markdown for non-human author.", { table, id: row.id, updateError });
       }
@@ -130,10 +127,7 @@ async function processPendingRows(params: {
     const cleaned = stripHtmlComments(markdown).trim();
     if (table === "issue_comments" && isCommandLikeContent(cleaned)) {
       logger.info("Skipping embedding for command-like comment.", { table, id: row.id });
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ markdown: null, plaintext: null, modified_at: new Date().toISOString() })
-        .eq("id", row.id);
+      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
         logger.error("Failed to clear markdown for command-like comment.", { table, id: row.id, updateError });
       }
