@@ -42,7 +42,7 @@ export async function addReviewComment(context: Context<"pull_request_review_com
 
     const queueSettings = getEmbeddingQueueSettings(context.env);
     await supabase.comment.createComment(
-      { markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null },
+      { markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null, docType: "review_comment" },
       { deferEmbedding: queueSettings.enabled }
     );
     logger.ok("Successfully created review comment", comment);

@@ -1,10 +1,12 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
+import { IssueDocumentType, ISSUE_DOCUMENT_TYPES } from "../../../types/document";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 
 export interface IssueType {
   id: string;
+  doc_type?: string;
   markdown?: string;
   author_id: number;
   created_at: string;
@@ -25,6 +27,7 @@ export interface IssueData {
   author_id: number;
   payload: Record<string, unknown> | null;
   isPrivate: boolean;
+  docType?: IssueDocumentType;
 }
 
 export interface IssueWriteOptions {
@@ -38,6 +41,20 @@ interface FindSimilarIssuesParams {
   topK?: number;
 }
 
+function resolveIssueDocType(payload: IssueData["payload"], explicitType?: IssueDocumentType): IssueDocumentType {
+  if (explicitType) {
+    return explicitType;
+  }
+  if (payload && typeof payload === "object") {
+    const hasIssue = "issue" in payload;
+    const hasPullRequest = "pull_request" in payload;
+    if (hasPullRequest && !hasIssue) {
+      return "pull_request";
+    }
+  }
+  return "issue";
+}
+
 export class Issue extends SuperSupabase {
   constructor(supabase: SupabaseClient, context: Context) {
     super(supabase, context);
@@ -46,11 +63,16 @@ export class Issue extends SuperSupabase {
   async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
-    const embeddingSource = isShortIssue ? null : cleanedMarkdown;
+    const embeddingSource = docType === "issue" && !isShortIssue ? cleanedMarkdown : null;
     //First Check if the issue already exists
-    const { data: existingData, error: existingError } = await this.supabase.from("issues").select("*").eq("id", issueData.id);
+    const { data: existingData, error: existingError } = await this.supabase
+      .from("documents")
+      .select("*")
+      .eq("id", issueData.id)
+      .in("doc_type", ISSUE_DOCUMENT_TYPES);
     if (existingError) {
       this.context.logger.error("Error creating issue", {
         Error: existingError,
@@ -78,9 +100,17 @@ export class Issue extends SuperSupabase {
       finalPayload = null;
     }
 
-    const { data, error } = await this.supabase
-      .from("issues")
-      .insert([{ id: issueData.id, embedding, payload: finalPayload, author_id: issueData.author_id, markdown: finalMarkdown }]);
+    const { data, error } = await this.supabase.from("documents").insert([
+      {
+        id: issueData.id,
+        doc_type: docType,
+        parent_id: null,
+        embedding,
+        payload: finalPayload,
+        author_id: issueData.author_id,
+        markdown: finalMarkdown,
+      },
+    ]);
     if (error) {
       this.context.logger.error("Failed to create issue in database", {
         Error: error,
@@ -94,9 +124,10 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
-    const embeddingSource = isShortIssue ? null : cleanedMarkdown;
+    const embeddingSource = docType === "issue" && !isShortIssue ? cleanedMarkdown : null;
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
@@ -118,14 +149,16 @@ export class Issue extends SuperSupabase {
     }
 
     const { error } = await this.supabase
-      .from("issues")
+      .from("documents")
       .update({
+        doc_type: docType,
         markdown: finalMarkdown,
         embedding,
         payload: finalPayload,
         modified_at: new Date(),
       })
-      .eq("id", issueData.id);
+      .eq("id", issueData.id)
+      .in("doc_type", ISSUE_DOCUMENT_TYPES);
 
     if (error) {
       this.context.logger.error("Error updating issue", {
@@ -153,7 +186,7 @@ export class Issue extends SuperSupabase {
   }
 
   async getIssue(issueNodeId: string): Promise<IssueType[] | null> {
-    const { data, error } = await this.supabase.from("issues").select("*").eq("id", issueNodeId).is("deleted_at", null);
+    const { data, error } = await this.supabase.from("documents").select("*").eq("id", issueNodeId).in("doc_type", ISSUE_DOCUMENT_TYPES).is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting issue", {
         Error: error,
@@ -168,9 +201,10 @@ export class Issue extends SuperSupabase {
 
   async deleteIssue(issueNodeId: string) {
     const { error } = await this.supabase
-      .from("issues")
+      .from("documents")
       .update({ deleted_at: new Date().toISOString(), modified_at: new Date().toISOString() })
-      .eq("id", issueNodeId);
+      .eq("id", issueNodeId)
+      .in("doc_type", ISSUE_DOCUMENT_TYPES);
     if (error) {
       this.context.logger.error("Error deleting issue", { err: error });
       return;

@@ -275,8 +275,10 @@ export async function issueScraper(username: string, token?: string): Promise<st
           continue;
         }
 
-        const { error } = await supabase.from("issues").upsert({
+        const { error } = await supabase.from("documents").upsert({
           id: metadata.nodeId,
+          doc_type: "issue",
+          parent_id: null,
           markdown: storedMarkdown,
           embedding: embedding ? JSON.stringify(embedding) : null,
           author_id: metadata.authorId,

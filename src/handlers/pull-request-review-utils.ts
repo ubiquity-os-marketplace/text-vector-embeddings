@@ -66,6 +66,7 @@ export async function ensurePullRequestIssue(context: ReviewContext, pullRequest
   await supabase.issue.createIssue(
     {
       id,
+      docType: "pull_request",
       payload: payload as Record<string, unknown>,
       isPrivate,
       markdown,

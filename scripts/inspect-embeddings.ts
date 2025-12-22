@@ -107,7 +107,7 @@ async function main() {
       }
 
       const nodeId = issue.node_id;
-      const { data, error } = await supabase.from("issues").select("id, markdown, modified_at, embedding").eq("id", nodeId).limit(1);
+      const { data, error } = await supabase.from("documents").select("id, markdown, modified_at, embedding").eq("id", nodeId).eq("doc_type", "issue").limit(1);
       if (error) {
         console.error(`Supabase error for #${issueNumber}`, error);
         continue;

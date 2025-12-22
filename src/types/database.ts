@@ -3,82 +3,61 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
-      issue_comments: {
+      documents: {
         Row: {
           author_id: string;
           created_at: string;
           deleted_at: string | null;
+          doc_type: string;
           embedding: number[] | null;
+          embedding_dim: number | null;
+          embedding_model: string | null;
+          embedding_status: string;
           id: string;
-          issue_id: string | null;
           markdown: string | null;
           modified_at: string;
+          parent_id: string | null;
           payload: Json | null;
         };
         Insert: {
           author_id: string;
           created_at?: string;
           deleted_at?: string | null;
+          doc_type: string;
           embedding?: number[] | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string;
           id: string;
-          issue_id?: string | null;
           markdown?: string | null;
           modified_at?: string;
+          parent_id?: string | null;
           payload?: Json | null;
         };
         Update: {
           author_id?: string;
           created_at?: string;
           deleted_at?: string | null;
+          doc_type?: string;
           embedding?: number[] | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string;
           id?: string;
-          issue_id?: string | null;
           markdown?: string | null;
           modified_at?: string;
+          parent_id?: string | null;
           payload?: Json | null;
         };
         Relationships: [
           {
-            foreignKeyName: "issue_comments_issue_id_fkey";
-            columns: ["issue_id"];
+            foreignKeyName: "documents_parent_id_fkey";
+            columns: ["parent_id"];
             isOneToOne: false;
-            referencedRelation: "issues";
+            referencedRelation: "documents";
             referencedColumns: ["id"];
           },
         ];
-      };
-      issues: {
-        Row: {
-          author_id: string;
-          created_at: string;
-          deleted_at: string | null;
-          embedding: number[] | null;
-          id: string;
-          markdown: string | null;
-          modified_at: string;
-          payload: Json | null;
-        };
-        Insert: {
-          author_id: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          embedding?: number[] | null;
-          id: string;
-          markdown?: string | null;
-          modified_at?: string;
-          payload?: Json | null;
-        };
-        Update: {
-          author_id?: string;
-          created_at?: string;
-          deleted_at?: string | null;
-          embedding?: number[] | null;
-          id?: string;
-          markdown?: string | null;
-          modified_at?: string;
-          payload?: Json | null;
-        };
-        Relationships: [];
       };
     };
     Views: {

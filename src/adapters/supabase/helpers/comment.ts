@@ -1,11 +1,13 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
+import { COMMENT_DOCUMENT_TYPES, CommentDocumentType } from "../../../types/document";
 import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 import { isCommandLikeContent } from "../../../utils/markdown-comments";
 
 export interface CommentType {
   id: string;
+  doc_type?: string;
   markdown?: string;
   author_id: number;
   created_at: string;
@@ -21,6 +23,7 @@ export interface CommentData {
   payload: Record<string, unknown> | null;
   isPrivate: boolean;
   issue_id: string | null;
+  docType?: CommentDocumentType;
 }
 
 export interface CommentWriteOptions {
@@ -46,13 +49,18 @@ export class Comment extends SuperSupabase {
   async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = commentData.docType ?? "issue_comment";
     const cleanedMarkdown = cleanMarkdown(commentData.markdown);
     const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
     const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
     const shouldSkipEmbedding = isCommandComment || isShortComment;
     const embeddingSource = shouldSkipEmbedding ? null : cleanedMarkdown;
     //First Check if the comment already exists
-    const { data: existingData, error: existingError } = await this.supabase.from("issue_comments").select("*").eq("id", commentData.id);
+    const { data: existingData, error: existingError } = await this.supabase
+      .from("documents")
+      .select("*")
+      .eq("id", commentData.id)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (existingError) {
       this.context.logger.error("Error creating comment", {
         Error: existingError,
@@ -78,14 +86,15 @@ export class Comment extends SuperSupabase {
       finalMarkdown = null;
       finalPayload = null;
     }
-    const { data, error } = await this.supabase.from("issue_comments").insert([
+    const { data, error } = await this.supabase.from("documents").insert([
       {
         id: commentData.id,
+        doc_type: docType,
+        parent_id: commentData.issue_id,
         markdown: finalMarkdown,
         author_id: commentData.author_id,
         embedding,
         payload: finalPayload,
-        issue_id: commentData.issue_id,
       },
     ]);
     if (error) {
@@ -101,6 +110,7 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = commentData.docType ?? "issue_comment";
     const cleanedMarkdown = cleanMarkdown(commentData.markdown);
     const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
     const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
@@ -124,9 +134,17 @@ export class Comment extends SuperSupabase {
       await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
     } else {
       const { error } = await this.supabase
-        .from("issue_comments")
-        .update({ markdown: finalMarkdown, embedding: embedding, payload: finalPayload, modified_at: new Date() })
-        .eq("id", commentData.id);
+        .from("documents")
+        .update({
+          doc_type: docType,
+          parent_id: commentData.issue_id,
+          markdown: finalMarkdown,
+          embedding,
+          payload: finalPayload,
+          modified_at: new Date(),
+        })
+        .eq("id", commentData.id)
+        .in("doc_type", COMMENT_DOCUMENT_TYPES);
       if (error) {
         this.context.logger.error("Error updating comment", {
           Error: error,
@@ -153,7 +171,12 @@ export class Comment extends SuperSupabase {
   }
 
   async getComment(commentNodeId: string): Promise<CommentType[] | null> {
-    const { data, error } = await this.supabase.from("issue_comments").select("*").eq("id", commentNodeId).is("deleted_at", null);
+    const { data, error } = await this.supabase
+      .from("documents")
+      .select("*")
+      .eq("id", commentNodeId)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES)
+      .is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting comment", {
         Error: error,
@@ -168,9 +191,10 @@ export class Comment extends SuperSupabase {
 
   async deleteComment(commentNodeId: string) {
     const { error } = await this.supabase
-      .from("issue_comments")
+      .from("documents")
       .update({ deleted_at: new Date().toISOString(), modified_at: new Date().toISOString() })
-      .eq("id", commentNodeId);
+      .eq("id", commentNodeId)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (error) {
       this.context.logger.error("Error deleting comment", {
         Error: error,

@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
+import { DocumentType } from "../types/document";
 import { Context } from "../types/context";
 import { Database } from "../types/database";
 import { Env } from "../types/env";
@@ -44,12 +45,12 @@ function getNestedString(value: unknown, path: string[]): string | null {
   return typeof current === "string" ? current : null;
 }
 
-function getAuthorType(payload: unknown, table: "issues" | "issue_comments"): string | null {
+function getAuthorType(payload: unknown, docType: DocumentType): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
   }
 
-  if (table === "issues") {
+  if (docType === "issue" || docType === "pull_request") {
     return (
       getNestedString(payload, ["issue", "user", "type"]) ??
       getNestedString(payload, ["pull_request", "user", "type"]) ??
@@ -87,16 +88,18 @@ async function createEmbeddingWithRetry(
 }
 
 async function processPendingRows(params: {
-  table: "issues" | "issue_comments";
+  docTypes: DocumentType[];
+  label: "issues" | "comments";
   supabase: SupabaseClient<Database>;
   embedder: VoyageEmbedding;
   settings: ReturnType<typeof getEmbeddingQueueSettings>;
   logger: QueueLogger;
 }): Promise<{ processed: number; stoppedEarly: boolean }> {
-  const { table, supabase, embedder, settings, logger } = params;
+  const { docTypes, label, supabase, embedder, settings, logger } = params;
   const { data, error } = await supabase
-    .from(table)
-    .select("id, markdown, modified_at, payload")
+    .from("documents")
+    .select("id, markdown, modified_at, payload, doc_type")
+    .in("doc_type", docTypes)
     .is("embedding", null)
     .is("deleted_at", null)
     .not("markdown", "is", null)
@@ -104,7 +107,7 @@ async function processPendingRows(params: {
     .limit(settings.batchSize);
 
   if (error) {
-    logger.error("Failed to load pending embeddings.", { table, error });
+    logger.error("Failed to load pending embeddings.", { label, error });
     return { processed: 0, stoppedEarly: false };
   }
 
@@ -114,35 +117,36 @@ async function processPendingRows(params: {
 
   let processed = 0;
   for (const row of data) {
-    const authorType = getAuthorType(row.payload, table);
+    const docType = row.doc_type as DocumentType;
+    const authorType = getAuthorType(row.payload, docType);
     if (authorType && authorType !== "User") {
-      logger.info("Skipping embedding for non-human author.", { table, id: row.id, authorType });
-      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+      logger.info("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
+      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
-        logger.error("Failed to clear markdown for non-human author.", { table, id: row.id, updateError });
+        logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
       }
       continue;
     }
 
     const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
-    const minLength = table === "issues" ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
-    if (table === "issue_comments" && isCommandLikeContent(cleaned)) {
-      logger.info("Skipping embedding for command-like comment.", { table, id: row.id });
-      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+    const minLength = docType === "issue" ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
+    if ((docType === "issue_comment" || docType === "review_comment") && isCommandLikeContent(cleaned)) {
+      logger.info("Skipping embedding for command-like comment.", { label, id: row.id, docType });
+      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
-        logger.error("Failed to clear markdown for command-like comment.", { table, id: row.id, updateError });
+        logger.error("Failed to clear markdown for command-like comment.", { label, id: row.id, updateError });
       }
       continue;
     }
     if (!cleaned) {
-      logger.warn("Skipping empty markdown embedding.", { table, id: row.id });
+      logger.warn("Skipping empty markdown embedding.", { label, id: row.id, docType });
       continue;
     }
     if (isTooShort(cleaned, minLength)) {
-      logger.info("Skipping embedding for short content.", { table, id: row.id, length: cleaned.length, minLength });
-      const { error: updateError } = await supabase.from(table).update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+      logger.info("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
+      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
-        logger.error("Failed to clear markdown for short content.", { table, id: row.id, updateError });
+        logger.error("Failed to clear markdown for short content.", { label, id: row.id, updateError });
       }
       continue;
     }
@@ -152,10 +156,10 @@ async function processPendingRows(params: {
       return { processed, stoppedEarly: true };
     }
 
-    const { error: updateError } = await supabase.from(table).update({ embedding, modified_at: new Date().toISOString() }).eq("id", row.id);
+    const { error: updateError } = await supabase.from("documents").update({ embedding, modified_at: new Date().toISOString() }).eq("id", row.id);
 
     if (updateError) {
-      logger.error("Failed to update embedding.", { table, id: row.id, updateError });
+      logger.error("Failed to update embedding.", { label, id: row.id, updateError });
       continue;
     }
 
@@ -178,7 +182,8 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
   const embedder = new VoyageEmbedding(clients.voyage, { logger } as unknown as Context);
 
   const issueResult = await processPendingRows({
-    table: "issues",
+    docTypes: ["issue"],
+    label: "issues",
     supabase: clients.supabase,
     embedder,
     settings,
@@ -186,7 +191,8 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
   });
 
   const commentResult = await processPendingRows({
-    table: "issue_comments",
+    docTypes: ["issue_comment", "review_comment"],
+    label: "comments",
     supabase: clients.supabase,
     embedder,
     settings,

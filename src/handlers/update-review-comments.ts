@@ -42,7 +42,7 @@ export async function updateReviewComment(context: Context<"pull_request_review_
 
     const queueSettings = getEmbeddingQueueSettings(context.env);
     await supabase.comment.updateComment(
-      { markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null },
+      { markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null, docType: "review_comment" },
       { deferEmbedding: queueSettings.enabled }
     );
     logger.ok("Successfully updated review comment", comment);

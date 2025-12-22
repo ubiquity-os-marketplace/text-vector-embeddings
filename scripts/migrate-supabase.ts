@@ -5,10 +5,7 @@ type TableSpec = {
   orderBy: string;
 };
 
-const TABLES: TableSpec[] = [
-  { name: "issues", orderBy: "id" },
-  { name: "issue_comments", orderBy: "id" },
-];
+const TABLES: TableSpec[] = [{ name: "documents", orderBy: "id" }];
 
 const DEFAULT_BATCH_SIZE = 100;
 const MAX_BATCH_SIZE = 1000;

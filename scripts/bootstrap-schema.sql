@@ -1,28 +1,24 @@
 create extension if not exists vector;
 
-create table if not exists issues (
+create table if not exists documents (
   id varchar primary key,
-  embedding vector(1024) not null,
+  doc_type text not null,
+  parent_id varchar,
+  embedding vector(1024),
   payload jsonb,
   author_id varchar not null,
   created_at timestamptz not null default now(),
   modified_at timestamptz not null default now(),
-  markdown text
+  markdown text,
+  deleted_at timestamptz,
+  embedding_status text not null default 'ready',
+  embedding_model text,
+  embedding_dim integer,
+  constraint documents_doc_type_check check (doc_type in ('issue', 'issue_comment', 'review_comment', 'pull_request')),
+  constraint documents_parent_id_fkey foreign key (parent_id) references documents(id) on delete cascade
 );
 
-create table if not exists issue_comments (
-  id varchar primary key,
-  created_at timestamptz not null default now(),
-  modified_at timestamptz not null default now(),
-  author_id varchar not null,
-  embedding vector(1024) not null,
-  payload jsonb,
-  issue_id varchar references issues(id) on delete cascade,
-  markdown text
-);
-
-alter table issues enable row level security;
-alter table issue_comments enable row level security;
+alter table documents enable row level security;
 
 create or replace function find_similar_issues_to_match(current_id varchar, query_embedding vector(1024), threshold float8, top_k int)
 returns table(issue_id varchar, similarity float8) as $$
@@ -34,8 +30,9 @@ begin
   return query
   select id as issue_id,
          ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.2 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-  from issues
+  from documents
   where id <> current_id
+    and doc_type = 'issue'
     and ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.2 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
   order by similarity desc
   limit top_k;
@@ -52,8 +49,9 @@ begin
   return query
   select id as issue_id,
          ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-  from issues
+  from documents
   where id <> current_id
+    and doc_type = 'issue'
     and ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
   order by similarity desc
   limit top_k;
@@ -70,8 +68,9 @@ begin
   return query
   select id as comment_id,
          ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-  from issue_comments
+  from documents
   where id <> current_id
+    and doc_type in ('issue_comment', 'review_comment')
     and ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
   order by similarity desc
   limit top_k;
