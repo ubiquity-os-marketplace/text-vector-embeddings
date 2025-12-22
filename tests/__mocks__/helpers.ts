@@ -28,6 +28,7 @@ export async function setupTests() {
     db.users.create({
       login: item.login,
       id: item.id,
+      type: "User",
     });
   }
 
@@ -53,6 +54,7 @@ export async function setupTests() {
     user: {
       login: STRINGS.USER_1,
       id: 1,
+      type: "User",
     },
     owner: STRINGS.USER_1,
     repo: STRINGS.TEST_REPO,
@@ -86,6 +88,7 @@ export async function setupTests() {
     user: {
       login: STRINGS.USER_1,
       id: 1,
+      type: "User",
     },
     owner: STRINGS.USER_1,
     repo: STRINGS.TEST_REPO,
@@ -120,12 +123,14 @@ export function createIssue(
   issueUser: {
     login: string;
     id: number;
+    type?: string;
   },
   issueState: string,
   issueCloseReason: string | null,
   repo: string,
   owner: string
 ) {
+  const normalizedUser = { type: "User", ...issueUser };
   const existingIssue = db.issue.findFirst({
     where: {
       node_id: {
@@ -143,7 +148,7 @@ export function createIssue(
       data: {
         body: issueBody,
         title: issueTitle,
-        user: issueUser,
+        user: normalizedUser,
         updated_at: new Date().toISOString(),
         owner: owner,
         repo: repo,
@@ -156,7 +161,7 @@ export function createIssue(
       node_id: issueNodeId,
       body: issueBody,
       title: issueTitle,
-      user: issueUser,
+      user: normalizedUser,
       number: issueNumber,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -227,6 +232,7 @@ export function createComment(comment: string, commentId: number, nodeId: string
       user: {
         login: STRINGS.USER_1,
         id: 1,
+        type: "User",
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

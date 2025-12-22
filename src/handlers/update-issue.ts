@@ -1,4 +1,5 @@
 import { Context } from "../types/index";
+import { isHumanUser } from "../helpers/plugin-utils";
 import { cleanContent } from "./issue-deduplication";
 
 export async function updateIssue(context: Context<"issues.edited">) {
@@ -14,6 +15,10 @@ export async function updateIssue(context: Context<"issues.edited">) {
   const authorId = payload.issue.user?.id || -1;
   // Fetch the previous issue and update it in the db
   try {
+    if (!isHumanUser(payload.issue.user)) {
+      logger.info("Skipping non-human issue update", { issueId: payload.issue.id, author: payload.issue.user?.login });
+      return;
+    }
     if (!markdown) {
       logger.error("Issue body is empty");
       return;

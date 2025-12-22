@@ -2,6 +2,9 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { stripHtmlComments } from "../../../utils/markdown-comments";
+import { VOYAGE_EMBEDDING_MODEL } from "../../voyage/helpers/embedding";
+import { enqueueEmbeddingJob, processEmbeddingQueue, shouldDeferEmbedding } from "../../../helpers/embedding-queue";
 
 export interface IssueType {
   id: string;
@@ -9,7 +12,12 @@ export interface IssueType {
   author_id: number;
   created_at: string;
   modified_at: string;
-  embedding: number[];
+  embedding: number[] | null;
+  plaintext?: string | null;
+  deleted_at?: string | null;
+  embedding_status?: string | null;
+  embedding_model?: string | null;
+  embedding_dim?: number | null;
 }
 
 export interface IssueSimilaritySearchResult {
@@ -55,8 +63,9 @@ export class Issue extends SuperSupabase {
       return;
     }
 
-    //Create the embedding for this issue
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown);
+    const shouldDefer = shouldDeferEmbedding(this.context, isPrivate);
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown) : issueData.markdown;
+    const embedding = shouldDefer ? null : await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
@@ -67,9 +76,20 @@ export class Issue extends SuperSupabase {
       plaintext = null;
     }
 
-    const { data, error } = await this.supabase
-      .from("issues")
-      .insert([{ id: issueData.id, plaintext, embedding, payload: finalPayload, author_id: issueData.author_id, markdown: finalMarkdown }]);
+    const { data, error } = await this.supabase.from("issues").insert([
+      {
+        id: issueData.id,
+        plaintext,
+        embedding,
+        embedding_status: embedding ? "ready" : "pending",
+        embedding_model: embedding ? VOYAGE_EMBEDDING_MODEL : null,
+        embedding_dim: embedding ? embedding.length : null,
+        payload: finalPayload,
+        author_id: issueData.author_id,
+        markdown: finalMarkdown,
+        deleted_at: null,
+      },
+    ]);
     if (error) {
       this.context.logger.error("Failed to create issue in database", {
         Error: error,
@@ -78,12 +98,17 @@ export class Issue extends SuperSupabase {
       return;
     }
     this.context.logger.info(`Issue created successfully with id: ${issueData.id}`, { data });
+    if (shouldDefer) {
+      await enqueueEmbeddingJob(this.context, { table: "issues", id: issueData.id });
+      await processEmbeddingQueue(this.context);
+    }
   }
 
   async updateIssue(issueData: IssueData) {
     const { isPrivate } = issueData;
-    //Create the embedding for this issue
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(issueData.markdown));
+    const shouldDefer = shouldDeferEmbedding(this.context, isPrivate);
+    const embeddingSource = issueData.markdown ? stripHtmlComments(issueData.markdown) : issueData.markdown;
+    const embedding = shouldDefer ? null : Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     let plaintext: string | null = markdownToPlainText(issueData.markdown);
     let finalMarkdown = issueData.markdown;
     let finalPayload = issueData.payload;
@@ -107,7 +132,11 @@ export class Issue extends SuperSupabase {
         markdown: finalMarkdown,
         plaintext,
         embedding,
+        embedding_status: embedding ? "ready" : "pending",
+        embedding_model: embedding ? VOYAGE_EMBEDDING_MODEL : null,
+        embedding_dim: embedding ? embedding.length : null,
         payload: finalPayload,
+        deleted_at: null,
         modified_at: new Date(),
       })
       .eq("id", issueData.id);
@@ -134,9 +163,14 @@ export class Issue extends SuperSupabase {
         plaintext,
         embedding,
         payload: finalPayload,
+        embedding_status: embedding ? "ready" : "pending",
         modified_at: new Date(),
       },
     });
+    if (shouldDefer) {
+      await enqueueEmbeddingJob(this.context, { table: "issues", id: issueData.id });
+      await processEmbeddingQueue(this.context);
+    }
   }
 
   async getIssue(issueNodeId: string): Promise<IssueType[] | null> {
@@ -154,7 +188,7 @@ export class Issue extends SuperSupabase {
   }
 
   async deleteIssue(issueNodeId: string) {
-    const { error } = await this.supabase.from("issues").delete().eq("id", issueNodeId);
+    const { error } = await this.supabase.from("issues").update({ deleted_at: new Date().toISOString(), modified_at: new Date() }).eq("id", issueNodeId);
     if (error) {
       this.context.logger.error("Error deleting issue", { err: error });
       return;
@@ -162,10 +196,34 @@ export class Issue extends SuperSupabase {
     this.context.logger.info("Issue deleted successfully with id: " + issueNodeId);
   }
 
+  async updateEmbedding(issueNodeId: string, embedding: number[], model: string) {
+    const { error } = await this.supabase
+      .from("issues")
+      .update({
+        embedding,
+        embedding_status: "ready",
+        embedding_model: model,
+        embedding_dim: embedding.length,
+        modified_at: new Date(),
+      })
+      .eq("id", issueNodeId);
+    if (error) {
+      this.context.logger.error("Error updating issue embedding", { Error: error, issueId: issueNodeId });
+    }
+  }
+
+  async markEmbeddingFailed(issueNodeId: string) {
+    const { error } = await this.supabase.from("issues").update({ embedding_status: "failed", modified_at: new Date() }).eq("id", issueNodeId);
+    if (error) {
+      this.context.logger.error("Error marking issue embedding failed", { Error: error, issueId: issueNodeId });
+    }
+  }
+
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown);
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
         query_embedding: embedding,
         current_id: currentId,
@@ -197,7 +255,8 @@ export class Issue extends SuperSupabase {
   async findSimilarIssuesToMatch({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown);
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
         current_id: currentId,
         query_embedding: embedding,

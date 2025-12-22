@@ -1,23 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
-import markdownit from "markdown-it";
-import plainTextPlugin from "markdown-it-plain-text";
 import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
 import { createAdapters } from "../adapters/index";
+import { markdownToPlainText } from "../adapters/utils/markdown-to-plaintext";
 import { Context } from "../types/context";
-
-interface MarkdownItWithPlainText extends markdownit {
-  plainText: string;
-}
-
-function markdownToPlainText(markdown: string | null): string | null {
-  if (!markdown) return markdown;
-  const md = markdownit() as MarkdownItWithPlainText;
-  md.use(plainTextPlugin);
-  md.render(markdown);
-  return md.plainText;
-}
 
 interface IssueMetadata {
   nodeId: string;

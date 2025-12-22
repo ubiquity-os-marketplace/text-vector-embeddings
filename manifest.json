@@ -6,6 +6,9 @@
     "issue_comment.created",
     "issue_comment.edited",
     "issue_comment.deleted",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.edited",
+    "pull_request_review_comment.deleted",
     "issues.opened",
     "issues.edited",
     "issues.deleted",
@@ -39,6 +42,26 @@
       "alwaysRecommend": {
         "default": 0,
         "description": "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score.",
+        "type": "number"
+      },
+      "embeddingMode": {
+        "default": "sync",
+        "description": "When set to async, embeddings are queued in KV and processed in small batches.",
+        "type": "string"
+      },
+      "embeddingQueueMaxPerRun": {
+        "default": 3,
+        "description": "Max embeddings to process per event when async mode is enabled.",
+        "type": "number"
+      },
+      "embeddingQueueDelaySeconds": {
+        "default": 60,
+        "description": "Base delay (seconds) before retrying a rate-limited embedding job.",
+        "type": "number"
+      },
+      "embeddingQueueMaxAttempts": {
+        "default": 6,
+        "description": "Maximum retry attempts for a queued embedding job.",
         "type": "number"
       },
       "demoFlag": {

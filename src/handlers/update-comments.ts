@@ -1,6 +1,7 @@
 import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { checkIfAnnotateFootNoteExists, removeAnnotateFootnotes } from "./annotate";
+import { isHumanUser } from "../helpers/plugin-utils";
 
 export async function updateComment(context: Context<"issue_comment.edited">) {
   const {
@@ -18,6 +19,10 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
 
   // Fetch the previous comment and update it in the db
   try {
+    if (!isHumanUser(payload.comment.user)) {
+      logger.info("Skipping non-human comment update", { commentId: payload.comment.id, author: payload.comment.user?.login });
+      return;
+    }
     if (!markdown) {
       logger.error("Comment body is empty");
     }

@@ -1,8 +1,8 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
-import pkg from "../../package.json" with { type: "json" };
 import { createCronDatabase } from "./database-handler";
+import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
 
 async function main() {
   const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
@@ -16,6 +16,15 @@ async function main() {
   });
 
   const db = await createCronDatabase();
+  let env;
+  try {
+    env = decodeEnv(process.env);
+  } catch (error) {
+    logger.error("Missing required env for reprocess; skipping cron run.", { error });
+    return;
+  }
+  const config = decodeConfig();
+  const clients = createReprocessClients(env);
   const repositories = await db.getAllRepositories();
 
   logger.info(`Loaded KV data.`, {
@@ -48,30 +57,43 @@ async function main() {
         },
       });
 
+      const repoResponse = await repoOctokit.rest.repos.get({ owner, repo });
+      const repository = repoResponse.data;
+
       for (const issueNumber of issueNumbers) {
         const url = `https://github.com/${owner}/${repo}/issues/${issueNumber}`;
         try {
-          const {
-            data: { body = "" },
-          } = await repoOctokit.rest.issues.get({
-            owner: owner,
-            repo: repo,
+          const { data: issue } = await repoOctokit.rest.issues.get({
+            owner,
+            repo,
             issue_number: issueNumber,
           });
+          if (issue.pull_request) {
+            logger.info("Skipping pull request entry in cron list", { owner, repo, issueNumber });
+            await db.removeIssue(url);
+            continue;
+          }
 
-          const newBody = body + `\n<!-- ${pkg.name} update ${new Date().toISOString()} -->`;
-          logger.info(`Updated body of ${url}`, { newBody });
+          const context = await createReprocessContext({
+            issue,
+            repository,
+            octokit: repoOctokit,
+            env,
+            config,
+            logger,
+            clients,
+          });
 
-          await repoOctokit.rest.issues.update({
-            owner: owner,
-            repo: repo,
-            issue_number: issueNumber,
-            body: newBody,
+          await reprocessIssue(context, {
+            updateIssue: false,
+            runMatching: true,
+            runDedupe: true,
+            keepUpdateComment: false,
           });
 
           await db.removeIssue(url);
         } catch (err) {
-          logger.error("Failed to update individual issue", {
+          logger.error("Failed to reprocess individual issue", {
             organization: owner,
             repository: repo,
             issueNumber,

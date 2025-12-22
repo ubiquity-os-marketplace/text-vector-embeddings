@@ -1,6 +1,7 @@
 import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { removeAnnotateFootnotes } from "./annotate";
+import { isHumanUser } from "../helpers/plugin-utils";
 
 export async function addComments(context: Context<"issue_comment.created">) {
   const {
@@ -17,6 +18,10 @@ export async function addComments(context: Context<"issue_comment.created">) {
   const issueId = payload.issue.node_id;
 
   try {
+    if (!isHumanUser(comment.user)) {
+      logger.info("Skipping non-human comment", { commentId: comment.id, author: comment.user?.login });
+      return;
+    }
     if (!markdown) {
       logger.error("Comment body is empty");
     }

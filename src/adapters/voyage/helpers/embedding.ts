@@ -3,6 +3,8 @@ import { EmbedRequestInputType } from "voyageai/api/types/EmbedRequestInputType.
 import { Context } from "../../../types/index";
 import { SuperVoyage } from "./voyage";
 
+export const VOYAGE_EMBEDDING_MODEL = "voyage-large-2-instruct";
+
 export class Embedding extends SuperVoyage {
   protected context: Context;
 
@@ -17,7 +19,7 @@ export class Embedding extends SuperVoyage {
     } else {
       const response = await this.client.embed({
         input: text,
-        model: "voyage-large-2-instruct",
+        model: VOYAGE_EMBEDDING_MODEL,
         inputType,
       });
       return (response.data && response.data[0]?.embedding) || [];

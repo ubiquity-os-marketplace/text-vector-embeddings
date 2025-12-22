@@ -19,6 +19,22 @@ export const pluginSettingsSchema = T.Object(
     alwaysRecommend: T.Optional(
       T.Number({ default: 0, description: "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score." })
     ),
+    embeddingMode: T.Union([T.Literal("sync"), T.Literal("async")], {
+      default: "sync",
+      description: "When set to async, embeddings are queued in KV and processed in small batches.",
+    }),
+    embeddingQueueMaxPerRun: T.Number({
+      default: 3,
+      description: "Max embeddings to process per event when async mode is enabled.",
+    }),
+    embeddingQueueDelaySeconds: T.Number({
+      default: 60,
+      description: "Base delay (seconds) before retrying a rate-limited embedding job.",
+    }),
+    embeddingQueueMaxAttempts: T.Number({
+      default: 6,
+      description: "Maximum retry attempts for a queued embedding job.",
+    }),
     demoFlag: T.Boolean({ default: false, description: "When true, disables storing issues and comments in the database." }),
   },
   { default: {} }

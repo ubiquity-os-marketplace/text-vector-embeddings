@@ -1,4 +1,5 @@
 import { Context } from "../types/index";
+import { isHumanUser } from "../helpers/plugin-utils";
 import { cleanContent } from "./issue-deduplication";
 
 export async function addIssue(context: Context<"issues.opened">) {
@@ -15,6 +16,10 @@ export async function addIssue(context: Context<"issues.opened">) {
   const isPrivate = payload.repository.private;
 
   try {
+    if (!isHumanUser(issue.user)) {
+      logger.info("Skipping non-human issue author", { issueId: issue.id, author: issue.user?.login });
+      return;
+    }
     if (!markdown) {
       logger.error("Issue body is empty", { issue });
       return;

@@ -1,4 +1,5 @@
 import { Context } from "../types/index";
+import { isHumanUser } from "../helpers/plugin-utils";
 import { cleanContent } from "./issue-deduplication";
 
 export async function completeIssue(context: Context<"issues.closed">) {
@@ -26,6 +27,10 @@ export async function completeIssue(context: Context<"issues.closed">) {
   const authorId = payload.issue.user?.id || -1;
 
   try {
+    if (!isHumanUser(payload.issue.user)) {
+      logger.info("Skipping non-human completed issue", { issueId: payload.issue.id, author: payload.issue.user?.login });
+      return;
+    }
     if (!markdown) {
       logger.error("Issue body is empty");
       return;

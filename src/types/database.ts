@@ -7,7 +7,11 @@ export type Database = {
         Row: {
           author_id: string;
           created_at: string;
-          embedding: string;
+          embedding: string | null;
+          embedding_dim: number | null;
+          embedding_model: string | null;
+          embedding_status: string | null;
+          deleted_at: string | null;
           id: string;
           issue_id: string | null;
           markdown: string | null;
@@ -18,7 +22,11 @@ export type Database = {
         Insert: {
           author_id: string;
           created_at?: string;
-          embedding: string;
+          embedding?: string | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string | null;
+          deleted_at?: string | null;
           id: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -29,7 +37,11 @@ export type Database = {
         Update: {
           author_id?: string;
           created_at?: string;
-          embedding?: string;
+          embedding?: string | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string | null;
+          deleted_at?: string | null;
           id?: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -51,7 +63,11 @@ export type Database = {
         Row: {
           author_id: string;
           created_at: string;
-          embedding: string;
+          embedding: string | null;
+          embedding_dim: number | null;
+          embedding_model: string | null;
+          embedding_status: string | null;
+          deleted_at: string | null;
           id: string;
           markdown: string | null;
           modified_at: string;
@@ -61,7 +77,11 @@ export type Database = {
         Insert: {
           author_id: string;
           created_at?: string;
-          embedding: string;
+          embedding?: string | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string | null;
+          deleted_at?: string | null;
           id: string;
           markdown?: string | null;
           modified_at?: string;
@@ -71,7 +91,11 @@ export type Database = {
         Update: {
           author_id?: string;
           created_at?: string;
-          embedding?: string;
+          embedding?: string | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string | null;
+          deleted_at?: string | null;
           id?: string;
           markdown?: string | null;
           modified_at?: string;

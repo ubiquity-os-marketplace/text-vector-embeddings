@@ -120,6 +120,40 @@ describe("Plugin tests", () => {
     expect(context.adapters.supabase.comment.getComment("sasasDelete")).rejects.toThrow("Comment does not exist");
   });
 
+  it("When a PR review comment is created it should add it to the database", async () => {
+    const { context, comment, pullRequest } = createReviewContext("Review comment body", 101, "reviewNodeCreate", "prNodeCreate");
+
+    await runPlugin(context);
+
+    const storedComment = (await context.adapters.supabase.comment.getComment(comment.node_id)) as unknown as CommentMock;
+    expect(storedComment).toBeDefined();
+    expect(storedComment?.plaintext).toContain("Review comment body");
+    expect(storedComment?.issue_id).toBe(pullRequest.node_id);
+  });
+
+  it("When a PR review comment is updated it should update the database", async () => {
+    const { context } = createReviewContext("Initial review", 102, "reviewNodeUpdate", "prNodeUpdate");
+    await runPlugin(context);
+
+    const updateContext = createReviewContext("Updated review", 102, "reviewNodeUpdate", "prNodeUpdate", "pull_request_review_comment.edited");
+    updateContext.context.adapters = context.adapters;
+    await runPlugin(updateContext.context);
+
+    const updatedComment = (await context.adapters.supabase.comment.getComment("reviewNodeUpdate")) as unknown as CommentMock;
+    expect(updatedComment?.plaintext).toContain("Updated review");
+  });
+
+  it("When a PR review comment is deleted it should delete it from the database", async () => {
+    const { context } = createReviewContext("Review comment delete", 103, "reviewNodeDelete", "prNodeDelete");
+    await runPlugin(context);
+
+    const deleteContext = createReviewContext("Review comment delete", 103, "reviewNodeDelete", "prNodeDelete", "pull_request_review_comment.deleted");
+    deleteContext.context.adapters = context.adapters;
+    await runPlugin(deleteContext.context);
+
+    expect(context.adapters.supabase.comment.getComment("reviewNodeDelete")).rejects.toThrow("Comment does not exist");
+  });
+
   it(
     "When an issue is created with similarity above warning threshold but below match threshold, it should" + " update the issue body with footnotes",
     async () => {
@@ -680,6 +714,67 @@ describe("Plugin tests", () => {
     };
   }
 
+  function createReviewContext(
+    commentBody: string,
+    commentId: number,
+    commentNodeId: string,
+    pullRequestNodeId: string,
+    eventName: Context["eventName"] = "pull_request_review_comment.created",
+    userType: "User" | "Bot" = "User"
+  ) {
+    const repo = db.repo.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["repository"];
+    const sender = db.users.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context["payload"]["sender"];
+    const reviewUser = { login: STRINGS.USER_1, id: 1, type: userType };
+
+    const pullRequest = {
+      id: 9001,
+      node_id: pullRequestNodeId,
+      number: 42,
+      title: "Test PR",
+      body: "Test PR body",
+      html_url: `https://github.com/${STRINGS.USER_1}/${STRINGS.TEST_REPO}/pull/42`,
+      user: reviewUser,
+    } as Context<"pull_request_review_comment.created">["payload"]["pull_request"];
+
+    const comment = {
+      id: commentId,
+      node_id: commentNodeId,
+      body: commentBody,
+      html_url: `https://github.com/${STRINGS.USER_1}/${STRINGS.TEST_REPO}/pull/42#discussion_r1`,
+      user: reviewUser,
+    } as Context<"pull_request_review_comment.created">["payload"]["comment"];
+
+    const context = {
+      eventName,
+      payload: {
+        action: "created",
+        sender,
+        repository: repo,
+        comment,
+        pull_request: pullRequest,
+        installation: { id: 1 } as Context["payload"]["installation"],
+        organization: { login: STRINGS.USER_1 } as Context["payload"]["organization"],
+      } as Context["payload"],
+      config: {
+        dedupeWarningThreshold: 0.75,
+        dedupeMatchThreshold: 0.95,
+        jobMatchingThreshold: 0.95,
+        annotateThreshold: 0.65,
+        embeddingMode: "sync",
+        demoFlag: false,
+      },
+      command: null,
+      adapters: {} as Context["adapters"],
+      logger: new Logs("debug") as unknown as Context["logger"],
+      env: {} as Env,
+      octokit: octokit,
+    } as Context;
+
+    context.adapters = createMockAdapters(context) as unknown as Context["adapters"];
+
+    return { context, comment, pullRequest };
+  }
+
   function createContextInner(
     repo: Context["payload"]["repository"],
     sender: Context["payload"]["sender"],
@@ -703,6 +798,7 @@ describe("Plugin tests", () => {
         dedupeMatchThreshold: 0.95,
         jobMatchingThreshold: 0.95,
         annotateThreshold: 0.65,
+        embeddingMode: "sync",
         demoFlag: false,
       },
       command: null,
