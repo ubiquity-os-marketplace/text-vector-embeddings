@@ -2,7 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
-import { stripHtmlComments } from "../../../utils/markdown-comments";
+import { isCommandLikeContent, stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface CommentType {
   id: string;
@@ -46,7 +46,9 @@ export class Comment extends SuperSupabase {
   async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
+    const embeddingSource = isCommandComment ? null : cleanedMarkdown;
     //First Check if the comment already exists
     const { data: existingData, error: existingError } = await this.supabase.from("issue_comments").select("*").eq("id", commentData.id);
     if (existingError) {
@@ -68,7 +70,7 @@ export class Comment extends SuperSupabase {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
     let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
-    let finalMarkdown = commentData.markdown;
+    let finalMarkdown = isCommandComment ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
@@ -100,14 +102,16 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
-    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : null;
+    const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
+    const embeddingSource = isCommandComment ? null : cleanedMarkdown;
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
     let plaintext: string | null = embeddingSource ? markdownToPlainText(embeddingSource) : null;
-    let finalMarkdown = commentData.markdown;
+    let finalMarkdown = isCommandComment ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {

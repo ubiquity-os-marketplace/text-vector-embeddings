@@ -2,6 +2,7 @@ import pkg from "../../package.json" with { type: "json" };
 
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
 const CODE_FENCE_REGEX = /^\s*(```|~~~)/;
+const COMMAND_PREFIX_REGEX = /^(?:\/\S+|@ubiquityos\b)/i;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -133,4 +134,11 @@ export function stripHtmlComments(markdown: string): string {
   flushBuffer(isInFence);
 
   return output.join("\n");
+}
+
+export function isCommandLikeContent(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+  return COMMAND_PREFIX_REGEX.test(content.trim());
 }

@@ -5,7 +5,7 @@ import { Context } from "../types/context";
 import { Database } from "../types/database";
 import { Env } from "../types/env";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
-import { stripHtmlComments } from "../utils/markdown-comments";
+import { isCommandLikeContent, stripHtmlComments } from "../utils/markdown-comments";
 
 type QueueLogger = {
   debug: (message: string, context?: Record<string, unknown>) => void;
@@ -128,6 +128,17 @@ async function processPendingRows(params: {
 
     const markdown = typeof row.markdown === "string" ? row.markdown : "";
     const cleaned = stripHtmlComments(markdown).trim();
+    if (table === "issue_comments" && isCommandLikeContent(cleaned)) {
+      logger.info("Skipping embedding for command-like comment.", { table, id: row.id });
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ markdown: null, plaintext: null, modified_at: new Date().toISOString() })
+        .eq("id", row.id);
+      if (updateError) {
+        logger.error("Failed to clear markdown for command-like comment.", { table, id: row.id, updateError });
+      }
+      continue;
+    }
     if (!cleaned) {
       logger.warn("Skipping empty markdown embedding.", { table, id: row.id });
       continue;

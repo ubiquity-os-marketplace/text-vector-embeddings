@@ -5,6 +5,7 @@ import { VoyageAIClient } from "voyageai";
 import { markdownToPlainText } from "../adapters/utils/markdown-to-plaintext";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
+import { stripHtmlComments } from "../utils/markdown-comments";
 interface IssueMetadata {
   nodeId: string;
   number: number;
@@ -244,8 +245,9 @@ export async function issueScraper(username: string, token?: string): Promise<st
         };
 
         const markdown = metadata.body + " " + metadata.title;
-        const plaintext = markdownToPlainText(markdown);
-        const embedding = shouldSkipEmbeddings || !voyageEmbedding ? null : await voyageEmbedding.createEmbedding(plaintext);
+        const cleanedMarkdown = stripHtmlComments(markdown).trim();
+        const plaintext = cleanedMarkdown ? markdownToPlainText(cleanedMarkdown) : null;
+        const embedding = shouldSkipEmbeddings || !voyageEmbedding || !plaintext ? null : await voyageEmbedding.createEmbedding(plaintext);
 
         const payload = {
           issue: metadata,
