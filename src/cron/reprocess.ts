@@ -15,6 +15,7 @@ import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
 import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { Database } from "../types/database";
+import { CronDatabaseClient } from "./database-handler";
 
 type IssuePayload = Context<"issues.edited">["payload"]["issue"];
 type RepoPayload = Context<"issues.edited">["payload"]["repository"];
@@ -31,7 +32,7 @@ type ReprocessClients = {
   voyage: VoyageAIClient;
 };
 
-class MemoryCronDatabase {
+class MemoryCronDatabase implements CronDatabaseClient {
   private readonly _entries = new Map<string, number[]>();
 
   async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
@@ -92,7 +93,8 @@ export function createReprocessClients(env: Env): ReprocessClients {
   };
 }
 
-export function createReprocessAdapters(context: Context, clients: ReprocessClients) {
+export function createReprocessAdapters(context: Context, clients: ReprocessClients): Context["adapters"] {
+  const kv: CronDatabaseClient = new MemoryCronDatabase();
   return {
     supabase: {
       comment: new Comment(clients.supabase, context),
@@ -103,7 +105,7 @@ export function createReprocessAdapters(context: Context, clients: ReprocessClie
       embedding: new VoyageEmbedding(clients.voyage, context),
       super: new SuperVoyage(clients.voyage, context),
     },
-    kv: new MemoryCronDatabase(),
+    kv,
     llm: new LlmAdapter(context),
   };
 }
@@ -112,17 +114,19 @@ export async function createReprocessContext(params: {
   issue: IssuePayload;
   repository: RepoPayload;
   octokit: Context<"issues.edited">["octokit"];
+  authToken: string;
   env: Env;
   config?: PluginSettings;
   logger?: Context<"issues.edited">["logger"];
   clients?: ReprocessClients;
 }): Promise<Context<"issues.edited">> {
-  const logger = params.logger ?? (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as Context<"issues.edited">["logger"]);
+  const logger = params.logger ?? (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context<"issues.edited">["logger"]);
   const config = params.config ?? decodeConfig();
   const ctx: Context<"issues.edited"> = {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
+    authToken: params.authToken,
     payload: {
       issue: params.issue,
       repository: params.repository,
@@ -135,7 +139,7 @@ export async function createReprocessContext(params: {
     adapters: {} as Context<"issues.edited">["adapters"],
   };
   const clients = params.clients ?? createReprocessClients(params.env);
-  ctx.adapters = createReprocessAdapters(ctx, clients) as Context<"issues.edited">["adapters"];
+  ctx.adapters = createReprocessAdapters(ctx, clients);
   return ctx;
 }
 
