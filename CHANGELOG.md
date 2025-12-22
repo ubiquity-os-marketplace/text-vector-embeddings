@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.2.0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/compare/v1.1.0...v1.2.0) (2025-12-22)
+
+
+### Features
+
+* add supabase migration workflow ([b736662](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b7366624c5553c77eadb69316b0fd5731d9f2202))
+* batch update for issue bodies ([bb4f48c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/bb4f48c07a339a60e952a0b72fa2b736cf8cc8a3))
+* the LLM example list auto-generates ([5c9798b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5c9798b8a7dd519ad8d3a43be00ff50e825e835a))
+
+
+### Bug Fixes
+
+* bumped SDK ([6183ac5](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6183ac5d1a46bf2defdf263303f8a00c56aaacf4))
+* bumped SDK ([b432c5b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b432c5bb5939255f1d612c5d37ef62c52d7d2fe8))
+* enhance alt text processing for images in issue content ([4f06796](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4f067967b49c76f8226546818572edd5b77e518f))
+* modularize schemas, routes, and rate limiter for improved organization and reusability ([47445b8](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/47445b85a2f0c1348a2c8b2aaeb904a8a412fe2b))
+* place footnotes near matches ([0599276](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0599276a3265aee89b14e46cf5e0bef7703b5b31))
+* prevent update comment spam ([7d0c353](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/7d0c353409153919d382894f8196fc6d8a00d15f))
+
 ## [1.1.0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/compare/v1.0.0...v1.1.0) (2025-07-23)
 
 
