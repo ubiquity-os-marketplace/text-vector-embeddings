@@ -2,6 +2,8 @@ import { Context } from "../types/index";
 import { Comment } from "../types/comment";
 import { processSimilarIssues, IssueGraphqlResponse, findMostSimilarSentence } from "./issue-deduplication";
 import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";
+import { stripHtmlComments } from "../utils/markdown-comments";
+import { appendFootnoteRefsToFirstLine } from "../utils/footnote-placement";
 
 interface CommentGraphqlResponse {
   node: {
@@ -69,20 +71,21 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
     return;
   }
   commentBody = removeAnnotateFootnotes(commentBody);
+  const commentBodyForMatching = stripHtmlComments(commentBody);
   const similarIssues = await supabase.issue.findSimilarIssues({
-    markdown: commentBody,
+    markdown: commentBodyForMatching,
     currentId: comment.node_id,
     threshold: context.config.annotateThreshold,
   });
   const similarComments = await supabase.comment.findSimilarComments({
-    markdown: commentBody,
+    markdown: commentBodyForMatching,
     currentId: comment.node_id,
     threshold: context.config.annotateThreshold,
   });
   let processedIssues: IssueGraphqlResponse[] = [];
   let processedComments: CommentGraphqlResponse[] = [];
   if (similarIssues && similarIssues.length > 0) {
-    processedIssues = await processSimilarIssues(similarIssues, context, commentBody);
+    processedIssues = await processSimilarIssues(similarIssues, context, commentBodyForMatching);
     processedIssues = processedIssues.filter((issue) =>
       filterByScope(scope, payload.repository.owner.login, issue.node.repository.owner.login, payload.repository.name, issue.node.repository.name)
     );
@@ -95,7 +98,7 @@ export async function commentChecker(context: Context, comment: Comment, scope: 
     context.logger.info("No similar issues found for comment", { commentBody });
   }
   if (similarComments && similarComments.length > 0) {
-    processedComments = await processSimilarComments(similarComments, context, commentBody);
+    processedComments = await processSimilarComments(similarComments, context, commentBodyForMatching);
     processedComments = processedComments.filter((comment) =>
       filterByScope(
         scope,
@@ -146,6 +149,7 @@ async function handleSimilarIssuesAndComments(
   let highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = commentBody;
   const footnotes: string[] = [];
+  const orphanRefs: string[] = [];
   // Sort relevant issues by similarity in ascending order
   issueList.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   issueList.forEach((issue, index) => {
@@ -154,12 +158,20 @@ async function handleSimilarIssuesAndComments(
     const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
-    const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
-    updatedBody = updatedBody.replace(sentencePattern, (match) => {
-      // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
-      const isAfterCodeBlock = /```\s*$/.test(match);
-      return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
-    });
+    if (!sentence.trim()) {
+      orphanRefs.push(footnoteRef);
+    } else {
+      const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+      const beforeReplace = updatedBody;
+      updatedBody = updatedBody.replace(sentencePattern, (match) => {
+        // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
+        const isAfterCodeBlock = /```\s*$/.test(match);
+        return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
+      });
+      if (beforeReplace === updatedBody) {
+        orphanRefs.push(footnoteRef);
+      }
+    }
 
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ${issue.similarity}% similar to issue: [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
@@ -172,16 +184,27 @@ async function handleSimilarIssuesAndComments(
     const modifiedUrl = comment.node.url.replace("https://github.com", "https://www.github.com");
     const { sentence } = comment.mostSimilarSentence;
     // Insert footnote reference in the body
-    const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
-    updatedBody = updatedBody.replace(sentencePattern, (match) => {
-      // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
-      const isAfterCodeBlock = /```\s*$/.test(match);
-      return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
-    });
+    if (!sentence.trim()) {
+      orphanRefs.push(footnoteRef);
+    } else {
+      const sentencePattern = new RegExp(`${sentence.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g");
+      const beforeReplace = updatedBody;
+      updatedBody = updatedBody.replace(sentencePattern, (match) => {
+        // Check if the sentence is preceded by triple backticks to avoid breaking the code block section
+        const isAfterCodeBlock = /```\s*$/.test(match);
+        return `${match}${isAfterCodeBlock ? "\n" : " "}${footnoteRef}`;
+      });
+      if (beforeReplace === updatedBody) {
+        orphanRefs.push(footnoteRef);
+      }
+    }
 
     // Add new footnote to the array
     footnotes.push(`${footnoteRef}: ${comment.similarity}% similar to comment: [#${comment.node.issue.number} (comment)](${modifiedUrl})\n\n`);
   });
+  if (orphanRefs.length > 0) {
+    updatedBody = appendFootnoteRefsToFirstLine(updatedBody, orphanRefs);
+  }
   // Append new footnotes to the body, keeping the previous ones
   if (footnotes.length > 0) {
     updatedBody += "\n\n" + footnotes.join("");
@@ -228,7 +251,8 @@ async function processSimilarComments(
           { commentNodeId: comment.comment_id }
         );
         commentUrl.similarity = Math.round(comment.similarity * 100).toString();
-        commentUrl.mostSimilarSentence = findMostSimilarSentence(commentBody, commentUrl.node.body, context);
+        const similarBody = stripHtmlComments(commentUrl.node.body);
+        commentUrl.mostSimilarSentence = findMostSimilarSentence(commentBody, similarBody, context);
         return commentUrl;
       } catch (error) {
         context.logger.error(`Failed to fetch comment ${comment.comment_id}: ${error}`, { comment });

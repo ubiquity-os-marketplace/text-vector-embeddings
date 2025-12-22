@@ -1,5 +1,6 @@
-import pkg from "../../package.json" with { type: "json" };
 import { Context } from "../types/context";
+import { normalizeWhitespace, stripPluginUpdateComments } from "../utils/markdown-comments";
+import { stripDuplicateFootnotes } from "../utils/footnotes";
 
 export function isPluginEdit(context: Context<"issues.edited">) {
   if (!isBot(context.payload.sender)) {
@@ -14,11 +15,12 @@ export function isPluginEdit(context: Context<"issues.edited">) {
   const oldBody = changes.body.from;
   const newBody = context.payload.issue.body || "";
 
-  const diff = newBody.replace(oldBody, "").trim();
+  const { cleaned: oldBodyCleaned } = stripPluginUpdateComments(oldBody);
+  const { cleaned: newBodyCleaned } = stripPluginUpdateComments(newBody);
+  const oldBodyNormalized = stripDuplicateFootnotes(oldBodyCleaned);
+  const newBodyNormalized = stripDuplicateFootnotes(newBodyCleaned);
 
-  const pluginCommentPattern = new RegExp(`<!-- ${pkg.name} update .*-->$`);
-
-  return pluginCommentPattern.test(diff);
+  return normalizeWhitespace(oldBodyNormalized) === normalizeWhitespace(newBodyNormalized);
 }
 
 export function isBot(sender: { type: string; login?: string }) {

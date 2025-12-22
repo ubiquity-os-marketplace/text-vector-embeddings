@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
+import { stripHtmlComments } from "../../../utils/markdown-comments";
 
 export interface CommentType {
   id: string;
@@ -55,7 +56,8 @@ export class Comment extends SuperSupabase {
       return;
     }
     //Create the embedding for this comment
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown);
+    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown) : commentData.markdown;
+    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     let plaintext: string | null = markdownToPlainText(commentData.markdown);
     let finalMarkdown = commentData.markdown;
     let finalPayload = commentData.payload;
@@ -89,7 +91,8 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData) {
     const { isPrivate } = commentData;
     //Create the embedding for this comment
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(commentData.markdown));
+    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown) : commentData.markdown;
+    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     let plaintext: string | null = markdownToPlainText(commentData.markdown);
     let finalMarkdown = commentData.markdown;
     let finalPayload = commentData.payload;
@@ -166,7 +169,8 @@ export class Comment extends SuperSupabase {
   async findSimilarComments({ markdown, currentId, threshold }: FindSimilarCommentsParams): Promise<CommentSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(markdown);
+      const embeddingSource = stripHtmlComments(markdown);
+      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
         query_embedding: embedding,
         current_id: currentId,
