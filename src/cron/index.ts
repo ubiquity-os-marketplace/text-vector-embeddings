@@ -37,7 +37,8 @@ async function main() {
       const result = await processPendingEmbeddings({ env: queueEnv, clients: { supabase, voyage }, logger });
       logger.info("Embedding queue processed", result);
     } catch (error) {
-      logger.error("Embedding queue failed", { error });
+      const safeError = error instanceof Error ? error : new Error(String(error));
+      logger.error("Embedding queue failed", { error: safeError });
     }
   } else {
     logger.warn("Skipping embedding queue processing; SUPABASE_URL, SUPABASE_KEY, or VOYAGEAI_API_KEY is missing.");

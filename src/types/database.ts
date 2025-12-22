@@ -8,7 +8,7 @@ export type Database = {
           author_id: string;
           created_at: string;
           deleted_at: string | null;
-          embedding: string | null;
+          embedding: number[] | null;
           id: string;
           issue_id: string | null;
           markdown: string | null;
@@ -20,7 +20,7 @@ export type Database = {
           author_id: string;
           created_at?: string;
           deleted_at?: string | null;
-          embedding?: string | null;
+          embedding?: number[] | null;
           id: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -32,7 +32,7 @@ export type Database = {
           author_id?: string;
           created_at?: string;
           deleted_at?: string | null;
-          embedding?: string | null;
+          embedding?: number[] | null;
           id?: string;
           issue_id?: string | null;
           markdown?: string | null;
@@ -55,7 +55,7 @@ export type Database = {
           author_id: string;
           created_at: string;
           deleted_at: string | null;
-          embedding: string | null;
+          embedding: number[] | null;
           id: string;
           markdown: string | null;
           modified_at: string;
@@ -66,7 +66,7 @@ export type Database = {
           author_id: string;
           created_at?: string;
           deleted_at?: string | null;
-          embedding?: string | null;
+          embedding?: number[] | null;
           id: string;
           markdown?: string | null;
           modified_at?: string;
@@ -77,7 +77,7 @@ export type Database = {
           author_id?: string;
           created_at?: string;
           deleted_at?: string | null;
-          embedding?: string | null;
+          embedding?: number[] | null;
           id?: string;
           markdown?: string | null;
           modified_at?: string;
@@ -107,7 +107,7 @@ export type Database = {
       find_similar_issues: {
         Args: {
           current_id: string;
-          query_embedding: string;
+          query_embedding: number[];
           threshold: number;
           top_k: number;
         };

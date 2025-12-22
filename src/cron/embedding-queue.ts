@@ -5,9 +5,13 @@ import { Context } from "../types/context";
 import { Database } from "../types/database";
 import { Env } from "../types/env";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
-import { stripHtmlComments } from "../utils/markdown-comments";
 
-type QueueLogger = Context["logger"];
+type QueueLogger = {
+  debug: (message: string, context?: Record<string, unknown>) => void;
+  info: (message: string, context?: Record<string, unknown>) => void;
+  warn: (message: string, context?: Record<string, unknown>) => void;
+  error: (message: string, context?: Record<string, unknown>) => void;
+};
 
 type QueueClients = {
   supabase: SupabaseClient<Database>;
@@ -114,7 +118,7 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
     return { issuesProcessed: 0, commentsProcessed: 0, stoppedEarly: false };
   }
 
-  const embedder = new VoyageEmbedding(clients.voyage, { logger } as Context);
+  const embedder = new VoyageEmbedding(clients.voyage, { logger } as unknown as Context);
 
   const issueResult = await processPendingRows({
     table: "issues",
@@ -137,4 +141,54 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
     commentsProcessed: commentResult.processed,
     stoppedEarly: issueResult.stoppedEarly || commentResult.stoppedEarly,
   };
+}
+
+const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
+const CODE_FENCE_REGEX = /^\s*(```|~~~)/;
+
+function stripHtmlComments(markdown: string): string {
+  if (!markdown) {
+    return markdown;
+  }
+
+  const lines = markdown.split(/\r?\n/);
+  let isInFence = false;
+  let fenceToken = "";
+  let buffer: string[] = [];
+  const output: string[] = [];
+
+  const flushBuffer = (preserveComments: boolean) => {
+    if (buffer.length === 0) {
+      return;
+    }
+    const chunk = buffer.join("\n");
+    output.push(preserveComments ? chunk : chunk.replace(HTML_COMMENT_REGEX, ""));
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const fenceMatch = line.match(CODE_FENCE_REGEX);
+    if (fenceMatch) {
+      const fence = fenceMatch[1];
+      if (!isInFence) {
+        flushBuffer(false);
+        isInFence = true;
+        fenceToken = fence;
+        buffer.push(line);
+      } else if (fence === fenceToken) {
+        buffer.push(line);
+        flushBuffer(true);
+        isInFence = false;
+        fenceToken = "";
+      } else {
+        buffer.push(line);
+      }
+      continue;
+    }
+    buffer.push(line);
+  }
+
+  flushBuffer(isInFence);
+
+  return output.join("\n");
 }

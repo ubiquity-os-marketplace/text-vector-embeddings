@@ -82,8 +82,8 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
         octokit = deps.createOctokit();
       } else {
         octokit = await deps.getAuthenticatedOctokit({
-          appId: honoEnv.APP_ID,
-          appPrivateKey: honoEnv.APP_PRIVATE_KEY,
+          appId,
+          appPrivateKey,
           owner,
           repo,
         });
