@@ -66,10 +66,7 @@ async function main() {
         issueIds: issueNumbers,
       });
 
-      const installation = await octokit.rest.apps.getRepoInstallation({
-        owner: owner,
-        repo: repo,
-      });
+      const installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
 
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
@@ -113,6 +110,7 @@ async function main() {
             authToken,
             env,
             config,
+            logger,
             clients,
           });
 

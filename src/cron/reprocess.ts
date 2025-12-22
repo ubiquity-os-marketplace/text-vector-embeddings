@@ -114,7 +114,7 @@ export async function createReprocessContext(params: {
   issue: IssuePayload;
   repository: RepoPayload;
   octokit: Context<"issues.edited">["octokit"];
-  authToken: string;
+  authToken?: string;
   env: Env;
   config?: PluginSettings;
   logger?: Context<"issues.edited">["logger"];
@@ -126,7 +126,7 @@ export async function createReprocessContext(params: {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
-    authToken: params.authToken,
+    authToken: params.authToken ?? "",
     payload: {
       issue: params.issue,
       repository: params.repository,

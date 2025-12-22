@@ -227,6 +227,7 @@ export function createComment(comment: string, commentId: number, nodeId: string
       user: {
         login: STRINGS.USER_1,
         id: 1,
+        type: "User",
       },
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),

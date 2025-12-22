@@ -102,8 +102,13 @@ async function copyTable({ name, orderBy }: TableSpec): Promise<void> {
     `Finished ${name}. Source=${sourceCount ?? "unknown"} TargetBefore=${targetCountBefore ?? "unknown"} TargetAfter=${targetCountAfter ?? "unknown"}`
   );
 
-  if (!isDryRun && sourceCount !== null && targetCountAfter !== null && targetCountAfter !== sourceCount) {
-    throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+  if (!isDryRun && sourceCount !== null && targetCountAfter !== null) {
+    if (targetCountAfter < sourceCount) {
+      throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
+    if (targetCountAfter > sourceCount) {
+      console.warn(`Target row count exceeds source for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
   }
 }
 

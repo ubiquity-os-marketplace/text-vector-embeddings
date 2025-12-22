@@ -8,6 +8,7 @@ export const db = factory({
   users: {
     id: primaryKey(Number),
     login: String,
+    type: nullable(String),
     avatar_url: nullable(String), // Add any additional fields based on the schema
   },
   repo: {
@@ -136,6 +137,7 @@ export const db = factory({
     user: {
       login: String,
       id: Number,
+      type: nullable(String),
     },
     issue_id: String,
     author_association: String,
