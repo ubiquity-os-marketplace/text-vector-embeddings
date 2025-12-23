@@ -1,11 +1,43 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { processPendingEmbeddings } from "./embedding-queue";
 import { createCronDatabase } from "./database-handler";
 import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
+import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
+import type { Context } from "../types/index";
+
+function normalizeError(error: unknown): Error | { stack: string } {
+  return error instanceof Error ? error : { stack: String(error) };
+}
 
 async function main() {
   const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
+  let env;
+  try {
+    env = decodeEnv(process.env);
+  } catch (error) {
+    logger.error("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
+    return;
+  }
+  const config = decodeConfig();
+  const clients = createReprocessClients(env);
+  const queueSettings = getEmbeddingQueueSettings(env);
+
+  try {
+    const queueResult = await processPendingEmbeddings({ env, clients, logger });
+    logger.info("Embedding queue processed", queueResult);
+    if (queueResult.stoppedEarly) {
+      logger.warn("Embedding queue stopped early due to rate limiting; skipping reprocess run.");
+      return;
+    }
+  } catch (error) {
+    logger.error("Embedding queue failed", { error: normalizeError(error) });
+    if (queueSettings.enabled) {
+      return;
+    }
+  }
+
   const octokit = new customOctokit({
     authStrategy: createAppAuth,
     auth: {
@@ -16,15 +48,6 @@ async function main() {
   });
 
   const db = await createCronDatabase();
-  let env;
-  try {
-    env = decodeEnv(process.env);
-  } catch (error) {
-    logger.error("Missing required env for reprocess; skipping cron run.", { error });
-    return;
-  }
-  const config = decodeConfig();
-  const clients = createReprocessClients(env);
   const repositories = await db.getAllRepositories();
 
   logger.info(`Loaded KV data.`, {
@@ -43,10 +66,7 @@ async function main() {
         issueIds: issueNumbers,
       });
 
-      const installation = await octokit.rest.apps.getRepoInstallation({
-        owner: owner,
-        repo: repo,
-      });
+      const installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
 
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
@@ -56,6 +76,12 @@ async function main() {
           installationId: installation.data.id,
         },
       });
+      const appAuth = createAppAuth({
+        appId: Number(process.env.APP_ID),
+        privateKey: process.env.APP_PRIVATE_KEY ?? "",
+        installationId: installation.data.id,
+      });
+      const { token: authToken } = await appAuth({ type: "installation" });
 
       const repoResponse = await repoOctokit.rest.repos.get({ owner, repo });
       const repository = repoResponse.data;
@@ -74,10 +100,14 @@ async function main() {
             continue;
           }
 
+          const issuePayload = issue as Context<"issues.edited">["payload"]["issue"];
+          const repositoryPayload = repository as Context<"issues.edited">["payload"]["repository"];
+
           const context = await createReprocessContext({
-            issue,
-            repository,
+            issue: issuePayload,
+            repository: repositoryPayload,
             octokit: repoOctokit,
+            authToken,
             env,
             config,
             logger,
@@ -100,6 +130,10 @@ async function main() {
             url,
             err,
           });
+        }
+
+        if (queueSettings.enabled) {
+          await sleep(queueSettings.delayMs);
         }
       }
     } catch (e) {

@@ -16,6 +16,22 @@ export function isIssueCommentEvent(context: Context): context is Context<"issue
 }
 
 /**
+ * Restricts the scope of `context` to the `pull_request_review_comment.created`, `pull_request_review_comment.edited`,
+ * and `pull_request_review_comment.deleted` payloads.
+ *
+ * @param context The context object.
+ */
+export function isPullRequestReviewCommentEvent(
+  context: Context
+): context is Context<"pull_request_review_comment.created" | "pull_request_review_comment.edited" | "pull_request_review_comment.deleted"> {
+  return (
+    context.eventName === "pull_request_review_comment.created" ||
+    context.eventName === "pull_request_review_comment.edited" ||
+    context.eventName === "pull_request_review_comment.deleted"
+  );
+}
+
+/**
  * Restricts the scope of `context` to the `issues.opened`, `issues.edited`, `issues.deleted`, `issues.transferred`, and `issues.closed` payloads.
  *
  * @param context The context object.

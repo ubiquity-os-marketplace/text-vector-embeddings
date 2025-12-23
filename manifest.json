@@ -1,7 +1,7 @@
 {
   "name": "Text Vector Embeddings",
   "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
-  "skipBotEvents": false,
+  "skipBotEvents": true,
   "commands": {
     "recommendation": {
       "ubiquity:example": "/recommendation @alice @bob",
@@ -24,6 +24,9 @@
     "issue_comment.created",
     "issue_comment.edited",
     "issue_comment.deleted",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.edited",
+    "pull_request_review_comment.deleted",
     "issues.opened",
     "issues.edited",
     "issues.deleted",
@@ -408,7 +411,10 @@
           "endpoint": {
             "default": "https://openrouter.ai/api/v1",
             "description": "The LLM API endpoint.",
-            "examples": ["https://openrouter.ai/api/v1", "https://api.openai.com/v1"],
+            "examples": [
+              "https://openrouter.ai/api/v1",
+              "https://api.openai.com/v1"
+            ],
             "type": "string"
           },
           "maxRetries": {

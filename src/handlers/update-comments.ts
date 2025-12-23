@@ -1,6 +1,7 @@
 import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { checkIfAnnotateFootNoteExists, removeAnnotateFootnotes } from "./annotate";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function updateComment(context: Context<"issue_comment.edited">) {
   const {
@@ -16,6 +17,11 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
   const isPrivate = payload.repository.private;
   const issueId = payload.issue.node_id;
 
+  if (payload.comment.user?.type !== "User") {
+    logger.debug("Ignoring comment update from non-human author", { author: payload.comment.user?.login, type: payload.comment.user?.type });
+    return;
+  }
+
   // Fetch the previous comment and update it in the db
   try {
     if (!markdown) {
@@ -29,6 +35,7 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
       await addIssue(context as unknown as Context<"issues.opened">);
     }
     const cleanedComment = removeAnnotateFootnotes(markdown);
+    const queueSettings = getEmbeddingQueueSettings(context.env);
     if (checkIfAnnotateFootNoteExists(markdown)) {
       await octokit.rest.issues.updateComment({
         owner: payload.repository.owner.login,
@@ -42,7 +49,10 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
       return;
     }
 
-    await supabase.comment.updateComment({ markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
+    await supabase.comment.updateComment(
+      { markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId },
+      { deferEmbedding: queueSettings.enabled }
+    );
     logger.ok(`Successfully updated comment! ${payload.comment.id}`, payload.comment);
   } catch (error) {
     if (error instanceof Error) {

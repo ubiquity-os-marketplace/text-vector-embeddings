@@ -2,6 +2,7 @@ import pkg from "../../package.json" with { type: "json" };
 
 const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
 const CODE_FENCE_REGEX = /^\s*(```|~~~)/;
+const COMMAND_PREFIX_REGEX = /^(?:\/\S+|@ubiquityos\b)/i;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -33,7 +34,7 @@ export function stripPluginUpdateComments(markdown: string): {
   matchCount: number;
 } {
   if (!markdown) {
-    return { cleaned: markdown ?? "", latestComment: null, matchCount: 0 };
+    return { cleaned: "", latestComment: null, matchCount: 0 };
   }
 
   const matches = Array.from(markdown.matchAll(UPDATE_COMMENT_REGEX));
@@ -99,14 +100,14 @@ export function stripHtmlComments(markdown: string): string {
   let buffer: string[] = [];
   const output: string[] = [];
 
-  const flushBuffer = (preserveComments: boolean) => {
+  function flushBuffer(preserveComments: boolean) {
     if (buffer.length === 0) {
       return;
     }
     const chunk = buffer.join("\n");
     output.push(preserveComments ? chunk : chunk.replace(HTML_COMMENT_REGEX, ""));
     buffer = [];
-  };
+  }
 
   for (const line of lines) {
     const fenceMatch = line.match(CODE_FENCE_REGEX);
@@ -133,4 +134,11 @@ export function stripHtmlComments(markdown: string): string {
   flushBuffer(isInFence);
 
   return output.join("\n");
+}
+
+export function isCommandLikeContent(content: string): boolean {
+  if (!content) {
+    return false;
+  }
+  return COMMAND_PREFIX_REGEX.test(content.trim());
 }

@@ -1,4 +1,3 @@
- 
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { appendPluginUpdateComment, normalizeWhitespace, stripPluginUpdateComments } from "../src/utils/markdown-comments";
 

@@ -37,9 +37,19 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     octokit,
     payload,
   } = context;
-  const shouldKeepUpdateComment = options.keepUpdateComment ?? true;
+  const shouldKeepUpdateComment = options.keepUpdateComment ?? false;
 
   const originalIssue = payload.issue;
+  const authorType = originalIssue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  if (!isHumanAuthor) {
+    logger.debug("Skipping dedupe for non-human author.", {
+      author: originalIssue.user?.login,
+      type: authorType,
+      issue: originalIssue.number,
+    });
+    return;
+  }
 
   // Use the latest issue data
   const issueBody = originalIssue.body;

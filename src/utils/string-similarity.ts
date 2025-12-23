@@ -22,6 +22,7 @@ export function findEditDistance(sentenceA: string, sentenceB: string): number {
 }
 
 export function normalizedSimilarity(sentenceA: string, sentenceB: string): number {
+  // Treat empty inputs as no similarity to avoid matching blank lines.
   if (!sentenceA || !sentenceB) {
     return 0;
   }
