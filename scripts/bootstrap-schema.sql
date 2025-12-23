@@ -20,6 +20,14 @@ create table if not exists documents (
 
 alter table documents enable row level security;
 
+drop policy if exists documents_service_role_all on documents;
+create policy documents_service_role_all
+  on documents
+  for all
+  to service_role
+  using (true)
+  with check (true);
+
 create or replace function find_similar_issues_to_match(current_id varchar, query_embedding vector(1024), threshold float8, top_k int)
 returns table(issue_id varchar, similarity float8) as $$
 declare
