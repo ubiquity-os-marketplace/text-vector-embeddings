@@ -8,7 +8,7 @@ import { createAdapters } from "../adapters/index";
 import { getAuthenticatedOctokit } from "../cron/workflow";
 import { issueMatching, issueMatchingForUsers } from "../handlers/issue-matching";
 import { parseGitHubUrl } from "../helpers/github";
-import { initAdapters } from "../plugin";
+import { initAdapters } from "../helpers/init-adapters";
 import { Context, envSchema, pluginSettingsSchema } from "../types/index";
 
 function getValidatedEnv(c: HonoContext) {
@@ -89,6 +89,10 @@ export async function recommendationsRoute(c: HonoContext) {
     const result = users.length > 0 ? await issueMatchingForUsers(ctx, users) : await issueMatching(ctx);
     return { [url]: serializeMatchResult(result) };
   }
+
   const res = await Promise.all(urls.map(handleUrl));
-  return new Response(JSON.stringify(res.reduce((acc, curr) => ({ ...acc, ...curr }), {})), { status: 200, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(res.reduce((acc, curr) => ({ ...acc, ...curr }), {})), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }

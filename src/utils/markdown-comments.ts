@@ -9,10 +9,6 @@ function escapeRegExp(value: string): string {
 
 const UPDATE_COMMENT_REGEX = new RegExp(`<!--\\s*${escapeRegExp(pkg.name)}\\s+update\\s+[^\\n]*?-->`, "g");
 
-export function buildPluginUpdateComment(timestamp: string): string {
-  return `<!-- ${pkg.name} update ${timestamp} -->`;
-}
-
 export function appendPluginUpdateComment(markdown: string, comment: string): string {
   const { cleaned } = stripPluginUpdateComments(markdown);
   const trimmed = cleaned.trimEnd();

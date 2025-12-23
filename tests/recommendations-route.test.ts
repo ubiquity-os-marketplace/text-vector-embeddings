@@ -1,7 +1,12 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Context as HonoContext } from "hono";
 
-const routePath = "../src/routes/recommendations";
+import * as honoAdapter from "hono/adapter";
+import * as githubHelpers from "../src/helpers/github";
+import * as workflow from "../src/cron/workflow";
+import * as issueMatchingModule from "../src/handlers/issue-matching";
+import * as initAdaptersModule from "../src/helpers/init-adapters";
+import { recommendationsRoute } from "../src/routes/recommendations";
 
 type MatchResult = {
   matchResultArray: Record<string, string[]>;
@@ -25,7 +30,7 @@ function createMatchResult(): MatchResult {
 function createContext(urls: string[], users: string[] = []): HonoContext {
   return {
     req: {
-      queries: mock((key: string) => {
+      queries: (key: string) => {
         if (key === "issueUrls") {
           return urls;
         }
@@ -33,13 +38,13 @@ function createContext(urls: string[], users: string[] = []): HonoContext {
           return users;
         }
         return [];
-      }),
+      },
     },
   } as unknown as HonoContext;
 }
 
-async function setupRoute(options: SetupOptions = {}) {
-  const envMock = mock(() => ({
+function setupSpies(options: SetupOptions = {}) {
+  const envValue = {
     LOG_LEVEL: "debug",
     KERNEL_PUBLIC_KEY: "kernel",
     SUPABASE_URL: "https://example.supabase.co",
@@ -50,42 +55,35 @@ async function setupRoute(options: SetupOptions = {}) {
     APP_ID: "",
     APP_PRIVATE_KEY: "",
     ...options.env,
-  }));
-  const issueMatchingMock = mock(async () => options.issueMatchingResult ?? createMatchResult());
-  const issueMatchingForUsersMock = mock(async () => options.issueMatchingResult ?? createMatchResult());
-  const initAdaptersMock = mock(async () => ({}));
+  };
+
   const issuesGetMock = mock(async () => ({ data: { id: "issue", number: 7, title: "Issue", body: "body" } }));
-  const customOctokitCtorMock = mock(() => undefined);
-  class CustomOctokitMock {
-    rest = { issues: { get: issuesGetMock } };
-    constructor() {
-      customOctokitCtorMock();
-      return this;
-    }
-  }
   const octokitInstance = { rest: { issues: { get: issuesGetMock } } };
-  const getAuthenticatedOctokitMock = mock(async () => octokitInstance);
 
-  await mock.module("hono/adapter", () => ({ env: envMock }));
-  await mock.module("../src/cron/workflow", () => ({ getAuthenticatedOctokit: getAuthenticatedOctokitMock }));
-  await mock.module("../src/handlers/issue-matching", () => ({ issueMatching: issueMatchingMock, issueMatchingForUsers: issueMatchingForUsersMock }));
-  await mock.module("../src/plugin", () => ({ initAdapters: initAdaptersMock }));
-  await mock.module("@ubiquity-os/plugin-sdk", () => ({ CommentHandler: class {} }));
-  await mock.module("@ubiquity-os/plugin-sdk/octokit", () => ({ customOctokit: CustomOctokitMock }));
-
-  const module = await import(`${routePath}?t=${Date.now()}`);
+  const envSpy = spyOn(honoAdapter, "env").mockReturnValue(envValue as never);
+  const parseSpy = spyOn(githubHelpers, "parseGitHubUrl").mockImplementation((url: string) => {
+    const match = url.match(/^https:\/\/github\.com\/(.+?)\/(.+?)\/issues\/(\d+)/);
+    if (!match) {
+      throw new Error("Invalid GitHub URL");
+    }
+    return { owner: match[1], repo: match[2], issue_number: Number(match[3]) } as never;
+  });
+  const initAdaptersSpy = spyOn(initAdaptersModule, "initAdapters").mockResolvedValue({} as never);
+  const issueMatchingSpy = spyOn(issueMatchingModule, "issueMatching").mockResolvedValue((options.issueMatchingResult ?? createMatchResult()) as never);
+  const issueMatchingForUsersSpy = spyOn(issueMatchingModule, "issueMatchingForUsers").mockResolvedValue(
+    (options.issueMatchingResult ?? createMatchResult()) as never
+  );
+  const getAuthenticatedOctokitSpy = spyOn(workflow, "getAuthenticatedOctokit").mockResolvedValue(octokitInstance as never);
 
   return {
-    recommendationsRoute: module.recommendationsRoute,
-    mocks: {
-      envMock,
-      issueMatchingMock,
-      issueMatchingForUsersMock,
-      initAdaptersMock,
-      issuesGetMock,
-      customOctokitCtorMock,
-      getAuthenticatedOctokitMock,
-    },
+    envSpy,
+    parseSpy,
+    initAdaptersSpy,
+    issueMatchingSpy,
+    issueMatchingForUsersSpy,
+    getAuthenticatedOctokitSpy,
+    issuesGetMock,
+    octokitInstance,
   };
 }
 
@@ -100,7 +98,7 @@ describe("/recommendations route", () => {
       similarIssues: [{ id: "10", issue_id: "20", similarity: 0.92 }],
       sortedContributors: [{ login: "octokit", matches: ["text"], maxSimilarity: 0.92 }],
     };
-    const { recommendationsRoute, mocks } = await setupRoute({
+    const spies = setupSpies({
       env: { APP_ID: "123", APP_PRIVATE_KEY: "key" },
       issueMatchingResult: matchResult,
     });
@@ -109,9 +107,8 @@ describe("/recommendations route", () => {
     const payload = await response.json();
 
     expect(payload).toEqual({ [url]: matchResult });
-    expect(mocks.getAuthenticatedOctokitMock).toHaveBeenCalledWith({ appId: "123", appPrivateKey: "key", owner: "foo", repo: "bar" });
-    expect(mocks.customOctokitCtorMock).not.toHaveBeenCalled();
-    expect(mocks.issuesGetMock).toHaveBeenCalledWith({ owner: "foo", repo: "bar", issue_number: 42 });
+    expect(spies.getAuthenticatedOctokitSpy).toHaveBeenCalledWith({ appId: "123", appPrivateKey: "key", owner: "foo", repo: "bar" });
+    expect(spies.issuesGetMock).toHaveBeenCalledWith({ owner: "foo", repo: "bar", issue_number: 42 });
   });
 
   it("uses the default Octokit instance when credentials are missing", async () => {
@@ -120,14 +117,24 @@ describe("/recommendations route", () => {
       similarIssues: [],
       sortedContributors: [],
     };
-    const { recommendationsRoute, mocks } = await setupRoute({ issueMatchingResult: matchResult });
+    const spies = setupSpies({ issueMatchingResult: matchResult });
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/repos/foo/bar/issues/99")) {
+        return new Response(JSON.stringify({ id: "issue", number: 99, title: "Issue", body: "body" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
     const url = "https://github.com/foo/bar/issues/99";
     const response = await recommendationsRoute(createContext([url]));
     const payload = await response.json();
 
     expect(payload).toEqual({ [url]: matchResult });
-    expect(mocks.customOctokitCtorMock).toHaveBeenCalledTimes(1);
-    expect(mocks.getAuthenticatedOctokitMock).not.toHaveBeenCalled();
+    expect(spies.getAuthenticatedOctokitSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it("returns a result for every requested user", async () => {
@@ -142,26 +149,29 @@ describe("/recommendations route", () => {
         { login: "bob", matches: [], maxSimilarity: 0 },
       ],
     };
-    const { recommendationsRoute, mocks } = await setupRoute({ issueMatchingResult: matchResult });
+    const spies = setupSpies({ env: { APP_ID: "123", APP_PRIVATE_KEY: "key" }, issueMatchingResult: matchResult });
     const url = "https://github.com/foo/bar/issues/42";
 
     const response = await recommendationsRoute(createContext([url], ["alice", "bob"]));
     const payload = await response.json();
 
     expect(payload).toEqual({ [url]: matchResult });
-    expect(mocks.issueMatchingForUsersMock).toHaveBeenCalledTimes(1);
-    expect(mocks.issueMatchingMock).not.toHaveBeenCalled();
+    expect(spies.issueMatchingForUsersSpy).toHaveBeenCalledTimes(1);
+    expect(spies.issueMatchingSpy).not.toHaveBeenCalled();
   });
 
   it("returns null results for invalid GitHub URLs", async () => {
-    const { recommendationsRoute, mocks } = await setupRoute();
+    const spies = setupSpies();
+    spies.parseSpy.mockImplementationOnce(() => {
+      throw new Error("Invalid GitHub URL");
+    });
     const invalidUrl = "https://example.com/not-a-github-issue";
     const response = await recommendationsRoute(createContext([invalidUrl]));
     const payload = await response.json();
 
     expect(payload).toEqual({ [invalidUrl]: null });
-    expect(mocks.issueMatchingMock).not.toHaveBeenCalled();
-    expect(mocks.issueMatchingForUsersMock).not.toHaveBeenCalled();
-    expect(mocks.envMock).toHaveBeenCalledTimes(1);
+    expect(spies.issueMatchingSpy).not.toHaveBeenCalled();
+    expect(spies.issueMatchingForUsersSpy).not.toHaveBeenCalled();
+    expect(spies.envSpy).toHaveBeenCalledTimes(1);
   });
 });
