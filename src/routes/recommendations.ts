@@ -76,6 +76,7 @@ export async function recommendationsRoute(c: HonoContext) {
       eventName: "issues.opened",
       command: null,
       commentHandler: new CommentHandler(),
+      authToken: "",
       payload: {
         issue: issue.data,
       } as Context<"issues.opened">["payload"],

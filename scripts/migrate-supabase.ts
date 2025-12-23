@@ -1,14 +1,13 @@
-import { createClient } from "@supabase/supabase-js";
+import { SupabaseClient, createClient } from "@supabase/supabase-js";
+import type { Database } from "../src/types/database";
 
-type TableSpec = {
-  name: string;
-  orderBy: string;
-};
-
-const TABLES: TableSpec[] = [
+const TABLES = [
   { name: "issues", orderBy: "id" },
   { name: "issue_comments", orderBy: "id" },
-];
+] as const;
+
+type TableSpec = (typeof TABLES)[number];
+type TableName = TableSpec["name"];
 
 function getEnv(name: string, fallbackName?: string): string {
   const value = process.env[name] ?? (fallbackName ? process.env[fallbackName] : undefined);
@@ -37,14 +36,14 @@ const targetKey = getEnv("SUPABASE_TARGET_KEY");
 const batchSize = parseBatchSize(process.env.BATCH_SIZE);
 const isDryRun = (process.env.DRY_RUN ?? "").toLowerCase() === "true";
 
-const source = createClient(sourceUrl, sourceKey, {
+const source = createClient<Database>(sourceUrl, sourceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-const target = createClient(targetUrl, targetKey, {
+const target = createClient<Database>(targetUrl, targetKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function fetchCount(client: ReturnType<typeof createClient>, table: string): Promise<number | null> {
+async function fetchCount(client: SupabaseClient<Database>, table: TableName): Promise<number | null> {
   const { count, error } = await client.from(table).select("id", { count: "exact", head: true });
   if (error) {
     console.error(`Failed to count ${table}:`, error.message);

@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import type { Context as HonoContext } from "hono";
 
 import * as honoAdapter from "hono/adapter";
-import * as githubHelpers from "../src/helpers/github";
 import * as workflow from "../src/cron/workflow";
 import * as issueMatchingModule from "../src/handlers/issue-matching";
+import * as githubHelpers from "../src/helpers/github";
 import * as initAdaptersModule from "../src/helpers/init-adapters";
 import { recommendationsRoute } from "../src/routes/recommendations";
 
@@ -118,9 +118,18 @@ describe("/recommendations route", () => {
       sortedContributors: [],
     };
     const spies = setupSpies({ issueMatchingResult: matchResult });
-    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes("/repos/foo/bar/issues/99")) {
+    // @ts-expect-error overrides for fetch
+    const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      let requestUrl: string;
+      if (typeof input === "string") {
+        requestUrl = input;
+      } else if (input instanceof URL) {
+        requestUrl = input.toString();
+      } else {
+        requestUrl = input.url;
+      }
+
+      if (requestUrl.includes("/repos/foo/bar/issues/99")) {
         return new Response(JSON.stringify({ id: "issue", number: 99, title: "Issue", body: "body" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },

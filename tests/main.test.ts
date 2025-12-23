@@ -1,6 +1,7 @@
 // cSpell:disable
 
 import { drop } from "@mswjs/data";
+import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
@@ -685,6 +686,8 @@ describe("Plugin tests", () => {
     eventName: Context["eventName"] = DEFAULT_HOOK
   ): Context {
     return {
+      authToken: "",
+      commentHandler: new CommentHandler(),
       eventName: eventName,
       payload: {
         action: "created",
@@ -701,6 +704,11 @@ describe("Plugin tests", () => {
         jobMatchingThreshold: 0.95,
         annotateThreshold: 0.65,
         demoFlag: false,
+        llm: {
+          model: "",
+          endpoint: "",
+          maxRetries: 0,
+        },
       },
       command: null,
       adapters: {} as Context["adapters"],

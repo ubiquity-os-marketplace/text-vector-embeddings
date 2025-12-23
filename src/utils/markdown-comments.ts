@@ -95,14 +95,14 @@ export function stripHtmlComments(markdown: string): string {
   let buffer: string[] = [];
   const output: string[] = [];
 
-  const flushBuffer = (preserveComments: boolean) => {
+  function flushBuffer(preserveComments: boolean) {
     if (buffer.length === 0) {
       return;
     }
     const chunk = buffer.join("\n");
     output.push(preserveComments ? chunk : chunk.replace(HTML_COMMENT_REGEX, ""));
     buffer = [];
-  };
+  }
 
   for (const line of lines) {
     const fenceMatch = line.match(CODE_FENCE_REGEX);
