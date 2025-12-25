@@ -2,8 +2,18 @@ import { parseGitHubUrl } from "../helpers/github";
 
 export const KV_PREFIX = "cron";
 
-export class CronDatabase {
-  private _kv: Deno.Kv;
+export type CronRepositoryEntry = { owner: string; repo: string; issueNumbers: number[] };
+
+export interface CronDatabase {
+  getIssueNumbers(owner: string, repo: string): Promise<number[]>;
+  addIssue(url: string): Promise<void>;
+  removeIssue(url: string): Promise<void>;
+  updateIssue(currentUrl: string, newUrl: string): Promise<void>;
+  getAllRepositories(): Promise<CronRepositoryEntry[]>;
+}
+
+class DenoCronDatabase implements CronDatabase {
+  private readonly _kv: Deno.Kv;
 
   constructor(kv: Deno.Kv) {
     this._kv = kv;
@@ -44,8 +54,8 @@ export class CronDatabase {
     await this.addIssue(newUrl);
   }
 
-  async getAllRepositories(): Promise<Array<{ owner: string; repo: string; issueNumbers: number[] }>> {
-    const repositories: Array<{ owner: string; repo: string; issueNumbers: number[] }> = [];
+  async getAllRepositories(): Promise<CronRepositoryEntry[]> {
+    const repositories: CronRepositoryEntry[] = [];
     const iter = this._kv.list({ prefix: [KV_PREFIX] });
 
     for await (const entry of iter) {
@@ -63,5 +73,5 @@ export class CronDatabase {
 
 export async function createCronDatabase(): Promise<CronDatabase> {
   const kv = await Deno.openKv(process.env.DENO_KV_URL);
-  return new CronDatabase(kv);
+  return new DenoCronDatabase(kv);
 }

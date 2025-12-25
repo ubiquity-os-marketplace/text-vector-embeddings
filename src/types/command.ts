@@ -1,7 +1,6 @@
-import { Type as T } from "@sinclair/typebox";
-import { StaticDecode } from "@sinclair/typebox";
+import { StaticDecode, Type as T } from "@sinclair/typebox";
 
-export const annotateCommandSchema = T.Object({
+const annotateCommandSchema = T.Object({
   name: T.Literal("annotate"),
   parameters: T.Object({
     commentUrl: T.Optional(T.String()),
@@ -9,13 +8,6 @@ export const annotateCommandSchema = T.Object({
   }),
 });
 
-export const recommendationCommandSchema = T.Object({
-  name: T.Literal("recommendation"),
-  parameters: T.Object({
-    users: T.Optional(T.Union([T.Array(T.String()), T.String()])),
-  }),
-});
-
-export const commandSchema = T.Union([annotateCommandSchema, recommendationCommandSchema]);
+export const commandSchema = annotateCommandSchema;
 
 export type Command = StaticDecode<typeof commandSchema>;
