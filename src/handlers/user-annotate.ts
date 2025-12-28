@@ -2,11 +2,15 @@ import { Context } from "../types/index";
 import { annotate } from "./annotate";
 import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
+// GitHub usernames are 1-39 chars, alnum or hyphen, no leading/trailing hyphen.
+const GITHUB_LOGIN_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+
 function normalizeUserLogins(segments: string[]): string[] {
   return segments
     .flatMap((segment) => segment.split(","))
     .map((user) => user.trim().replace(/^@/, ""))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((user) => GITHUB_LOGIN_REGEX.test(user));
 }
 
 // GitHub usernames cannot include whitespace or commas, so splitting is safe.
@@ -71,9 +75,7 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
   if (context.command.name === "recommendation") {
     const issue = context.payload.issue;
     const { owner, name: repo } = context.payload.repository;
-    const requestedLoginsFromParams = parseUserLogins(context.command.parameters.users);
-    const commentTokens = context.payload.comment.body.trim().split(/\s+/).slice(1);
-    const requestedLogins = requestedLoginsFromParams.length > 0 ? requestedLoginsFromParams : parseUserLoginsFromTokens(commentTokens);
+    const requestedLogins = parseUserLogins(context.command.parameters.users);
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
