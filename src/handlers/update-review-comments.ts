@@ -1,7 +1,7 @@
 import { Context } from "../types/index";
 import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 import { removeAnnotateFootnotes } from "./annotate";
-import { ensurePullRequestIssue } from "./pull-request-review-utils";
+import { buildReviewCommentMarkdown, ensurePullRequestIssue, fetchParentReviewComment, formatReviewThreadContext } from "./pull-request-review-utils";
 
 export async function updateReviewComment(context: Context<"pull_request_review_comment.edited">) {
   const {
@@ -17,9 +17,18 @@ export async function updateReviewComment(context: Context<"pull_request_review_
   const isPrivate = payload.repository.private;
   const pullRequest = payload.pull_request;
 
-  if (comment.user?.type !== "User") {
+  const isHumanAuthor = comment.user?.type === "User";
+  const isThreadRoot = comment.in_reply_to_id == null;
+  if (!isHumanAuthor && !isThreadRoot) {
     logger.debug("Ignoring review comment update from non-human author", { author: comment.user?.login, type: comment.user?.type });
     return;
+  }
+  if (!isHumanAuthor && isThreadRoot) {
+    logger.debug("Allowing bot-authored root review comment update for thread context", {
+      author: comment.user?.login,
+      type: comment.user?.type,
+      commentId: comment.id,
+    });
   }
 
   try {
@@ -34,6 +43,31 @@ export async function updateReviewComment(context: Context<"pull_request_review_
 
     const issueId = await ensurePullRequestIssue(context, pullRequest);
     const cleanedComment = removeAnnotateFootnotes(markdown);
+    const enrichedComment = buildReviewCommentMarkdown({
+      body: cleanedComment,
+      diff_hunk: comment.diff_hunk ?? null,
+      path: comment.path ?? null,
+      line: comment.line ?? null,
+      start_line: comment.start_line ?? null,
+      original_line: comment.original_line ?? null,
+      original_start_line: comment.original_start_line ?? null,
+      side: comment.side ?? null,
+      start_side: comment.start_side ?? null,
+    });
+    if (!enrichedComment) {
+      logger.error("Review comment body is empty", { comment });
+      return;
+    }
+    let finalMarkdown = enrichedComment;
+    const owner = payload.repository.owner.login;
+    const repo = payload.repository.name;
+    const parentId = comment.in_reply_to_id ?? null;
+    if (parentId) {
+      const parentContext = await fetchParentReviewComment(context, owner, repo, parentId);
+      if (parentContext) {
+        finalMarkdown = formatReviewThreadContext(enrichedComment, parentContext.markdown, parentContext.author);
+      }
+    }
 
     if (config.demoFlag) {
       logger.info("Demo mode active - skipping review comment update in database", { comment: comment.id, comment_url: comment.html_url });
@@ -42,7 +76,7 @@ export async function updateReviewComment(context: Context<"pull_request_review_
 
     const queueSettings = getEmbeddingQueueSettings(context.env);
     await supabase.comment.updateComment(
-      { markdown: cleanedComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null, docType: "review_comment" },
+      { markdown: finalMarkdown, id, author_id: authorId, payload, isPrivate, issue_id: issueId ?? null, docType: "review_comment" },
       { deferEmbedding: queueSettings.enabled }
     );
     logger.ok("Successfully updated review comment", comment);

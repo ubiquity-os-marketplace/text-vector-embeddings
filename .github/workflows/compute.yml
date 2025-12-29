@@ -36,7 +36,7 @@ jobs:
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      KERNEL_PUBLIC_KEY: ${{ (endsWith(github.actor, '[bot]') && github.event.inputs.kernelPublicKey) || secrets.KERNEL_PUBLIC_KEY }}
+      KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
       DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
@@ -56,7 +56,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KERNEL_PUBLIC_KEY: ${{ (endsWith(github.actor, '[bot]') && github.event.inputs.kernelPublicKey) || secrets.KERNEL_PUBLIC_KEY }}
+          KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
           DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
           DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}

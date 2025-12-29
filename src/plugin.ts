@@ -5,6 +5,8 @@ import { updateCronState } from "./cron/workflow";
 import { addComments } from "./handlers/add-comments";
 import { addReviewComment } from "./handlers/add-review-comments";
 import { addIssue } from "./handlers/add-issue";
+import { addPullRequest } from "./handlers/add-pull-request";
+import { addPullRequestReview } from "./handlers/add-pull-request-review";
 import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
 import { deleteReviewComment } from "./handlers/delete-review-comments";
@@ -15,11 +17,13 @@ import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
 import { updateReviewComment } from "./handlers/update-review-comments";
 import { updateIssue } from "./handlers/update-issue";
+import { updatePullRequest } from "./handlers/update-pull-request";
+import { updatePullRequestReview } from "./handlers/update-pull-request-review";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
 import { isPluginEdit } from "./helpers/plugin-utils";
 import { Database } from "./types/database";
 import { Context } from "./types/index";
-import { isIssueCommentEvent, isIssueEvent, isPullRequestReviewCommentEvent } from "./types/typeguards";
+import { isIssueCommentEvent, isIssueEvent, isPullRequestEvent, isPullRequestReviewCommentEvent, isPullRequestReviewEvent } from "./types/typeguards";
 import { getEmbeddingQueueSettings } from "./utils/embedding-queue";
 
 export async function initAdapters(context: Context) {
@@ -71,6 +75,20 @@ export async function runPlugin(context: Context) {
         return await updateReviewComment(context as Context<"pull_request_review_comment.edited">);
       case "pull_request_review_comment.deleted":
         return await deleteReviewComment(context as Context<"pull_request_review_comment.deleted">);
+    }
+  } else if (isPullRequestReviewEvent(context)) {
+    switch (eventName) {
+      case "pull_request_review.submitted":
+        return await addPullRequestReview(context as Context<"pull_request_review.submitted">);
+      case "pull_request_review.edited":
+        return await updatePullRequestReview(context as Context<"pull_request_review.edited">);
+    }
+  } else if (isPullRequestEvent(context)) {
+    switch (eventName) {
+      case "pull_request.opened":
+        return await addPullRequest(context as Context<"pull_request.opened">);
+      case "pull_request.edited":
+        return await updatePullRequest(context as Context<"pull_request.edited">);
     }
   } else if (isIssueEvent(context)) {
     switch (eventName) {

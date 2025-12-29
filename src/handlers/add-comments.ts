@@ -1,6 +1,7 @@
 import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { removeAnnotateFootnotes } from "./annotate";
+import { ensurePullRequestIssue } from "./pull-request-review-utils";
 import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function addComments(context: Context<"issue_comment.created">) {
@@ -15,7 +16,8 @@ export async function addComments(context: Context<"issue_comment.created">) {
   const authorId = comment.user?.id || -1;
   const id = comment.node_id;
   const isPrivate = payload.repository.private;
-  const issueId = payload.issue.node_id;
+  const isPullRequestComment = !!payload.issue.pull_request;
+  let issueId = payload.issue.node_id;
 
   if (comment.user?.type !== "User") {
     logger.debug("Ignoring comment from non-human author", { author: comment.user?.login, type: comment.user?.type });
@@ -26,10 +28,10 @@ export async function addComments(context: Context<"issue_comment.created">) {
     if (!markdown) {
       logger.error("Comment body is empty");
     }
-    if (context.payload.issue.pull_request) {
-      logger.error("Comment is on a pull request");
-    }
-    if ((await supabase.issue.getIssue(issueId)) === null) {
+    if (isPullRequestComment) {
+      logger.debug("Issue comment is on a pull request; linking to PR document", { commentId: comment.id, pullRequestUrl: payload.issue.html_url });
+      issueId = (await ensurePullRequestIssue(context, payload.issue)) ?? issueId;
+    } else if ((await supabase.issue.getIssue(issueId)) === null) {
       logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
       await addIssue(context as unknown as Context<"issues.opened">);
     }

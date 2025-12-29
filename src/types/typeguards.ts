@@ -32,6 +32,24 @@ export function isPullRequestReviewCommentEvent(
 }
 
 /**
+ * Restricts the scope of `context` to the `pull_request_review.submitted` and `pull_request_review.edited` payloads.
+ *
+ * @param context The context object.
+ */
+export function isPullRequestReviewEvent(context: Context): context is Context<"pull_request_review.submitted" | "pull_request_review.edited"> {
+  return context.eventName === "pull_request_review.submitted" || context.eventName === "pull_request_review.edited";
+}
+
+/**
+ * Restricts the scope of `context` to the `pull_request.opened` and `pull_request.edited` payloads.
+ *
+ * @param context The context object.
+ */
+export function isPullRequestEvent(context: Context): context is Context<"pull_request.opened" | "pull_request.edited"> {
+  return context.eventName === "pull_request.opened" || context.eventName === "pull_request.edited";
+}
+
+/**
  * Restricts the scope of `context` to the `issues.opened`, `issues.edited`, `issues.deleted`, `issues.transferred`, and `issues.closed` payloads.
  *
  * @param context The context object.

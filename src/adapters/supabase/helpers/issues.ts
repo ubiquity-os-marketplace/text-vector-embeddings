@@ -66,7 +66,7 @@ export class Issue extends SuperSupabase {
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
-    const embeddingSource = docType === "issue" && !isShortIssue ? cleanedMarkdown : null;
+    const embeddingSource = !isShortIssue ? cleanedMarkdown : null;
     //First Check if the issue already exists
     const { data: existingData, error: existingError } = await this.supabase
       .from("documents")
@@ -127,7 +127,7 @@ export class Issue extends SuperSupabase {
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
-    const embeddingSource = docType === "issue" && !isShortIssue ? cleanedMarkdown : null;
+    const embeddingSource = !isShortIssue ? cleanedMarkdown : null;
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {

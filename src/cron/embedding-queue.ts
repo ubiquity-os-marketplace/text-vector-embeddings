@@ -45,6 +45,22 @@ function getNestedString(value: unknown, path: string[]): string | null {
   return typeof current === "string" ? current : null;
 }
 
+function getNestedNumber(value: unknown, path: string[]): number | null {
+  let current: unknown = value;
+  for (const key of path) {
+    if (!current || typeof current !== "object") {
+      return null;
+    }
+    current = (current as JsonRecord)[key];
+  }
+  return typeof current === "number" ? current : null;
+}
+
+function isReviewCommentThreadRoot(payload: unknown): boolean {
+  const parentId = getNestedNumber(payload, ["comment", "in_reply_to_id"]);
+  return parentId === null;
+}
+
 function getAuthorType(payload: unknown, docType: DocumentType): string | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -56,6 +72,9 @@ function getAuthorType(payload: unknown, docType: DocumentType): string | null {
       getNestedString(payload, ["pull_request", "user", "type"]) ??
       getNestedString(payload, ["sender", "type"])
     );
+  }
+  if (docType === "pull_request_review") {
+    return getNestedString(payload, ["review", "user", "type"]) ?? getNestedString(payload, ["sender", "type"]);
   }
 
   return getNestedString(payload, ["comment", "user", "type"]) ?? getNestedString(payload, ["sender", "type"]);
@@ -120,17 +139,22 @@ async function processPendingRows(params: {
     const docType = row.doc_type as DocumentType;
     const authorType = getAuthorType(row.payload, docType);
     if (authorType && authorType !== "User") {
-      logger.info("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
-      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
-      if (updateError) {
-        logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
+      const isBotRootReviewAllowed = docType === "review_comment" && isReviewCommentThreadRoot(row.payload);
+      if (!isBotRootReviewAllowed) {
+        logger.info("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
+        const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+        if (updateError) {
+          logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
+        }
+        continue;
       }
-      continue;
+      logger.info("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
     }
 
     const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
-    const minLength = docType === "issue" ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
-    if ((docType === "issue_comment" || docType === "review_comment") && isCommandLikeContent(cleaned)) {
+    const isIssueDoc = docType === "issue" || docType === "pull_request";
+    const minLength = isIssueDoc ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
+    if ((docType === "issue_comment" || docType === "review_comment" || docType === "pull_request_review") && isCommandLikeContent(cleaned)) {
       logger.info("Skipping embedding for command-like comment.", { label, id: row.id, docType });
       const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
@@ -182,7 +206,7 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
   const embedder = new VoyageEmbedding(clients.voyage, { logger } as unknown as Context);
 
   const issueResult = await processPendingRows({
-    docTypes: ["issue"],
+    docTypes: ["issue", "pull_request"],
     label: "issues",
     supabase: clients.supabase,
     embedder,
@@ -191,7 +215,7 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
   });
 
   const commentResult = await processPendingRows({
-    docTypes: ["issue_comment", "review_comment"],
+    docTypes: ["issue_comment", "review_comment", "pull_request_review"],
     label: "comments",
     supabase: clients.supabase,
     embedder,
