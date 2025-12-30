@@ -30,6 +30,15 @@ type QueueStats = {
 type JsonRecord = Record<string, unknown>;
 
 function isRateLimitError(error: unknown): boolean {
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const status = typeof record.status === "number" ? record.status : typeof record.statusCode === "number" ? record.statusCode : typeof record.httpStatus === "number" ? record.httpStatus : null;
+    const response = record.response as Record<string, unknown> | undefined;
+    const responseStatus = typeof response?.status === "number" ? response.status : null;
+    if (status === 429 || responseStatus === 429) {
+      return true;
+    }
+  }
   const message = error instanceof Error ? error.message : String(error ?? "");
   return message.toLowerCase().includes("rate limit");
 }
