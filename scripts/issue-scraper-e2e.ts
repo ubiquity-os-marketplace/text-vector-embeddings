@@ -53,7 +53,7 @@ function parseArgs(argv: string[]): CliOptions {
         options.token = readFlagValue(argv, index, arg);
         index += 1;
         break;
-      case "--limit":
+      case "--limit": {
         const limitValue = readFlagValue(argv, index, arg);
         const parsedLimit = Number(limitValue);
         if (!Number.isFinite(parsedLimit) || !Number.isInteger(parsedLimit) || parsedLimit <= 0) {
@@ -64,6 +64,7 @@ function parseArgs(argv: string[]): CliOptions {
         options.limit = parsedLimit;
         index += 1;
         break;
+      }
       case "--dry-run":
         options.dryRun = true;
         break;

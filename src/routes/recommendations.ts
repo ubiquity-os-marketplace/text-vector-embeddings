@@ -109,7 +109,7 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
         const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
         return { [url]: serializeMatchResult(result) };
       } catch (error) {
-        const errorInfo = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+        const errorInfo = error instanceof Error ? error : { stack: String(error) };
         logger.warn("Failed to process recommendations URL", { url, error: errorInfo });
         return { [url]: null };
       }

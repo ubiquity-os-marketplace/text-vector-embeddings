@@ -26,6 +26,11 @@ export interface IssueGraphqlResponse {
 
 type IssueNodeResponse = IssueGraphqlResponse | { node: null };
 
+type IssueCommentSummary = {
+  id: number;
+  body?: string | null;
+};
+
 function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
   return response.node !== null;
 }
@@ -44,11 +49,11 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   const { matchResultArray, sortedContributors } = result;
 
   // Fetch if any previous comment exists
-  const listIssues = await octokit.paginate(octokit.rest.issues.listComments, {
+  const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
     owner: payload.repository.owner.login,
     repo: payload.repository.name,
     issue_number: issue.number,
-  });
+  })) as IssueCommentSummary[];
 
   //Check if the comment already exists
   const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));

@@ -12,7 +12,7 @@ function normalizeError(error: unknown): Error | { stack: string } {
 }
 
 async function main() {
-  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
+  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context<"issues.edited">["logger"];
   let env;
   try {
     env = decodeEnv(process.env);
