@@ -26,6 +26,10 @@ export interface IssueGraphqlResponse {
 
 type IssueNodeResponse = IssueGraphqlResponse | { node: null };
 
+function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
+  return response.node !== null;
+}
+
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
   const { logger, octokit, payload } = context;
   const issue = payload.issue;
@@ -181,7 +185,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           `,
           { issueNodeId: issue.issue_id }
         );
-        if (!issueObject?.node) {
+        if (!hasIssueNode(issueObject)) {
           context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId: issue.issue_id });
           return null;
         }

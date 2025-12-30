@@ -53,12 +53,9 @@ DROP FUNCTION IF EXISTS find_similar_issues_to_match(VARCHAR, vector(1024), floa
 CREATE OR REPLACE FUNCTION find_similar_issues(current_id VARCHAR, query_embedding vector(1024), threshold float8, top_k INT)
 RETURNS TABLE(issue_id VARCHAR, similarity float8) AS $$
 DECLARE
-    current_quantized vector(1024);
     current_repo TEXT;
     current_org TEXT;
 BEGIN
-    current_quantized := query_embedding;
-
     SELECT
         payload->'repository'->>'name'::text,
         payload->'repository'->'owner'->>'login'::text
@@ -67,16 +64,20 @@ BEGIN
     WHERE id = current_id;
 
     RETURN QUERY
-    SELECT id AS issue_id,
-           ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.8 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-    FROM issues
-    WHERE id <> current_id
-        AND deleted_at IS NULL
-        AND embedding IS NOT NULL
-        AND COALESCE(payload->'repository'->>'name', '') = COALESCE(current_repo, '')
-        AND COALESCE(payload->'repository'->'owner'->>'login', '') = COALESCE(current_org, '')
-        AND ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.8 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
-    ORDER BY similarity DESC
+    SELECT sub.issue_id,
+           sub.similarity
+    FROM (
+        SELECT id AS issue_id,
+               ((0.8 * (1 - cosine_distance(query_embedding, embedding))) + 0.8 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
+        FROM issues
+        WHERE id <> current_id
+            AND deleted_at IS NULL
+            AND embedding IS NOT NULL
+            AND COALESCE(payload->'repository'->>'name', '') = COALESCE(current_repo, '')
+            AND COALESCE(payload->'repository'->'owner'->>'login', '') = COALESCE(current_org, '')
+    ) sub
+    WHERE sub.similarity > threshold
+    ORDER BY sub.similarity DESC
     LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;
@@ -85,73 +86,77 @@ CREATE OR REPLACE FUNCTION find_similar_comments(query_embedding vector(1024), t
 RETURNS TABLE(comment_id VARCHAR, similarity float8) AS $$
 BEGIN
     RETURN QUERY
-    SELECT id AS comment_id,
-           ((0.8 * (1 - cosine_distance(query_embedding, embedding))) + 0.8 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
-    FROM issue_comments
-    WHERE deleted_at IS NULL
-        AND embedding IS NOT NULL
-        AND ((0.8 * (1 - cosine_distance(query_embedding, embedding))) + 0.8 * (1 / (1 + l2_distance(query_embedding, embedding)))) > threshold
-    ORDER BY similarity DESC
+    SELECT sub.comment_id,
+           sub.similarity
+    FROM (
+        SELECT id AS comment_id,
+               ((0.8 * (1 - cosine_distance(query_embedding, embedding))) + 0.8 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
+        FROM issue_comments
+        WHERE deleted_at IS NULL
+            AND embedding IS NOT NULL
+    ) sub
+    WHERE sub.similarity > threshold
+    ORDER BY sub.similarity DESC
     LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION find_similar_issues_annotate(current_id VARCHAR, query_embedding vector(1024), threshold float8, top_k INT)
 RETURNS TABLE(issue_id VARCHAR, similarity float8) AS $$
-DECLARE
-    current_quantized vector(1024);
 BEGIN
-    current_quantized := query_embedding;
-
     RETURN QUERY
-    SELECT id AS issue_id,
-           ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-    FROM issues
-    WHERE id <> current_id
-        AND deleted_at IS NULL
-        AND embedding IS NOT NULL
-        AND ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
-    ORDER BY similarity DESC
+    SELECT sub.issue_id,
+           sub.similarity
+    FROM (
+        SELECT id AS issue_id,
+               ((0.7 * (1 - cosine_distance(query_embedding, embedding))) + 0.3 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
+        FROM issues
+        WHERE id <> current_id
+            AND deleted_at IS NULL
+            AND embedding IS NOT NULL
+    ) sub
+    WHERE sub.similarity > threshold
+    ORDER BY sub.similarity DESC
     LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION find_similar_comments_annotate(current_id VARCHAR, query_embedding vector(1024), threshold float8, top_k INT)
 RETURNS TABLE(comment_id VARCHAR, similarity float8) AS $$
-DECLARE
-    current_quantized vector(1024);
 BEGIN
-    current_quantized := query_embedding;
-
     RETURN QUERY
-    SELECT id AS comment_id,
-           ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-    FROM issue_comments
-    WHERE id <> current_id
-        AND deleted_at IS NULL
-        AND embedding IS NOT NULL
-        AND ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
-    ORDER BY similarity DESC
+    SELECT sub.comment_id,
+           sub.similarity
+    FROM (
+        SELECT id AS comment_id,
+               ((0.7 * (1 - cosine_distance(query_embedding, embedding))) + 0.3 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
+        FROM issue_comments
+        WHERE id <> current_id
+            AND deleted_at IS NULL
+            AND embedding IS NOT NULL
+    ) sub
+    WHERE sub.similarity > threshold
+    ORDER BY sub.similarity DESC
     LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION find_similar_issues_to_match(current_id VARCHAR, query_embedding vector(1024), threshold float8, top_k INT)
 RETURNS TABLE(issue_id VARCHAR, similarity float8) AS $$
-DECLARE
-    current_quantized vector(1024);
 BEGIN
-    current_quantized := query_embedding;
-
     RETURN QUERY
-    SELECT id AS issue_id,
-           ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.2 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
-    FROM issues
-    WHERE id <> current_id
-        AND deleted_at IS NULL
-        AND embedding IS NOT NULL
-        AND ((0.8 * (1 - cosine_distance(current_quantized, embedding))) + 0.2 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
-    ORDER BY similarity DESC
+    SELECT sub.issue_id,
+           sub.similarity
+    FROM (
+        SELECT id AS issue_id,
+               ((0.8 * (1 - cosine_distance(query_embedding, embedding))) + 0.2 * (1 / (1 + l2_distance(query_embedding, embedding)))) as similarity
+        FROM issues
+        WHERE id <> current_id
+            AND deleted_at IS NULL
+            AND embedding IS NOT NULL
+    ) sub
+    WHERE sub.similarity > threshold
+    ORDER BY sub.similarity DESC
     LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;

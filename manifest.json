@@ -1,7 +1,7 @@
 {
   "name": "Text Vector Embeddings",
   "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
-  "skipBotEvents": true,
+  "skipBotEvents": false,
   "commands": {
     "recommendation": {
       "ubiquity:example": "/recommendation @alice @bob",

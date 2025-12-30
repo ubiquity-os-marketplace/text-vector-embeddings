@@ -25,6 +25,16 @@ Env:
   SUPABASE_URL, SUPABASE_KEY, VOYAGEAI_API_KEY, and a GitHub token.`);
 }
 
+function readFlagValue(argv: string[], index: number, flag: string): string {
+  const value = argv[index + 1];
+  if (!value || value.startsWith("-")) {
+    console.error(`Missing value for ${flag}.`);
+    printUsage();
+    process.exit(1);
+  }
+  return value;
+}
+
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     user: "",
@@ -36,15 +46,22 @@ function parseArgs(argv: string[]): CliOptions {
     const arg = argv[index];
     switch (arg) {
       case "--user":
-        options.user = argv[index + 1] || "";
+        options.user = readFlagValue(argv, index, arg);
         index += 1;
         break;
       case "--token":
-        options.token = argv[index + 1];
+        options.token = readFlagValue(argv, index, arg);
         index += 1;
         break;
       case "--limit":
-        options.limit = Number(argv[index + 1]);
+        const limitValue = readFlagValue(argv, index, arg);
+        const parsedLimit = Number(limitValue);
+        if (!Number.isFinite(parsedLimit) || !Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+          console.error(`Invalid value for ${arg}: ${limitValue}`);
+          printUsage();
+          process.exit(1);
+        }
+        options.limit = parsedLimit;
         index += 1;
         break;
       case "--dry-run":

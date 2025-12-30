@@ -73,40 +73,46 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
         logger.warn("Failed to parse the GitHub url", { e });
         return { [url]: null };
       }
-      const appId = honoEnv.APP_ID;
-      const appPrivateKey = honoEnv.APP_PRIVATE_KEY;
-      let octokit;
+      try {
+        const appId = honoEnv.APP_ID;
+        const appPrivateKey = honoEnv.APP_PRIVATE_KEY;
+        let octokit;
 
-      if (!appId || !appPrivateKey) {
-        logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
-        octokit = deps.createOctokit();
-      } else {
-        octokit = await deps.getAuthenticatedOctokit({
-          appId,
-          appPrivateKey,
-          owner,
-          repo,
-        });
+        if (!appId || !appPrivateKey) {
+          logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
+          octokit = deps.createOctokit();
+        } else {
+          octokit = await deps.getAuthenticatedOctokit({
+            appId,
+            appPrivateKey,
+            owner,
+            repo,
+          });
+        }
+        const issue = await octokit.rest.issues.get({ owner, repo, issue_number: issueNumber });
+        const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
+        const ctx: Context<"issues.opened"> = {
+          eventName: "issues.opened",
+          command: null,
+          authToken: "",
+          commentHandler: new CommentHandler(),
+          payload: {
+            issue: issue.data,
+          } as Context<"issues.opened">["payload"],
+          octokit,
+          env: honoEnv as Context<"issues.opened">["env"],
+          config,
+          logger,
+          adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
+        };
+        ctx.adapters = await deps.initAdapters(ctx);
+        const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
+        return { [url]: serializeMatchResult(result) };
+      } catch (error) {
+        const errorInfo = error instanceof Error ? { message: error.message, stack: error.stack } : { message: String(error) };
+        logger.warn("Failed to process recommendations URL", { url, error: errorInfo });
+        return { [url]: null };
       }
-      const issue = await octokit.rest.issues.get({ owner, repo, issue_number: issueNumber });
-      const config = Value.Decode(pluginSettingsSchema, Value.Default(pluginSettingsSchema, {}));
-      const ctx: Context<"issues.opened"> = {
-        eventName: "issues.opened",
-        command: null,
-        authToken: "",
-        commentHandler: new CommentHandler(),
-        payload: {
-          issue: issue.data,
-        } as Context<"issues.opened">["payload"],
-        octokit,
-        env: honoEnv as Context<"issues.opened">["env"],
-        config,
-        logger,
-        adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
-      };
-      ctx.adapters = await deps.initAdapters(ctx);
-      const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
-      return { [url]: serializeMatchResult(result) };
     }
 
     const res = await Promise.all(urls.map(handleUrl));

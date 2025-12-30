@@ -38,11 +38,19 @@ async function main() {
     }
   }
 
+  const appIdRaw = process.env.APP_ID;
+  const appId = Number(appIdRaw);
+  const appPrivateKey = process.env.APP_PRIVATE_KEY ?? "";
+  if (!appIdRaw || Number.isNaN(appId) || !appPrivateKey) {
+    logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env; skipping cron run.");
+    return;
+  }
+
   const octokit = new customOctokit({
     authStrategy: createAppAuth,
     auth: {
-      appId: Number(process.env.APP_ID),
-      privateKey: process.env.APP_PRIVATE_KEY,
+      appId,
+      privateKey: appPrivateKey,
       installationId: process.env.APP_INSTALLATION_ID,
     },
   });
@@ -71,14 +79,14 @@ async function main() {
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
         auth: {
-          appId: Number(process.env.APP_ID),
-          privateKey: process.env.APP_PRIVATE_KEY,
+          appId,
+          privateKey: appPrivateKey,
           installationId: installation.data.id,
         },
       });
       const appAuth = createAppAuth({
-        appId: Number(process.env.APP_ID),
-        privateKey: process.env.APP_PRIVATE_KEY ?? "",
+        appId,
+        privateKey: appPrivateKey,
         installationId: installation.data.id,
       });
       const { token: authToken } = await appAuth({ type: "installation" });

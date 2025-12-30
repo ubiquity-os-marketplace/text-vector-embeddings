@@ -89,6 +89,53 @@ export type Database = {
           similarity: number;
         }[];
       };
+      find_similar_comments: {
+        Args: {
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          comment_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_issues_annotate: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          issue_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_comments_annotate: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          comment_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_issues_to_match: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          issue_id: string;
+          similarity: number;
+        }[];
+      };
       halfvec_avg: {
         Args: {
           "": number[];

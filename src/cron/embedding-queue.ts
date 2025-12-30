@@ -164,6 +164,10 @@ async function processPendingRows(params: {
     }
     if (!cleaned) {
       logger.warn("Skipping empty markdown embedding.", { label, id: row.id, docType });
+      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+      if (updateError) {
+        logger.error("Failed to clear markdown for empty content.", { label, id: row.id, updateError });
+      }
       continue;
     }
     if (isTooShort(cleaned, minLength)) {

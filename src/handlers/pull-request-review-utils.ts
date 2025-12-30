@@ -150,8 +150,9 @@ export async function fetchParentReviewComment(
     }
     return { markdown, author: data.user?.login ?? null };
   } catch (error) {
+    const normalizedError = error instanceof Error ? error : { stack: String(error) };
     context.logger.warn("Failed to fetch parent review comment", {
-      error,
+      error: normalizedError,
       parentId,
       owner,
       repo,
@@ -192,8 +193,7 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
   }
 
   if (isHumanAuthor && !markdown) {
-    logger.error("Pull request title/body is empty; skipping PR issue creation", { pullRequestUrl: pullRequest.html_url });
-    return id;
+    logger.warn("Pull request title/body is empty; storing issue without embeddings", { pullRequestUrl: pullRequest.html_url });
   }
 
   if (config.demoFlag) {
