@@ -44,7 +44,7 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
   };
 
   return async function recommendationsRoute(c: HonoContext) {
-    const urls = c.req.queries("issueUrls") as string[];
+    const urls = (c.req.queries("issueUrls") as string[] | undefined) ?? [];
     const users = ((c.req.queries("users") as string[] | undefined) ?? [])
       .flatMap((segment) => segment.split(/[\s,]+/))
       .map((user) => user.trim().replace(/^@/, ""))
