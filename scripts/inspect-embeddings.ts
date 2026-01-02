@@ -1,4 +1,3 @@
- 
 import { createClient } from "@supabase/supabase-js";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Database } from "../src/types/database";

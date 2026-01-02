@@ -3,9 +3,10 @@ import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { createCronDatabase } from "./database-handler";
 import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
+import { Context } from "@ubiquity-os/plugin-sdk";
 
 async function main() {
-  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO);
+  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context["logger"];
   const octokit = new customOctokit({
     authStrategy: createAppAuth,
     auth: {
@@ -19,8 +20,8 @@ async function main() {
   let env;
   try {
     env = decodeEnv(process.env);
-  } catch (error) {
-    logger.error("Missing required env for reprocess; skipping cron run.", { error });
+  } catch (err) {
+    logger.error("Missing required env for reprocess; skipping cron run.", { err });
     return;
   }
   const config = decodeConfig();
