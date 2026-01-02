@@ -170,7 +170,7 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
 
   const id = pullRequest.node_id ?? "";
   if (!id) {
-    logger.error("Pull request node_id is missing; cannot link review comment");
+    logger.warn("Pull request node_id is missing; cannot link review comment");
     return null;
   }
 
@@ -192,12 +192,12 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
   }
 
   if (isHumanAuthor && !markdown) {
-    logger.error("Pull request title/body is empty; skipping PR issue creation", { pullRequestUrl: pullRequest.html_url });
+    logger.warn("Pull request title/body is empty; skipping PR issue creation", { pullRequestUrl: pullRequest.html_url });
     return id;
   }
 
   if (config.demoFlag) {
-    logger.info("Demo mode active - skipping PR issue storage", { pullRequestUrl: pullRequest.html_url });
+    logger.debug("Demo mode active - skipping PR issue storage", { pullRequestUrl: pullRequest.html_url });
     return id;
   }
 

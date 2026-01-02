@@ -28,14 +28,14 @@ export async function addIssue(context: Context<"issues.opened">) {
 
   try {
     if (isHumanAuthor && !markdown) {
-      logger.error("Issue body is empty", { issue });
+      logger.warn("Issue body is empty", { issue });
       return;
     }
     const cleanedIssue = isHumanAuthor && markdown ? await cleanContent(context, markdown) : null;
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
+      logger.debug("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
       return;
     }
 

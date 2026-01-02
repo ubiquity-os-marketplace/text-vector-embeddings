@@ -28,7 +28,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
 
   try {
     if (isHumanAuthor && !markdown) {
-      logger.error("Issue body is empty");
+      logger.warn("Issue body is empty");
       return;
     }
     //clean issue by removing footnotes
@@ -36,7 +36,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
+      logger.debug("Demo mode active - skipping issue update in database", { issue: payload.issue.number, issue_url: payload.issue.html_url });
       return;
     }
 

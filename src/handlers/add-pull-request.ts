@@ -35,7 +35,7 @@ export async function addPullRequest(context: Context<"pull_request.opened">) {
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping pull request storage", { pullRequest: pullRequest.number, pull_request_url: pullRequest.html_url });
+      logger.debug("Demo mode active - skipping pull request storage", { pullRequest: pullRequest.number, pull_request_url: pullRequest.html_url });
       return;
     }
 

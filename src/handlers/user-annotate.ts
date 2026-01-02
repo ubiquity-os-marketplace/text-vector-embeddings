@@ -32,7 +32,7 @@ function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeo
   const lines: string[] = [">[!NOTE]", requestedLogins.length > 0 ? `>Recommendation results (filtered): ${formattedLogins}` : ">Recommendation results:"];
 
   if (!result.sortedContributors.length) {
-    lines.push("> _No suitable contributors found._");
+    lines.push("> No suitable contributors found.");
     return lines.join("\n");
   }
 
@@ -43,11 +43,16 @@ function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeo
         lines.push(match);
       }
     } else {
-      lines.push("> _No matches found._");
+      lines.push("> No matches found.");
     }
   }
 
   return lines.join("\n");
+}
+
+async function postCommandResponse(context: Context<"issue_comment.created">, body: string, forceTag = false) {
+  const options = forceTag ? { raw: true, commentKind: "command-response" } : { raw: true };
+  await context.commentHandler.postComment(context, context.logger.info(body), options);
 }
 
 export async function commandHandler(context: Context<"issue_comment.created">) {
@@ -73,27 +78,15 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
   }
 
   if (context.command.name === "recommendation") {
-    const issue = context.payload.issue;
-    const { owner, name: repo } = context.payload.repository;
     const requestedLogins = parseUserLogins(context.command.parameters.users);
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
-      await context.octokit.rest.issues.createComment({
-        owner: owner.login,
-        repo,
-        issue_number: issue.number,
-        body: ">[!NOTE]\n>_No suitable contributors found._",
-      });
+      await postCommandResponse(context, ">[!NOTE]\n> No suitable contributors found.");
       return;
     }
 
-    await context.octokit.rest.issues.createComment({
-      owner: owner.login,
-      repo,
-      issue_number: issue.number,
-      body: buildRecommendationComment(result, requestedLogins),
-    });
+    await postCommandResponse(context, buildRecommendationComment(result, requestedLogins));
   }
 }
 
@@ -130,26 +123,14 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
   }
 
   if (commandName === "recommendation") {
-    const issue = context.payload.issue;
-    const { owner, name: repo } = context.payload.repository;
     const requestedLogins = parseUserLoginsFromTokens(splitComment.slice(1));
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
-      await context.octokit.rest.issues.createComment({
-        owner: owner.login,
-        repo,
-        issue_number: issue.number,
-        body: ">[!NOTE]\n>_No suitable contributors found._",
-      });
+      await postCommandResponse(context, ">[!NOTE]\n> No suitable contributors found.", true);
       return;
     }
 
-    await context.octokit.rest.issues.createComment({
-      owner: owner.login,
-      repo,
-      issue_number: issue.number,
-      body: buildRecommendationComment(result, requestedLogins),
-    });
+    await postCommandResponse(context, buildRecommendationComment(result, requestedLogins), true);
   }
 }

@@ -69,7 +69,7 @@ export class Comment extends SuperSupabase {
       return;
     }
     if (existingData && existingData.length > 0) {
-      this.context.logger.error("Comment already exists", {
+      this.context.logger.warn("Comment already exists", {
         commentData: commentData,
       });
       return;
@@ -104,7 +104,7 @@ export class Comment extends SuperSupabase {
       });
       return;
     }
-    this.context.logger.info(`Comment created successfully with id: ${commentData.id}`, { data });
+    this.context.logger.ok(`Comment created successfully with id: ${commentData.id}`, { data });
   }
 
   async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
@@ -130,7 +130,7 @@ export class Comment extends SuperSupabase {
     }
     const comments = await this.getComment(commentData.id);
     if (comments && comments.length == 0) {
-      this.context.logger.info("Comment does not exist, creating a new one");
+      this.context.logger.debug("Comment does not exist, creating a new one");
       await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
     } else {
       const { error } = await this.supabase
@@ -158,7 +158,7 @@ export class Comment extends SuperSupabase {
         });
         return;
       }
-      this.context.logger.info("Comment updated successfully with id: " + commentData.id, {
+      this.context.logger.ok("Comment updated successfully with id: " + commentData.id, {
         commentData: {
           commentData,
           markdown: finalMarkdown,
@@ -204,7 +204,7 @@ export class Comment extends SuperSupabase {
       });
       return;
     }
-    this.context.logger.info("Comment deleted successfully with id: " + commentNodeId);
+    this.context.logger.ok("Comment deleted successfully with id: " + commentNodeId);
   }
 
   async findSimilarComments({ markdown, currentId, threshold }: FindSimilarCommentsParams): Promise<CommentSimilaritySearchResult[] | null> {
@@ -212,11 +212,11 @@ export class Comment extends SuperSupabase {
     try {
       const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
-        this.context.logger.warn("Skipping comment similarity search because text is empty after stripping comments.", { currentId });
+        this.context.logger.debug("Skipping comment similarity search because text is empty after stripping comments.", { currentId });
         return null;
       }
       if (isTooShort(embeddingSource, MIN_COMMENT_MARKDOWN_LENGTH)) {
-        this.context.logger.warn("Skipping comment similarity search because text is too short.", {
+        this.context.logger.debug("Skipping comment similarity search because text is too short.", {
           currentId,
           length: embeddingSource.length,
           minLength: MIN_COMMENT_MARKDOWN_LENGTH,

@@ -217,7 +217,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
       try {
         const author = issue.author?.login ? await fetchAuthor(context.octokit, issue.author.login) : null;
         if (!author || author.type !== "User") {
-          context.logger.info("Skipping issue from non-human author.", {
+          context.logger.debug("Skipping issue from non-human author.", {
             author: issue.author?.login ?? null,
             type: author?.type ?? null,
             issue: issue.number,

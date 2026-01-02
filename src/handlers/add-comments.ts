@@ -26,7 +26,7 @@ export async function addComments(context: Context<"issue_comment.created">) {
 
   try {
     if (!markdown) {
-      logger.error("Comment body is empty");
+      logger.warn("Comment body is empty");
     }
     if (isPullRequestComment) {
       logger.debug("Issue comment is on a pull request; linking to PR document", { commentId: comment.id, pullRequestUrl: payload.issue.html_url });
@@ -39,7 +39,7 @@ export async function addComments(context: Context<"issue_comment.created">) {
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping comment storage", { comment: comment.id, comment_url: comment.html_url });
+      logger.debug("Demo mode active - skipping comment storage", { comment: comment.id, comment_url: comment.html_url });
       return;
     }
 

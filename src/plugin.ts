@@ -95,7 +95,7 @@ export async function runPlugin(context: Context) {
       case "issues.opened":
         await addIssue(context as Context<"issues.opened">);
         if (shouldDeferEmbeddings) {
-          logger.info("Embedding queue enabled; skipping issue matching on open.");
+          logger.debug("Embedding queue enabled; skipping issue matching on open.");
         } else {
           await issueMatchingWithComment(context as Context<"issues.opened">);
         }
@@ -104,7 +104,7 @@ export async function runPlugin(context: Context) {
         if (isPluginEdit(context as Context<"issues.edited">)) {
           logger.info("Plugin edit detected, will run issue matching and checker.");
           if (shouldDeferEmbeddings) {
-            logger.info("Embedding queue enabled; skipping issue matching and dedupe on plugin edit.");
+            logger.debug("Embedding queue enabled; skipping issue matching and dedupe on plugin edit.");
           } else {
             await issueMatchingWithComment(context as Context<"issues.edited">);
             await issueDedupe(context as Context<"issues.edited">);
@@ -125,12 +125,12 @@ export async function runPlugin(context: Context) {
     }
   } else if (eventName == "issues.labeled") {
     if (shouldDeferEmbeddings) {
-      logger.info("Embedding queue enabled; skipping issue matching on label.");
+      logger.debug("Embedding queue enabled; skipping issue matching on label.");
       return;
     }
     return await issueMatchingWithComment(context as Context<"issues.labeled">);
   } else {
-    logger.error(`Unsupported event: ${eventName}`);
+    logger.warn(`Unsupported event: ${eventName}`);
     return;
   }
   await updateCronState(context);
