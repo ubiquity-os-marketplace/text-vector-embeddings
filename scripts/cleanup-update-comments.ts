@@ -1,4 +1,3 @@
- 
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { appendPluginUpdateComment, normalizeWhitespace, stripPluginUpdateComments } from "../src/utils/markdown-comments";
 
@@ -15,6 +14,11 @@ interface CliOptions {
   limit?: number;
   token?: string;
 }
+
+type IssueListItem = {
+  number: number;
+  pull_request?: unknown;
+};
 
 function printUsage(): void {
   console.log(`Usage:
@@ -133,12 +137,12 @@ async function main() {
   let issueNumbers = Array.from(new Set(options.issues));
 
   if (options.all) {
-    const issues = await octokit.paginate(octokit.rest.issues.listForRepo, {
+    const issues = (await octokit.paginate(octokit.rest.issues.listForRepo, {
       owner,
       repo,
       state: options.state,
       per_page: 100,
-    });
+    })) as IssueListItem[];
     issueNumbers = issues.filter((issue) => !issue.pull_request).map((issue) => issue.number);
     if (options.limit && options.limit > 0) {
       issueNumbers = issueNumbers.slice(0, options.limit);
