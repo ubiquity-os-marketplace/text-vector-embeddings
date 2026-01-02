@@ -15,9 +15,10 @@ import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
 import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { Database } from "../types/database";
+import { CronDatabase } from "./database-handler";
 
-type IssuePayload = Context<"issues.edited">["payload"]["issue"];
-type RepoPayload = Context<"issues.edited">["payload"]["repository"];
+type IssuePayload = unknown;
+type RepoPayload = unknown;
 
 export type ReprocessOptions = {
   updateIssue?: boolean;
@@ -31,7 +32,7 @@ type ReprocessClients = {
   voyage: VoyageAIClient;
 };
 
-class MemoryCronDatabase {
+class MemoryCronDatabase implements CronDatabase {
   private readonly _entries = new Map<string, number[]>();
 
   async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
@@ -123,6 +124,7 @@ export async function createReprocessContext(params: {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
+    authToken: "",
     payload: {
       issue: params.issue,
       repository: params.repository,

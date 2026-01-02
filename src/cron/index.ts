@@ -20,7 +20,7 @@ async function main() {
   try {
     env = decodeEnv(process.env);
   } catch (error) {
-    logger.error("Missing required env for reprocess; skipping cron run.", { error });
+    logger.error("Missing required env for reprocess; skipping cron run.", { error: error as Error });
     return;
   }
   const config = decodeConfig();
