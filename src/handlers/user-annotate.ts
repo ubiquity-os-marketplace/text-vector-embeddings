@@ -38,10 +38,14 @@ function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeo
   return lines.join("\n");
 }
 
+function isIssueCommentCreatedEvent(context: Context): context is Context<"issue_comment.created"> {
+  return context.eventName === "issue_comment.created";
+}
+
 export async function commandHandler(context: Context) {
   const { logger } = context;
 
-  if (context.eventName !== "issue_comment.created") {
+  if (!isIssueCommentCreatedEvent(context)) {
     return;
   }
 
