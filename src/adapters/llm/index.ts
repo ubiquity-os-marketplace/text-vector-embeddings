@@ -32,7 +32,7 @@ export class LlmAdapter {
       async () => {
         const imageData = await linkResponse.arrayBuffer();
         const linkContent = Buffer.from(imageData).toString("base64");
-        this.context.logger.debug("Analyzing image", {
+        this.context.logger.info("Analyzing image", {
           href: linkResponse.url,
         });
         const response = await callLlm(
@@ -68,15 +68,15 @@ export class LlmAdapter {
 
         const content = response.choices?.[0]?.message?.content;
         if (typeof content !== "string" || !content.trim()) {
-          throw this.context.logger.warn("Failed to get a completion from the LLM.");
+          throw this.context.logger.error("Failed to get a completion from the LLM.");
         }
-        this.context.logger.debug("LLM response", { response });
+        this.context.logger.info("LLM response", { response });
         return String(content);
       },
       {
         maxRetries: LlmAdapter._defaultMaxRetries,
         onError(e) {
-          logger.warn("Failed to create a completion using the LLM.", {
+          logger.error("Failed to create a completion using the LLM.", {
             e,
           });
         },

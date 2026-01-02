@@ -171,7 +171,7 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
 
   const id = pullRequest.node_id ?? "";
   if (!id) {
-    logger.error("Pull request node_id is missing; cannot link review comment");
+    logger.warn("Pull request node_id is missing; cannot link review comment");
     return null;
   }
 
@@ -197,7 +197,7 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
   }
 
   if (config.demoFlag) {
-    logger.info("Demo mode active - skipping PR issue storage", { pullRequestUrl: pullRequest.html_url });
+    logger.debug("Demo mode active - skipping PR issue storage", { pullRequestUrl: pullRequest.html_url });
     return id;
   }
 

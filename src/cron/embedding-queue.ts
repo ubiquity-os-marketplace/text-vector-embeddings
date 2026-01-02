@@ -150,21 +150,21 @@ async function processPendingRows(params: {
     if (authorType && authorType !== "User") {
       const isBotRootReviewAllowed = docType === "review_comment" && isReviewCommentThreadRoot(row.payload);
       if (!isBotRootReviewAllowed) {
-        logger.info("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
+        logger.debug("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
         const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
         if (updateError) {
           logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
         }
         continue;
       }
-      logger.info("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
+      logger.debug("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
     }
 
     const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
     const isIssueDoc = docType === "issue" || docType === "pull_request";
     const minLength = isIssueDoc ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
     if ((docType === "issue_comment" || docType === "review_comment" || docType === "pull_request_review") && isCommandLikeContent(cleaned)) {
-      logger.info("Skipping embedding for command-like comment.", { label, id: row.id, docType });
+      logger.debug("Skipping embedding for command-like comment.", { label, id: row.id, docType });
       const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
         logger.error("Failed to clear markdown for command-like comment.", { label, id: row.id, updateError });
@@ -180,7 +180,7 @@ async function processPendingRows(params: {
       continue;
     }
     if (isTooShort(cleaned, minLength)) {
-      logger.info("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
+      logger.debug("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
       const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
       if (updateError) {
         logger.error("Failed to clear markdown for short content.", { label, id: row.id, updateError });

@@ -17,7 +17,7 @@ async function main() {
   try {
     env = decodeEnv(process.env);
   } catch (error) {
-    logger.error("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
+    logger.warn("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
     return;
   }
   const config = decodeConfig();
@@ -26,7 +26,7 @@ async function main() {
 
   try {
     const queueResult = await processPendingEmbeddings({ env, clients, logger });
-    logger.info("Embedding queue processed", queueResult);
+    logger.ok("Embedding queue processed", queueResult);
     if (queueResult.stoppedEarly) {
       logger.warn("Embedding queue stopped early due to rate limiting; skipping reprocess run.");
       return;
@@ -58,7 +58,7 @@ async function main() {
   const db = await createCronDatabase();
   const repositories = await db.getAllRepositories();
 
-  logger.info(`Loaded KV data.`, {
+  logger.ok(`Loaded KV data.`, {
     repositories: repositories.length,
   });
 
@@ -103,7 +103,7 @@ async function main() {
             issue_number: issueNumber,
           });
           if (issue.pull_request) {
-            logger.info("Skipping pull request entry in cron list", { owner, repo, issueNumber });
+            logger.debug("Skipping pull request entry in cron list", { owner, repo, issueNumber });
             await db.removeIssue(url);
             continue;
           }

@@ -81,7 +81,7 @@ export class Issue extends SuperSupabase {
       return;
     }
     if (existingData && existingData.length > 0) {
-      this.context.logger.error("Issue already exists", {
+      this.context.logger.warn("Issue already exists", {
         issueData: issueData,
       });
       return;
@@ -118,7 +118,7 @@ export class Issue extends SuperSupabase {
       });
       return;
     }
-    this.context.logger.info(`Issue created successfully with id: ${issueData.id}`, { data });
+    this.context.logger.ok(`Issue created successfully with id: ${issueData.id}`, { data });
   }
 
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
@@ -143,7 +143,7 @@ export class Issue extends SuperSupabase {
 
     const issues = await this.getIssue(issueData.id);
     if (!issues || issues.length === 0) {
-      this.context.logger.info("Issue does not exist, creating a new one");
+      this.context.logger.debug("Issue does not exist, creating a new one");
       await this.createIssue({ ...issueData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
       return;
     }
@@ -174,7 +174,7 @@ export class Issue extends SuperSupabase {
       return;
     }
 
-    this.context.logger.info("Issue updated successfully with id: " + issueData.id, {
+    this.context.logger.ok("Issue updated successfully with id: " + issueData.id, {
       issueData: {
         id: issueData.id,
         markdown: finalMarkdown,
@@ -209,7 +209,7 @@ export class Issue extends SuperSupabase {
       this.context.logger.error("Error deleting issue", { err: error });
       return;
     }
-    this.context.logger.info("Issue deleted successfully with id: " + issueNodeId);
+    this.context.logger.ok("Issue deleted successfully with id: " + issueNodeId);
   }
 
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
@@ -217,11 +217,11 @@ export class Issue extends SuperSupabase {
     try {
       const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
-        this.context.logger.warn("Skipping issue similarity search because text is empty after stripping comments.", { currentId });
+        this.context.logger.debug("Skipping issue similarity search because text is empty after stripping comments.", { currentId });
         return null;
       }
       if (isTooShort(embeddingSource, MIN_ISSUE_MARKDOWN_LENGTH)) {
-        this.context.logger.warn("Skipping issue similarity search because text is too short.", {
+        this.context.logger.debug("Skipping issue similarity search because text is too short.", {
           currentId,
           length: embeddingSource.length,
           minLength: MIN_ISSUE_MARKDOWN_LENGTH,
@@ -262,11 +262,11 @@ export class Issue extends SuperSupabase {
     try {
       const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
-        this.context.logger.warn("Skipping issue match search because text is empty after stripping comments.", { currentId });
+        this.context.logger.debug("Skipping issue match search because text is empty after stripping comments.", { currentId });
         return null;
       }
       if (isTooShort(embeddingSource, MIN_ISSUE_MARKDOWN_LENGTH)) {
-        this.context.logger.warn("Skipping issue match search because text is too short.", {
+        this.context.logger.debug("Skipping issue match search because text is too short.", {
           currentId,
           length: embeddingSource.length,
           minLength: MIN_ISSUE_MARKDOWN_LENGTH,

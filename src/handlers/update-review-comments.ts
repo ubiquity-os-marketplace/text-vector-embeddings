@@ -33,11 +33,11 @@ export async function updateReviewComment(context: Context<"pull_request_review_
 
   try {
     if (!markdown) {
-      logger.error("Review comment body is empty", { comment });
+      logger.warn("Review comment body is empty", { comment });
       return;
     }
     if (!pullRequest) {
-      logger.error("Pull request payload missing; cannot update review comment", { commentId: comment.id });
+      logger.warn("Pull request payload missing; cannot update review comment", { commentId: comment.id });
       return;
     }
 
@@ -55,7 +55,7 @@ export async function updateReviewComment(context: Context<"pull_request_review_
       start_side: comment.start_side ?? null,
     });
     if (!enrichedComment) {
-      logger.error("Review comment body is empty", { comment });
+      logger.warn("Review comment body is empty", { comment });
       return;
     }
     let finalMarkdown = enrichedComment;
@@ -70,7 +70,7 @@ export async function updateReviewComment(context: Context<"pull_request_review_
     }
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping review comment update in database", { comment: comment.id, comment_url: comment.html_url });
+      logger.debug("Demo mode active - skipping review comment update in database", { comment: comment.id, comment_url: comment.html_url });
       return;
     }
 

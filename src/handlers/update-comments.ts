@@ -27,7 +27,7 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
   // Fetch the previous comment and update it in the db
   try {
     if (!markdown) {
-      logger.error("Comment body is empty");
+      logger.warn("Comment body is empty");
     }
     if (isPullRequestComment) {
       logger.debug("Issue comment update is on a pull request; linking to PR document", {
@@ -50,7 +50,7 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
       });
     }
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping comment update in database", { comment: payload.comment.id, comment_url: payload.comment.html_url });
+      logger.debug("Demo mode active - skipping comment update in database", { comment: payload.comment.id, comment_url: payload.comment.html_url });
       return;
     }
 

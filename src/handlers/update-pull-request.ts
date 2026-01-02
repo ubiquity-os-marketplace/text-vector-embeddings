@@ -35,7 +35,7 @@ export async function updatePullRequest(context: Context<"pull_request.edited">)
     const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping pull request update in database", { pullRequest: pullRequest.number, pull_request_url: pullRequest.html_url });
+      logger.debug("Demo mode active - skipping pull request update in database", { pullRequest: pullRequest.number, pull_request_url: pullRequest.html_url });
       return;
     }
 

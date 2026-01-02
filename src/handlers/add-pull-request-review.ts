@@ -14,7 +14,7 @@ export async function addPullRequestReview(context: Context<"pull_request_review
   const pullRequest = payload.pull_request;
 
   if (!review) {
-    logger.error("Pull request review payload is missing", { payload });
+    logger.warn("Pull request review payload is missing", { payload });
     return;
   }
 
@@ -25,7 +25,7 @@ export async function addPullRequestReview(context: Context<"pull_request_review
 
   try {
     if (!pullRequest) {
-      logger.error("Pull request payload missing; cannot store review summary", { reviewId: review.id });
+      logger.warn("Pull request payload missing; cannot store review summary", { reviewId: review.id });
       return;
     }
 
@@ -33,12 +33,12 @@ export async function addPullRequestReview(context: Context<"pull_request_review
     const cleanedBody = removeAnnotateFootnotes(review.body ?? "");
     const reviewMarkdown = buildPullRequestReviewMarkdown({ body: cleanedBody, state: review.state ?? null }, pullRequest);
     if (!reviewMarkdown) {
-      logger.error("Review summary is empty", { review });
+      logger.warn("Review summary is empty", { review });
       return;
     }
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping pull request review storage", { review: review.id, review_url: review.html_url });
+      logger.debug("Demo mode active - skipping pull request review storage", { review: review.id, review_url: review.html_url });
       return;
     }
 
