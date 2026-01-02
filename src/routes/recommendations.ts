@@ -6,7 +6,7 @@ import { Context as HonoContext } from "hono";
 import { env } from "hono/adapter";
 import { createAdapters } from "../adapters/index";
 import { getAuthenticatedOctokit } from "../cron/workflow";
-import { issueMatching } from "../handlers/issue-matching";
+import { issueMatching, issueMatchingForUsers } from "../handlers/issue-matching";
 import { parseGitHubUrl } from "../helpers/github";
 import { initAdapters } from "../plugin";
 import { Context, envSchema, pluginSettingsSchema } from "../types/index";
@@ -26,8 +26,23 @@ function getValidatedEnv(c: HonoContext) {
 
 export async function recommendationsRoute(c: HonoContext) {
   const urls = c.req.queries("issueUrls") as string[];
+  const users = ((c.req.queries("users") as string[] | undefined) ?? [])
+    .flatMap((segment) => segment.split(/[\s,]+/))
+    .map((user) => user.trim().replace(/^@/, ""))
+    .filter(Boolean);
   const logger = new Logs("debug") as unknown as Context<"issues.opened">["logger"];
   const honoEnv = getValidatedEnv(c);
+
+  function serializeMatchResult(result: Awaited<ReturnType<typeof issueMatching>> | Awaited<ReturnType<typeof issueMatchingForUsers>>) {
+    if (!result) {
+      return null;
+    }
+    const matchResultArray = result.matchResultArray instanceof Map ? Object.fromEntries(result.matchResultArray.entries()) : result.matchResultArray;
+    return {
+      ...result,
+      matchResultArray,
+    };
+  }
 
   async function handleUrl(url: string) {
     let owner, repo, issueNumber;
@@ -71,8 +86,8 @@ export async function recommendationsRoute(c: HonoContext) {
       adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
     };
     ctx.adapters = await initAdapters(ctx);
-    const result = await issueMatching(ctx);
-    return { [url]: result };
+    const result = users.length > 0 ? await issueMatchingForUsers(ctx, users) : await issueMatching(ctx);
+    return { [url]: serializeMatchResult(result) };
   }
   const res = await Promise.all(urls.map(handleUrl));
   return new Response(JSON.stringify(res.reduce((acc, curr) => ({ ...acc, ...curr }), {})), { status: 200, headers: { "Content-Type": "application/json" } });

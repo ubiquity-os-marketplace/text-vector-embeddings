@@ -9,10 +9,6 @@ function escapeRegExp(value: string): string {
 
 const UPDATE_COMMENT_REGEX = new RegExp(`<!--\\s*${escapeRegExp(pkg.name)}\\s+update\\s+[^\\n]*?-->`, "g");
 
-export function buildPluginUpdateComment(timestamp: string): string {
-  return `<!-- ${pkg.name} update ${timestamp} -->`;
-}
-
 export function appendPluginUpdateComment(markdown: string, comment: string): string {
   const { cleaned } = stripPluginUpdateComments(markdown);
   const trimmed = cleaned.trimEnd();
@@ -99,14 +95,14 @@ export function stripHtmlComments(markdown: string): string {
   let buffer: string[] = [];
   const output: string[] = [];
 
-  const flushBuffer = (preserveComments: boolean) => {
+  function flushBuffer(preserveComments: boolean) {
     if (buffer.length === 0) {
       return;
     }
     const chunk = buffer.join("\n");
     output.push(preserveComments ? chunk : chunk.replace(HTML_COMMENT_REGEX, ""));
     buffer = [];
-  };
+  }
 
   for (const line of lines) {
     const fenceMatch = line.match(CODE_FENCE_REGEX);

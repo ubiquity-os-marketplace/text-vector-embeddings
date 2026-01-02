@@ -4,6 +4,7 @@ export const urlSchema = v.pipe(v.string(), v.url(), v.regex(/https:\/\/github\.
 
 export const querySchema = v.object({
   issueUrls: v.union([v.array(urlSchema), urlSchema]),
+  users: v.optional(v.union([v.array(v.string()), v.string()])),
 });
 
 export const responseSchema = v.record(

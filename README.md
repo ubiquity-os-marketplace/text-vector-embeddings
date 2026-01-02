@@ -23,6 +23,17 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
     jobMatchingThreshold: 0.75
 ```
 
+## Recommendations
+
+### HTTP API
+
+- `GET /recommendations?issueUrls=<github-issue-url>&users=alice&users=bob` (or `users=alice,bob`) returns recommendation data per issue URL.
+- `GET /recommendation` is an alias of `/recommendations`.
+
+### Command
+
+- Comment `/recommendation @alice @bob` on an issue to get recommendations filtered to those users (omit users for the global list).
+
 ## Testing Locally
 
 - Run `bun install` to install the dependencies.

@@ -2,6 +2,24 @@
   "name": "Text Vector Embeddings",
   "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
   "skipBotEvents": false,
+  "commands": {
+    "recommendation": {
+      "ubiquity:example": "/recommendation @alice @bob",
+      "description": "Returns recommended contributors for the current issue, optionally filtered to a list of GitHub usernames.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "description": "Optional list of GitHub usernames to filter recommendations to.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
   "ubiquity:listeners": [
     "issue_comment.created",
     "issue_comment.edited",
@@ -412,6 +430,6 @@
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-mai.deno.dev",
+  "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
   "short_name": "ubiquity-os-marketplace/text-vector-embeddings@main"
 }

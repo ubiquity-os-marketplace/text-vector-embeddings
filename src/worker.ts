@@ -60,7 +60,23 @@ export default {
     honoApp.get(
       "/recommendations",
       describeRoute({
-        description: "Get recommended users for a given issue url",
+        description: "Get recommended users for a given issue url (optionally filtered to a list of users)",
+        responses: {
+          200: {
+            description: "Successful response",
+            content: {
+              "application/json": { schema: resolver(responseSchema) },
+            },
+          },
+        },
+      }),
+      validator("query", querySchema),
+      recommendationsRoute
+    );
+    honoApp.get(
+      "/recommendation",
+      describeRoute({
+        description: "Alias of /recommendations",
         responses: {
           200: {
             description: "Successful response",
