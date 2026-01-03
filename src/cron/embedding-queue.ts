@@ -27,20 +27,40 @@ type QueueStats = {
   stoppedEarly: boolean;
 };
 
+type PendingRow = {
+  id: string;
+  markdown: string | null;
+  modified_at: string | null;
+  payload: unknown;
+  doc_type: DocumentType;
+};
+
 type JsonRecord = Record<string, unknown>;
+
+const MAX_RATE_LIMIT_DELAY_MS = 60_000;
 
 function isRateLimitError(error: unknown): boolean {
   if (error && typeof error === "object") {
-    const record = error as Record<string, unknown>;
-    const status = typeof record.status === "number" ? record.status : typeof record.statusCode === "number" ? record.statusCode : typeof record.httpStatus === "number" ? record.httpStatus : null;
-    const response = record.response as Record<string, unknown> | undefined;
-    const responseStatus = typeof response?.status === "number" ? response.status : null;
-    if (status === 429 || responseStatus === 429) {
+    const statusCode =
+      getNestedNumber(error, ["statusCode"]) ??
+      getNestedNumber(error, ["status"]) ??
+      getNestedNumber(error, ["httpStatus"]) ??
+      getNestedNumber(error, ["response", "status"]);
+    if (statusCode === 429) {
+      return true;
+    }
+    const body = (error as JsonRecord).body;
+    const bodyMessage =
+      getNestedString(body, ["error", "message"]) ??
+      getNestedString(body, ["message"]) ??
+      getNestedString(body, ["error", "type"]) ??
+      getNestedString(body, ["error", "code"]);
+    if (bodyMessage && bodyMessage.toLowerCase().includes("rate")) {
       return true;
     }
   }
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return message.toLowerCase().includes("rate limit");
+  return message.toLowerCase().includes("rate limit") || message.toLowerCase().includes("rate_limit");
 }
 
 function getNestedString(value: unknown, path: string[]): string | null {
@@ -63,6 +83,33 @@ function getNestedNumber(value: unknown, path: string[]): number | null {
     current = (current as JsonRecord)[key];
   }
   return typeof current === "number" ? current : null;
+}
+
+function getRetryAfterMs(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+  const body = (error as JsonRecord).body;
+  const retryAfterSeconds =
+    getNestedNumber(body, ["retry_after"]) ??
+    getNestedNumber(body, ["error", "retry_after"]) ??
+    getNestedNumber(body, ["retryAfter"]) ??
+    getNestedNumber(body, ["error", "retryAfter"]);
+  if (retryAfterSeconds === null || !Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0) {
+    return null;
+  }
+  return Math.round(retryAfterSeconds * 1000);
+}
+
+function getRateLimitDelayMs(baseDelayMs: number, attempt: number, error: unknown): number {
+  const retryAfterMs = getRetryAfterMs(error);
+  if (retryAfterMs !== null) {
+    return retryAfterMs;
+  }
+  if (baseDelayMs <= 0) {
+    return 0;
+  }
+  return Math.min(baseDelayMs * Math.pow(2, attempt), MAX_RATE_LIMIT_DELAY_MS);
 }
 
 function isReviewCommentThreadRoot(payload: unknown): boolean {
@@ -104,15 +151,83 @@ async function createEmbeddingWithRetry(
       if (!isRateLimitError(error)) {
         throw error;
       }
-      logger.warn("Voyage rate limit hit while creating embedding.", { attempt: attempt + 1 });
+      const backoffMs = getRateLimitDelayMs(delayMs, attempt, error);
+      logger.warn("Voyage rate limit hit while creating embedding.", { attempt: attempt + 1, backoffMs });
       if (attempt >= maxRetries) {
         return null;
       }
-      await sleep(delayMs);
+      await sleep(backoffMs);
       attempt += 1;
     }
   }
   return null;
+}
+
+async function processPendingRow(params: {
+  row: PendingRow;
+  label: "issues" | "comments";
+  supabase: SupabaseClient<Database>;
+  embedder: VoyageEmbedding;
+  settings: ReturnType<typeof getEmbeddingQueueSettings>;
+  logger: QueueLogger;
+}): Promise<{ processed: boolean; stoppedEarly: boolean }> {
+  const { row, label, supabase, embedder, settings, logger } = params;
+  const docType = row.doc_type as DocumentType;
+  const authorType = getAuthorType(row.payload, docType);
+  if (authorType && authorType !== "User") {
+    const isBotRootReviewAllowed = docType === "review_comment" && isReviewCommentThreadRoot(row.payload);
+    if (!isBotRootReviewAllowed) {
+      logger.debug("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
+      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+      if (updateError) {
+        logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
+      }
+      return { processed: false, stoppedEarly: false };
+    }
+    logger.debug("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
+  }
+
+  const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
+  const isIssueDoc = docType === "issue" || docType === "pull_request";
+  const minLength = isIssueDoc ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
+  if ((docType === "issue_comment" || docType === "review_comment" || docType === "pull_request_review") && isCommandLikeContent(cleaned)) {
+    logger.debug("Skipping embedding for command-like comment.", { label, id: row.id, docType });
+    const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+    if (updateError) {
+      logger.error("Failed to clear markdown for command-like comment.", { label, id: row.id, updateError });
+    }
+    return { processed: false, stoppedEarly: false };
+  }
+  if (!cleaned) {
+    logger.warn("Skipping empty markdown embedding.", { label, id: row.id, docType });
+    const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+    if (updateError) {
+      logger.error("Failed to clear markdown for empty content.", { label, id: row.id, updateError });
+    }
+    return { processed: false, stoppedEarly: false };
+  }
+  if (isTooShort(cleaned, minLength)) {
+    logger.debug("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
+    const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
+    if (updateError) {
+      logger.error("Failed to clear markdown for short content.", { label, id: row.id, updateError });
+    }
+    return { processed: false, stoppedEarly: false };
+  }
+
+  const embedding = await createEmbeddingWithRetry(embedder, cleaned, settings.maxRetries, settings.delayMs, logger);
+  if (!embedding) {
+    return { processed: false, stoppedEarly: true };
+  }
+
+  const { error: updateError } = await supabase.from("documents").update({ embedding, modified_at: new Date().toISOString() }).eq("id", row.id);
+
+  if (updateError) {
+    logger.error("Failed to update embedding.", { label, id: row.id, updateError });
+    return { processed: false, stoppedEarly: false };
+  }
+
+  return { processed: true, stoppedEarly: false };
 }
 
 async function processPendingRows(params: {
@@ -143,68 +258,32 @@ async function processPendingRows(params: {
     return { processed: 0, stoppedEarly: false };
   }
 
+  const rows = (data as PendingRow[]).slice();
   let processed = 0;
-  for (const row of data) {
-    const docType = row.doc_type as DocumentType;
-    const authorType = getAuthorType(row.payload, docType);
-    if (authorType && authorType !== "User") {
-      const isBotRootReviewAllowed = docType === "review_comment" && isReviewCommentThreadRoot(row.payload);
-      if (!isBotRootReviewAllowed) {
-        logger.debug("Skipping embedding for non-human author.", { label, id: row.id, authorType, docType });
-        const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
-        if (updateError) {
-          logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
-        }
-        continue;
+  let shouldStopEarly = false;
+  const concurrency = Math.max(1, Math.min(settings.concurrency, rows.length));
+
+  async function worker() {
+    while (rows.length > 0 && !shouldStopEarly) {
+      const row = rows.shift();
+      if (!row) {
+        return;
       }
-      logger.debug("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
-    }
-
-    const cleaned = cleanMarkdown(typeof row.markdown === "string" ? row.markdown : null);
-    const isIssueDoc = docType === "issue" || docType === "pull_request";
-    const minLength = isIssueDoc ? MIN_ISSUE_MARKDOWN_LENGTH : MIN_COMMENT_MARKDOWN_LENGTH;
-    if ((docType === "issue_comment" || docType === "review_comment" || docType === "pull_request_review") && isCommandLikeContent(cleaned)) {
-      logger.debug("Skipping embedding for command-like comment.", { label, id: row.id, docType });
-      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
-      if (updateError) {
-        logger.error("Failed to clear markdown for command-like comment.", { label, id: row.id, updateError });
+      const result = await processPendingRow({ row, label, supabase, embedder, settings, logger });
+      if (result.stoppedEarly) {
+        shouldStopEarly = true;
+        return;
       }
-      continue;
-    }
-    if (!cleaned) {
-      logger.warn("Skipping empty markdown embedding.", { label, id: row.id, docType });
-      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
-      if (updateError) {
-        logger.error("Failed to clear markdown for empty content.", { label, id: row.id, updateError });
+      if (result.processed) {
+        processed += 1;
+        await sleep(settings.delayMs);
       }
-      continue;
     }
-    if (isTooShort(cleaned, minLength)) {
-      logger.debug("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
-      const { error: updateError } = await supabase.from("documents").update({ markdown: null, modified_at: new Date().toISOString() }).eq("id", row.id);
-      if (updateError) {
-        logger.error("Failed to clear markdown for short content.", { label, id: row.id, updateError });
-      }
-      continue;
-    }
-
-    const embedding = await createEmbeddingWithRetry(embedder, cleaned, settings.maxRetries, settings.delayMs, logger);
-    if (!embedding) {
-      return { processed, stoppedEarly: true };
-    }
-
-    const { error: updateError } = await supabase.from("documents").update({ embedding, modified_at: new Date().toISOString() }).eq("id", row.id);
-
-    if (updateError) {
-      logger.error("Failed to update embedding.", { label, id: row.id, updateError });
-      continue;
-    }
-
-    processed += 1;
-    await sleep(settings.delayMs);
   }
 
-  return { processed, stoppedEarly: false };
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  return { processed, stoppedEarly: shouldStopEarly };
 }
 
 export async function processPendingEmbeddings(params: { env: Env; clients: QueueClients; logger: QueueLogger }): Promise<QueueStats> {
