@@ -5,26 +5,19 @@ import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 // GitHub usernames are 1-39 chars, alphanumeric or hyphen, no leading/trailing hyphen.
 const GITHUB_LOGIN_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 
-function normalizeUserLogins(segments: string[]): string[] {
+function parseUserLogins(value: string | string[] | undefined): string[] {
+  let segments: string[];
+  if (Array.isArray(value)) {
+    segments = value;
+  } else {
+    segments = typeof value === "string" ? [value] : [];
+  }
   return segments
+    .flatMap((segment) => segment.split(/\s+/))
     .flatMap((segment) => segment.split(","))
     .map((user) => user.trim().replace(/^@/, ""))
     .filter(Boolean)
     .filter((user) => GITHUB_LOGIN_REGEX.test(user));
-}
-
-// GitHub usernames cannot include whitespace or commas, so splitting is safe.
-function parseUserLogins(value: string | string[] | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-  const segments = Array.isArray(value) ? value : [value];
-  const expanded = segments.flatMap((segment) => segment.split(/\s+/));
-  return normalizeUserLogins(expanded);
-}
-
-function parseUserLoginsFromTokens(tokens: string[]): string[] {
-  return normalizeUserLogins(tokens);
 }
 
 function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeof issueMatching>>>, requestedLogins: string[]): string {
@@ -55,8 +48,16 @@ async function postCommandResponse(context: Context<"issue_comment.created">, bo
   await context.commentHandler.postComment(context, context.logger.info(body), options);
 }
 
-export async function commandHandler(context: Context<"issue_comment.created">) {
+function isIssueCommentCreatedEvent(context: Context): context is Context<"issue_comment.created"> {
+  return context.eventName === "issue_comment.created";
+}
+
+export async function commandHandler(context: Context) {
   const { logger } = context;
+
+  if (!isIssueCommentCreatedEvent(context)) {
+    return;
+  }
 
   if (!context.command) {
     return;
@@ -78,7 +79,9 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
   }
 
   if (context.command.name === "recommendation") {
-    const requestedLogins = parseUserLogins(context.command.parameters.users);
+    const requestedLoginsFromParams = parseUserLogins(context.command.parameters.users);
+    const requestedLogins =
+      requestedLoginsFromParams.length > 0 ? requestedLoginsFromParams : parseUserLogins(context.payload.comment.body.trim().split(/\s+/).slice(1));
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
@@ -123,7 +126,7 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
   }
 
   if (commandName === "recommendation") {
-    const requestedLogins = parseUserLoginsFromTokens(splitComment.slice(1));
+    const requestedLogins = parseUserLogins(splitComment.slice(1));
     const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
 
     if (!result) {
