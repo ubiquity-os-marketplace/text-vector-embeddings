@@ -1,6 +1,6 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
 
-export const annotateCommandSchema = T.Object({
+const annotateCommandSchema = T.Object({
   name: T.Literal("annotate"),
   parameters: T.Object({
     commentUrl: T.Optional(T.String()),
