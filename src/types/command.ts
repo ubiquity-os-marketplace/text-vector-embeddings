@@ -1,5 +1,4 @@
-import { Type as T } from "@sinclair/typebox";
-import { StaticDecode } from "@sinclair/typebox";
+import { StaticDecode, Type as T } from "@sinclair/typebox";
 
 export const annotateCommandSchema = T.Object({
   name: T.Literal("annotate"),

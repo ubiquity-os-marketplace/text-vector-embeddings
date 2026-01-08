@@ -1,12 +1,12 @@
-import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
+import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
 import { Embedding as VoyageEmbedding } from "../src/adapters/voyage/helpers/embedding";
 import { buildPullRequestMarkdown } from "../src/handlers/pull-request-review-utils";
-import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../src/utils/embedding-content";
 import { Database } from "../src/types/database";
 import type { Context } from "../src/types/index";
+import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../src/utils/embedding-content";
 
 type DocType = "issue" | "pull_request";
 

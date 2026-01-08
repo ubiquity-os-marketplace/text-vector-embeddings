@@ -1,14 +1,14 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { ConfigurationHandler } from "@ubiquity-os/plugin-sdk/configuration";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
+import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
-import { processPendingEmbeddings } from "./embedding-queue";
-import { createCronDatabase } from "./database-handler";
-import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
-import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
-import type { Context } from "../types/index";
 import manifest from "../../manifest.json" with { type: "json" };
+import type { Context } from "../types/index";
+import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
+import { createCronDatabase } from "./database-handler";
+import { processPendingEmbeddings } from "./embedding-queue";
+import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
 
 function normalizeError(error: unknown): Error | { stack: string } {
   return error instanceof Error ? error : { stack: String(error) };
