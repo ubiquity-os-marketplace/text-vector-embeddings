@@ -1,6 +1,6 @@
-import { RestEndpointMethodTypes } from "@octokit/plugin-rest-endpoint-methods";
 import { Value } from "@sinclair/typebox/value";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
+import type { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { SupabaseClient, createClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
@@ -18,8 +18,9 @@ import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from ".
 import { Database } from "../types/database";
 import { CronDatabaseClient } from "./database-handler";
 
-type IssuePayload = RestEndpointMethodTypes["issues"]["get"]["response"]["data"];
-type RepoPayload = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
+type Octokit = InstanceType<typeof customOctokit>;
+type IssuePayload = Awaited<ReturnType<Octokit["rest"]["issues"]["get"]>>["data"];
+type RepoPayload = Awaited<ReturnType<Octokit["rest"]["repos"]["get"]>>["data"];
 type ReprocessAdapters = ReturnType<typeof createReprocessAdapters>;
 type ReprocessContext = Omit<Context<"issues.edited">, "adapters"> & { adapters: ReprocessAdapters };
 

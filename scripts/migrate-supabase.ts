@@ -2,7 +2,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "../src/types/database";
 
 type TableSpec = {
-  name: "issues" | "issue_comments";
+  name: keyof Database["public"]["Tables"];
   orderBy: string;
 };
 
@@ -45,7 +45,7 @@ const target = createClient<Database>(targetUrl, targetKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function fetchCount(client: SupabaseClient<Database>, table: "issues" | "issue_comments"): Promise<number | null> {
+async function fetchCount(client: SupabaseClient<Database>, table: TableSpec["name"]): Promise<number | null> {
   const { count, error } = await client.from(table).select("id", { count: "exact", head: true });
   if (error) {
     console.error(`Failed to count ${table}:`, error.message);

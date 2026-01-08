@@ -118,12 +118,9 @@ async function main() {
             continue;
           }
 
-          const issuePayload = issue as Context<"issues.edited">["payload"]["issue"];
-          const repositoryPayload = repository as Context<"issues.edited">["payload"]["repository"];
-
           const context = await createReprocessContext({
-            issue: issuePayload,
-            repository: repositoryPayload,
+            issue,
+            repository,
             octokit: repoOctokit,
             authToken,
             env,
