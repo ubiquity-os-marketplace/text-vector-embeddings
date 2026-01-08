@@ -61,6 +61,8 @@ export class CronDatabase {
   }
 }
 
+export type CronDatabaseClient = Pick<CronDatabase, "getIssueNumbers" | "addIssue" | "removeIssue" | "updateIssue" | "getAllRepositories">;
+
 export async function createCronDatabase(): Promise<CronDatabase> {
   const kv = await Deno.openKv(process.env.DENO_KV_URL);
   return new CronDatabase(kv);

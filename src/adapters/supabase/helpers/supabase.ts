@@ -11,7 +11,7 @@ export class SuperSupabase {
   }
 
   async checkConnection(): Promise<boolean> {
-    const { error } = await this.supabase.from("issues").select("*").limit(1);
+    const { error } = await this.supabase.from("documents").select("*").limit(1);
     // If there's no error, the connection is working
     if (!error) {
       return true;

@@ -74,22 +74,6 @@ export default {
       recommendationsRoute
     );
     honoApp.get(
-      "/recommendation",
-      describeRoute({
-        description: "Alias of /recommendations",
-        responses: {
-          200: {
-            description: "Successful response",
-            content: {
-              "application/json": { schema: resolver(responseSchema) },
-            },
-          },
-        },
-      }),
-      validator("query", querySchema),
-      recommendationsRoute
-    );
-    honoApp.get(
       "/openapi",
       openAPIRouteHandler(honoApp, {
         documentation: {
