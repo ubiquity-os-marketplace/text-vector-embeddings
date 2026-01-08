@@ -14,6 +14,7 @@ export const envSchema = T.Object({
   DENO_KV_URL: T.Optional(T.String()),
   LOG_LEVEL: T.Optional(T.String()),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
+  UOS_AI_TOKEN: T.Optional(T.String()),
   APP_ID: T.Optional(T.String()),
   APP_PRIVATE_KEY: T.Optional(T.String()),
   EMBEDDINGS_QUEUE_ENABLED: T.Optional(T.String()),
