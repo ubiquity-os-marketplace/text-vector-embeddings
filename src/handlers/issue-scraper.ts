@@ -41,6 +41,7 @@ interface IssueNode {
   };
   repository: {
     id: string;
+    databaseId: number;
     name: string;
     owner: {
       login: string;
@@ -91,6 +92,7 @@ const SEARCH_ISSUES_QUERY = `
           }
           repository {
             id
+            databaseId
             name
             owner {
               login
@@ -194,6 +196,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
       logger: {
         info: (message: string, data: Record<string, unknown>) => console.log("INFO:", message + ":", data),
         error: (message: string, data: Record<string, unknown>) => console.error("ERROR:", message + ":", data),
+        debug: (message: string, data: Record<string, unknown>) => console.log("DEBUG:", message + ":", data),
       },
       octokit: new Octokit({ auth: authToken }),
     } as unknown as Context;
@@ -235,7 +238,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
           state: issue.state,
           stateReason: issue.stateReason,
           repositoryName: issue.repository.name,
-          repositoryId: parseInt(issue.repository.id),
+          repositoryId: issue.repository.databaseId,
           assignees: (issue.assignees?.nodes || []).map((assignee) => assignee.login),
           authorId,
           createdAt: issue.createdAt,
@@ -257,7 +260,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
             login: username,
           },
           repository: {
-            id: parseInt(issue.repository.id),
+            id: issue.repository.databaseId,
             node_id: issue.repository.id,
             name: issue.repository.name,
             full_name: `${repoOwner}/${issue.repository.name}`,
@@ -280,7 +283,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
           doc_type: "issue",
           parent_id: null,
           markdown: storedMarkdown,
-          embedding: embedding ? JSON.stringify(embedding) : null,
+          embedding: embedding ?? null,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,
           payload: payload,
@@ -300,7 +303,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
             state: issue.state,
             stateReason: issue.stateReason,
             repositoryName: issue.repository.name,
-            repositoryId: parseInt(issue.repository.id),
+            repositoryId: issue.repository.databaseId,
             assignees: [],
             authorId: -1,
             createdAt: issue.createdAt,

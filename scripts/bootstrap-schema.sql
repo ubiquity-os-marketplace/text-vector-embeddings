@@ -14,7 +14,7 @@ create table if not exists documents (
   embedding_status text not null default 'ready',
   embedding_model text,
   embedding_dim integer,
-  constraint documents_doc_type_check check (doc_type in ('issue', 'issue_comment', 'review_comment', 'pull_request')),
+  constraint documents_doc_type_check check (doc_type in ('issue', 'issue_comment', 'review_comment', 'pull_request', 'pull_request_review')),
   constraint documents_parent_id_fkey foreign key (parent_id) references documents(id) on delete cascade
 );
 
@@ -78,7 +78,7 @@ begin
          ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) as similarity
   from documents
   where id <> current_id
-    and doc_type in ('issue_comment', 'review_comment')
+    and doc_type in ('issue_comment', 'review_comment', 'pull_request_review')
     and ((0.7 * (1 - cosine_distance(current_quantized, embedding))) + 0.3 * (1 / (1 + l2_distance(current_quantized, embedding)))) > threshold
   order by similarity desc
   limit top_k;

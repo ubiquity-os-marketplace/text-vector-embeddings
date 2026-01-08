@@ -2,7 +2,7 @@ import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
 import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
-export async function addIssue(context: Context<"issues.opened">) {
+export async function addIssue(context: Context<"issues.opened" | "issue_comment.created" | "issue_comment.edited">) {
   const {
     logger,
     adapters: { supabase, kv },

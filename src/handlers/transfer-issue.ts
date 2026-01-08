@@ -13,7 +13,8 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
   const newIssueNodeId = new_issue.node_id;
   const authorType = new_issue.user?.type;
   const isHumanAuthor = authorType === "User";
-  let markdown = new_issue.body && new_issue.title ? new_issue.body + " " + new_issue.title : null;
+  const markdownParts = [new_issue.body?.trim() ?? "", new_issue.title?.trim() ?? ""].filter(Boolean);
+  let markdown = markdownParts.length > 0 ? markdownParts.join(" ") : null;
   const authorId = new_issue.user?.id || -1;
   const isPrivate = new_repository.private;
   const queueSettings = getEmbeddingQueueSettings(context.env);

@@ -31,9 +31,12 @@ export async function addComments(context: Context<"issue_comment.created">) {
     if (isPullRequestComment) {
       logger.debug("Issue comment is on a pull request; linking to PR document", { commentId: comment.id, pullRequestUrl: payload.issue.html_url });
       issueId = (await ensurePullRequestIssue(context, payload.issue)) ?? issueId;
-    } else if ((await supabase.issue.getIssue(issueId)) === null) {
-      logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
-      await addIssue(context as unknown as Context<"issues.opened">);
+    } else {
+      const existingIssue = await supabase.issue.getIssue(issueId);
+      if (!existingIssue || existingIssue.length === 0) {
+        logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
+        await addIssue(context);
+      }
     }
     const cleanComment = removeAnnotateFootnotes(markdown);
     const queueSettings = getEmbeddingQueueSettings(context.env);

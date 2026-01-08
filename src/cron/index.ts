@@ -43,8 +43,10 @@ async function main() {
   const appIdRaw = process.env.APP_ID;
   const appId = Number(appIdRaw);
   const appPrivateKey = process.env.APP_PRIVATE_KEY ?? "";
-  if (!appIdRaw || Number.isNaN(appId) || !appPrivateKey) {
-    logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env; skipping cron run.");
+  const appInstallationIdRaw = process.env.APP_INSTALLATION_ID;
+  const appInstallationId = Number(appInstallationIdRaw);
+  if (!appIdRaw || Number.isNaN(appId) || !appPrivateKey || !appInstallationIdRaw || Number.isNaN(appInstallationId)) {
+    logger.warn("APP_ID, APP_PRIVATE_KEY, or APP_INSTALLATION_ID are missing/invalid in the env; skipping cron run.");
     return;
   }
 
@@ -53,7 +55,7 @@ async function main() {
     auth: {
       appId,
       privateKey: appPrivateKey,
-      installationId: process.env.APP_INSTALLATION_ID,
+      installationId: appInstallationId,
     },
   });
 

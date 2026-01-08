@@ -126,7 +126,7 @@ export async function createReprocessContext(params: {
 }): Promise<Context<"issues.edited">> {
   const logger =
     (params.logger as Context<"issues.edited">["logger"]) ??
-    (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as unknown as Context<"issues.edited">["logger"]);
+    (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context<"issues.edited">["logger"]);
   const config = params.config ?? decodeConfig();
   const ctx: ReprocessContext = {
     eventName: "issues.edited",

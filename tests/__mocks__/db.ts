@@ -20,6 +20,7 @@ export const db = factory({
       login: String,
       id: Number,
       avatar_url: nullable(String),
+      type: nullable(String),
     },
     html_url: String,
     description: nullable(String),
@@ -102,7 +103,7 @@ export const db = factory({
       starred_at: String,
       starred_url: String,
       subscriptions_url: String,
-      type: String,
+      type: nullable(String),
       url: String,
     }),
     milestone: nullable({

@@ -35,9 +35,12 @@ export async function updateComment(context: Context<"issue_comment.edited">) {
         pullRequestUrl: payload.issue.html_url,
       });
       issueId = (await ensurePullRequestIssue(context, payload.issue)) ?? issueId;
-    } else if ((await supabase.issue.getIssue(issueId)) === null) {
-      logger.info("Parent issue not found, creating new issue");
-      await addIssue(context as unknown as Context<"issues.opened">);
+    } else {
+      const existingIssue = await supabase.issue.getIssue(issueId);
+      if (!existingIssue || existingIssue.length === 0) {
+        logger.info("Parent issue not found, creating new issue");
+        await addIssue(context);
+      }
     }
     const cleanedComment = removeAnnotateFootnotes(markdown);
     const queueSettings = getEmbeddingQueueSettings(context.env);

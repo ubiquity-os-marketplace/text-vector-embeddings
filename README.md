@@ -14,6 +14,12 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
 - `EMBEDDINGS_QUEUE_MAX_RETRIES`: Max retries on rate limits (default: 3).
 
+Cron GitHub App auth:
+
+- `APP_ID`: GitHub App ID.
+- `APP_PRIVATE_KEY`: GitHub App private key.
+- `APP_INSTALLATION_ID`: GitHub App installation ID.
+
 ## Usage
 
 - Add the following to your `.ubiquity-os.config.yml` file with the appropriate URL:
