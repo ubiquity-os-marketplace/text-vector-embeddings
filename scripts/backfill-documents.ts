@@ -463,7 +463,7 @@ async function fetchPullPage(
 
 async function upsertDocument(supabase: ReturnType<typeof createClient<Database>>, record: Record<string, unknown>, dryRun: boolean): Promise<void> {
   if (dryRun) return;
-  const { error } = await supabase.from("documents").upsert(record, { onConflict: "id" });
+  const { error } = await supabase.from("documents").upsert(record as unknown as Database["public"]["Tables"]["documents"]["Insert"], { onConflict: "id" });
   if (error) {
     throw new Error(`Supabase upsert failed: ${error.message}`);
   }
@@ -476,7 +476,10 @@ async function updateDocument(
   dryRun: boolean
 ): Promise<void> {
   if (dryRun) return;
-  const { error } = await supabase.from("documents").update(updates).eq("id", nodeId);
+  const { error } = await supabase
+    .from("documents")
+    .update(updates as unknown as Database["public"]["Tables"]["documents"]["Update"])
+    .eq("id", nodeId);
   if (error) {
     throw new Error(`Supabase update failed: ${error.message}`);
   }

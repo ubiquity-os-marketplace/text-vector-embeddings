@@ -167,8 +167,8 @@ async function main() {
       }
 
       const context = await createReprocessContext({
-        issue,
-        repository,
+        issue: issue as unknown as Context<"issues.edited">["payload"]["issue"],
+        repository: repository as unknown as Context<"issues.edited">["payload"]["repository"],
         octokit,
         env,
         config,
