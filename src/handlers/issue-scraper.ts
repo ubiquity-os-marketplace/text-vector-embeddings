@@ -175,7 +175,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
 
     const authToken = token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_PAT;
     if (!authToken) {
-      throw new Error("Missing GitHub token. Set GITHUB_TOKEN/GH_TOKEN or pass --token.");
+      throw new Error("Missing GitHub token. Set GITHUB_TOKEN/GH_TOKEN/GITHUB_PAT or pass --token.");
     }
 
     const limit = parseOptionalPositiveInt(process.env.ISSUE_SCRAPER_LIMIT);
