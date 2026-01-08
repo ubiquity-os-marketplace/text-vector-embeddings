@@ -1,11 +1,14 @@
 import { createAppAuth } from "@octokit/auth-app";
+import { ConfigurationHandler } from "@ubiquity-os/plugin-sdk/configuration";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { processPendingEmbeddings } from "./embedding-queue";
 import { createCronDatabase } from "./database-handler";
 import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
 import type { Context } from "../types/index";
+import manifest from "../../manifest.json" with { type: "json" };
 
 function normalizeError(error: unknown): Error | { stack: string } {
   return error instanceof Error ? error : { stack: String(error) };
@@ -20,7 +23,6 @@ async function main() {
     logger.warn("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
     return;
   }
-  const config = decodeConfig();
   const clients = createReprocessClients(env);
   const queueSettings = getEmbeddingQueueSettings(env);
 
@@ -84,6 +86,14 @@ async function main() {
           installationId: installation.data.id,
         },
       });
+
+      const configurationHandler = new ConfigurationHandler(logger, repoOctokit);
+      const repoConfig = await configurationHandler.getSelfConfiguration<Record<string, unknown>>(manifest as Pick<Manifest, "short_name">, {
+        owner,
+        repo,
+      });
+      const config = decodeConfig(repoConfig ?? {});
+
       const appAuth = createAppAuth({
         appId,
         privateKey: appPrivateKey,
