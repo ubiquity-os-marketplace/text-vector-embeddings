@@ -1,3 +1,4 @@
+import { RestEndpointMethodTypes } from "@octokit/plugin-rest-endpoint-methods";
 import { Value } from "@sinclair/typebox/value";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
@@ -17,8 +18,10 @@ import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from ".
 import { Database } from "../types/database";
 import { CronDatabaseClient } from "./database-handler";
 
-type IssuePayload = Context<"issues.edited">["payload"]["issue"];
-type RepoPayload = Context<"issues.edited">["payload"]["repository"];
+type IssuePayload = RestEndpointMethodTypes["issues"]["get"]["response"]["data"];
+type RepoPayload = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
+type ReprocessAdapters = ReturnType<typeof createReprocessAdapters>;
+type ReprocessContext = Omit<Context<"issues.edited">, "adapters"> & { adapters: ReprocessAdapters };
 
 export type ReprocessOptions = {
   updateIssue?: boolean;
@@ -120,9 +123,11 @@ export async function createReprocessContext(params: {
   logger?: Context<"issues.edited">["logger"];
   clients?: ReprocessClients;
 }): Promise<Context<"issues.edited">> {
-  const logger = params.logger ?? (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context<"issues.edited">["logger"]);
+  const logger =
+    (params.logger as Context<"issues.edited">["logger"]) ??
+    (new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as unknown as Context<"issues.edited">["logger"]);
   const config = params.config ?? decodeConfig();
-  const ctx: Context<"issues.edited"> = {
+  const ctx: ReprocessContext = {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
@@ -136,7 +141,7 @@ export async function createReprocessContext(params: {
     env: params.env,
     config,
     logger,
-    adapters: {} as Context<"issues.edited">["adapters"],
+    adapters: {} as ReprocessContext["adapters"],
   };
   const clients = params.clients ?? createReprocessClients(params.env);
   ctx.adapters = createReprocessAdapters(ctx, clients);

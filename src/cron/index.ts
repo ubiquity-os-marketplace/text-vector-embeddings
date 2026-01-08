@@ -15,12 +15,12 @@ function normalizeError(error: unknown): Error | { stack: string } {
 }
 
 async function main() {
-  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context<"issues.edited">["logger"];
+  const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context["logger"];
   let env;
   try {
     env = decodeEnv(process.env);
-  } catch (error) {
-    logger.warn("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
+  } catch (err) {
+    logger.error("Missing required env for reprocess; skipping cron run.", { err });
     return;
   }
   const clients = createReprocessClients(env);
