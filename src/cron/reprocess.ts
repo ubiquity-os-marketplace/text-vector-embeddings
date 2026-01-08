@@ -1,8 +1,8 @@
 import { Value } from "@sinclair/typebox/value";
+import { SupabaseClient, createClient } from "@supabase/supabase-js";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import type { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
-import { SupabaseClient, createClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
 import { LlmAdapter } from "../adapters/llm";
 import { Comment } from "../adapters/supabase/helpers/comment";
@@ -14,8 +14,8 @@ import { issueDedupe } from "../handlers/issue-deduplication";
 import { issueMatchingWithComment } from "../handlers/issue-matching";
 import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
-import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { Database } from "../types/database";
+import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { CronDatabaseClient } from "./database-handler";
 
 type Octokit = InstanceType<typeof customOctokit>;
