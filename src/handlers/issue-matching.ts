@@ -24,6 +24,17 @@ export interface IssueGraphqlResponse {
   similarity: number;
 }
 
+type IssueNodeResponse = IssueGraphqlResponse | { node: null };
+
+type IssueCommentSummary = {
+  id: number;
+  body?: string | null;
+};
+
+function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
+  return response.node !== null;
+}
+
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
   const { logger, octokit, payload } = context;
   const issue = payload.issue;
@@ -38,11 +49,11 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   const { matchResultArray, sortedContributors } = result;
 
   // Fetch if any previous comment exists
-  const listIssues = await octokit.paginate(octokit.rest.issues.listComments, {
+  const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
     owner: payload.repository.owner.login,
     repo: payload.repository.name,
     issue_number: issue.number,
-  });
+  })) as IssueCommentSummary[];
 
   //Check if the comment already exists
   const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
@@ -122,6 +133,16 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
     payload,
   } = context;
   const issue = payload.issue;
+  const authorType = issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  if (!isHumanAuthor) {
+    logger.debug("Skipping issue matching for non-human author.", {
+      author: issue.user?.login,
+      type: authorType,
+      issue: issue.number,
+    });
+    return null;
+  }
   const issueContent = issue.body + issue.title;
   const matchResultArray: Map<string, Array<string>> = new Map();
 
@@ -140,7 +161,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
     similarIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
     const fetchPromises = similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {
-        const issueObject: IssueGraphqlResponse = await context.octokit.graphql(
+        const issueObject: IssueNodeResponse = await context.octokit.graphql(
           /* GraphQL */
           `
             query ($issueNodeId: ID!) {
@@ -169,6 +190,10 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           `,
           { issueNodeId: issue.issue_id }
         );
+        if (!hasIssueNode(issueObject)) {
+          context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId: issue.issue_id });
+          return null;
+        }
         issueObject.similarity = issue.similarity;
         return issueObject;
       } catch (error) {

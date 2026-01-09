@@ -2,10 +2,9 @@ import { createClient } from "@supabase/supabase-js";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
-import { createAdapters } from "../adapters/index";
-import { markdownToPlainText } from "../adapters/utils/markdown-to-plaintext";
+import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
-
+import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 interface IssueMetadata {
   nodeId: string;
   number: number;
@@ -103,17 +102,36 @@ const SEARCH_ISSUES_QUERY = `
   }
 `;
 
-async function fetchAuthorId(octokit: InstanceType<typeof Octokit>, login: string): Promise<number> {
+function parseOptionalPositiveInt(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+  return parsed;
+}
+
+function parseBoolean(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+async function fetchAuthor(octokit: InstanceType<typeof Octokit>, login: string): Promise<{ id: number; type: string } | null> {
   try {
     const response = await octokit.rest.users.getByUsername({ username: login });
-    return response.data.id;
+    return { id: response.data.id, type: response.data.type ?? "User" };
   } catch (error) {
     console.error(`Error fetching author ID for ${login}:`, error);
-    return -1;
+    return null;
   }
 }
 
-async function fetchUserIssues(octokit: InstanceType<typeof Octokit>, username: string): Promise<IssueNode[]> {
+async function fetchUserIssues(octokit: InstanceType<typeof Octokit>, username: string, limit?: number): Promise<IssueNode[]> {
   const allIssues: IssueNode[] = [];
   let hasNextPage = true;
   let cursor: string | null = null;
@@ -133,6 +151,10 @@ async function fetchUserIssues(octokit: InstanceType<typeof Octokit>, username: 
     const completedIssues = response.search.nodes.filter((issue) => issue.stateReason === "COMPLETED");
     allIssues.push(...completedIssues);
 
+    if (limit && allIssues.length >= limit) {
+      return allIssues.slice(0, limit);
+    }
+
     hasNextPage = response.search.pageInfo.hasNextPage;
     cursor = response.search.pageInfo.endCursor;
 
@@ -149,7 +171,19 @@ export async function issueScraper(username: string, token?: string): Promise<st
       throw new Error("Username is required");
     }
 
-    const required = ["GITHUB_TOKEN", "SUPABASE_URL", "SUPABASE_KEY", "VOYAGEAI_API_KEY"];
+    const authToken = token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_PAT;
+    if (!authToken) {
+      throw new Error("Missing GitHub token. Set GITHUB_TOKEN/GH_TOKEN or pass --token.");
+    }
+
+    const limit = parseOptionalPositiveInt(process.env.ISSUE_SCRAPER_LIMIT);
+    const shouldDryRun = parseBoolean(process.env.ISSUE_SCRAPER_DRY_RUN);
+    const shouldSkipEmbeddings = parseBoolean(process.env.ISSUE_SCRAPER_SKIP_EMBEDDINGS);
+
+    const required = ["SUPABASE_URL", "SUPABASE_KEY"];
+    if (!shouldSkipEmbeddings) {
+      required.push("VOYAGEAI_API_KEY");
+    }
     const missing = required.filter((key) => !process.env[key]);
     if (missing.length > 0) {
       throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
@@ -161,27 +195,36 @@ export async function issueScraper(username: string, token?: string): Promise<st
         info: (message: string, data: Record<string, unknown>) => console.log("INFO:", message + ":", data),
         error: (message: string, data: Record<string, unknown>) => console.error("ERROR:", message + ":", data),
       },
-      octokit: new Octokit({ auth: token || process.env.GITHUB_TOKEN }),
+      octokit: new Octokit({ auth: authToken }),
     } as unknown as Context;
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_KEY;
     const voyageApiKey = process.env.VOYAGEAI_API_KEY;
 
-    if (!supabaseUrl || !supabaseKey || !voyageApiKey) {
+    if (!supabaseUrl || !supabaseKey || (!shouldSkipEmbeddings && !voyageApiKey)) {
       throw new Error("Required environment variables are missing");
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const voyageClient = new VoyageAIClient({ apiKey: voyageApiKey });
-    const adapters = await createAdapters(supabase, voyageClient, context);
+    const voyageClient = new VoyageAIClient({ apiKey: voyageApiKey ?? "" });
+    const voyageEmbedding = shouldSkipEmbeddings ? null : new VoyageEmbedding(voyageClient, context);
 
-    const issues = await fetchUserIssues(context.octokit, username);
+    const issues = await fetchUserIssues(context.octokit, username, limit);
     const processedIssues: Array<{ issue: IssueMetadata; error?: string }> = [];
 
     for (const issue of issues) {
       try {
-        const authorId = issue.author?.login ? await fetchAuthorId(context.octokit, issue.author.login) : -1;
+        const author = issue.author?.login ? await fetchAuthor(context.octokit, issue.author.login) : null;
+        if (!author || author.type !== "User") {
+          context.logger.debug("Skipping issue from non-human author.", {
+            author: issue.author?.login ?? null,
+            type: author?.type ?? null,
+            issue: issue.number,
+          });
+          continue;
+        }
+        const authorId = author.id;
         const repoOwner = issue.repository.owner.login;
 
         const metadata: IssueMetadata = {
@@ -201,8 +244,11 @@ export async function issueScraper(username: string, token?: string): Promise<st
         };
 
         const markdown = metadata.body + " " + metadata.title;
-        const plaintext = markdownToPlainText(markdown);
-        const embedding = await adapters.voyage.embedding.createEmbedding(plaintext);
+        const cleanedMarkdown = cleanMarkdown(markdown);
+        const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
+        const embedding =
+          shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown || isShortIssue ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
+        const storedMarkdown = isShortIssue ? null : markdown;
 
         const payload = {
           issue: metadata,
@@ -224,11 +270,17 @@ export async function issueScraper(username: string, token?: string): Promise<st
           },
         };
 
-        const { error } = await supabase.from("issues").upsert({
+        if (shouldDryRun) {
+          processedIssues.push({ issue: metadata });
+          continue;
+        }
+
+        const { error } = await supabase.from("documents").upsert({
           id: metadata.nodeId,
-          markdown,
-          plaintext,
-          embedding: JSON.stringify(embedding),
+          doc_type: "issue",
+          parent_id: null,
+          markdown: storedMarkdown,
+          embedding: embedding ? JSON.stringify(embedding) : null,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,
           payload: payload,

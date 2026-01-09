@@ -13,6 +13,11 @@ on:
         description: "Settings"
       authToken:
         description: "Auth Token"
+      ubiquityKernelToken:
+        description: "Kernel attestation token (optional)"
+      kernelPublicKey:
+        description: "Kernel public key PEM for signature verification (optional)"
+        required: false
       ref:
         description: "Ref"
       signature:
@@ -31,13 +36,12 @@ jobs:
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
+      KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
       DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -52,10 +56,9 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
+          KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
           DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
           DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}

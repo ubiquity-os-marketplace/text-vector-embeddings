@@ -9,6 +9,10 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `SUPABASE_URL`: The URL for your Supabase instance.
 - `SUPABASE_KEY`: The key for your Supabase instance.
 - `VOYAGEAI_API_KEY`: The API key for Voyage.
+- `EMBEDDINGS_QUEUE_ENABLED`: Enable deferred embedding processing via cron (default: true).
+- `EMBEDDINGS_QUEUE_BATCH_SIZE`: Max rows per cron batch (default: 50).
+- `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
+- `EMBEDDINGS_QUEUE_MAX_RETRIES`: Max retries on rate limits (default: 3).
 
 ## Usage
 

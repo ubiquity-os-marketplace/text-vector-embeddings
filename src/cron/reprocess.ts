@@ -16,6 +16,7 @@ import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
 import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { Database } from "../types/database";
+import { CronDatabaseClient } from "./database-handler";
 
 type IssuePayload = RestEndpointMethodTypes["issues"]["get"]["response"]["data"];
 type RepoPayload = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
@@ -34,7 +35,7 @@ type ReprocessClients = {
   voyage: VoyageAIClient;
 };
 
-class MemoryCronDatabase {
+class MemoryCronDatabase implements CronDatabaseClient {
   private readonly _entries = new Map<string, number[]>();
 
   async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
@@ -95,7 +96,8 @@ export function createReprocessClients(env: Env): ReprocessClients {
   };
 }
 
-export function createReprocessAdapters(context: Context, clients: ReprocessClients) {
+export function createReprocessAdapters(context: Context, clients: ReprocessClients): Context["adapters"] {
+  const kv: CronDatabaseClient = new MemoryCronDatabase();
   return {
     supabase: {
       comment: new Comment(clients.supabase, context),
@@ -106,7 +108,7 @@ export function createReprocessAdapters(context: Context, clients: ReprocessClie
       embedding: new VoyageEmbedding(clients.voyage, context),
       super: new SuperVoyage(clients.voyage, context),
     },
-    kv: new MemoryCronDatabase(),
+    kv,
     llm: new LlmAdapter(context),
   };
 }
@@ -115,6 +117,7 @@ export async function createReprocessContext(params: {
   issue: IssuePayload;
   repository: RepoPayload;
   octokit: Context<"issues.edited">["octokit"];
+  authToken?: string;
   env: Env;
   config?: PluginSettings;
   logger?: Context<"issues.edited">["logger"];
@@ -128,6 +131,7 @@ export async function createReprocessContext(params: {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
+    authToken: params.authToken ?? "",
     payload: {
       issue: params.issue,
       repository: params.repository,

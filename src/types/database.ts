@@ -3,82 +3,61 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
-      issue_comments: {
+      documents: {
         Row: {
           author_id: string;
           created_at: string;
-          embedding: string;
+          deleted_at: string | null;
+          doc_type: string;
+          embedding: number[] | null;
+          embedding_dim: number | null;
+          embedding_model: string | null;
+          embedding_status: string;
           id: string;
-          issue_id: string | null;
           markdown: string | null;
           modified_at: string;
+          parent_id: string | null;
           payload: Json | null;
-          plaintext: string | null;
         };
         Insert: {
           author_id: string;
           created_at?: string;
-          embedding: string;
+          deleted_at?: string | null;
+          doc_type: string;
+          embedding?: number[] | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string;
           id: string;
-          issue_id?: string | null;
           markdown?: string | null;
           modified_at?: string;
+          parent_id?: string | null;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Update: {
           author_id?: string;
           created_at?: string;
-          embedding?: string;
+          deleted_at?: string | null;
+          doc_type?: string;
+          embedding?: number[] | null;
+          embedding_dim?: number | null;
+          embedding_model?: string | null;
+          embedding_status?: string;
           id?: string;
-          issue_id?: string | null;
           markdown?: string | null;
           modified_at?: string;
+          parent_id?: string | null;
           payload?: Json | null;
-          plaintext?: string | null;
         };
         Relationships: [
           {
-            foreignKeyName: "issue_comments_issue_id_fkey";
-            columns: ["issue_id"];
+            foreignKeyName: "documents_parent_id_fkey";
+            columns: ["parent_id"];
             isOneToOne: false;
-            referencedRelation: "issues";
+            referencedRelation: "documents";
             referencedColumns: ["id"];
           },
         ];
-      };
-      issues: {
-        Row: {
-          author_id: string;
-          created_at: string;
-          embedding: string;
-          id: string;
-          markdown: string | null;
-          modified_at: string;
-          payload: Json | null;
-          plaintext: string | null;
-        };
-        Insert: {
-          author_id: string;
-          created_at?: string;
-          embedding: string;
-          id: string;
-          markdown?: string | null;
-          modified_at?: string;
-          payload?: Json | null;
-          plaintext?: string | null;
-        };
-        Update: {
-          author_id?: string;
-          created_at?: string;
-          embedding?: string;
-          id?: string;
-          markdown?: string | null;
-          modified_at?: string;
-          payload?: Json | null;
-          plaintext?: string | null;
-        };
-        Relationships: [];
       };
     };
     Views: {
@@ -101,13 +80,59 @@ export type Database = {
       find_similar_issues: {
         Args: {
           current_id: string;
-          query_embedding: string;
+          query_embedding: number[];
           threshold: number;
           top_k: number;
         };
         Returns: {
           issue_id: string;
-          issue_plaintext: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_comments: {
+        Args: {
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          comment_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_issues_annotate: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          issue_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_comments_annotate: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          comment_id: string;
+          similarity: number;
+        }[];
+      };
+      find_similar_issues_to_match: {
+        Args: {
+          current_id: string;
+          query_embedding: number[];
+          threshold: number;
+          top_k: number;
+        };
+        Returns: {
+          issue_id: string;
           similarity: number;
         }[];
       };

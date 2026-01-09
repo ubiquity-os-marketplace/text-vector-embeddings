@@ -11,6 +11,9 @@ const TABLES: TableSpec[] = [
   { name: "issue_comments", orderBy: "id" },
 ];
 
+const DEFAULT_BATCH_SIZE = 100;
+const MAX_BATCH_SIZE = 1000;
+
 function getEnv(name: string, fallbackName?: string): string {
   const value = process.env[name] ?? (fallbackName ? process.env[fallbackName] : undefined);
   if (!value) {
@@ -22,9 +25,9 @@ function getEnv(name: string, fallbackName?: string): string {
 }
 
 function parseBatchSize(raw: string | undefined): number {
-  const parsed = Number.parseInt(raw ?? "100", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    console.error(`Invalid BATCH_SIZE: ${raw}`);
+  const parsed = Number.parseInt(raw ?? String(DEFAULT_BATCH_SIZE), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_BATCH_SIZE) {
+    console.error(`Invalid BATCH_SIZE: ${raw}. Use an integer between 1 and ${MAX_BATCH_SIZE}.`);
     process.exit(1);
   }
   return parsed;
@@ -100,8 +103,13 @@ async function copyTable({ name, orderBy }: TableSpec): Promise<void> {
     `Finished ${name}. Source=${sourceCount ?? "unknown"} TargetBefore=${targetCountBefore ?? "unknown"} TargetAfter=${targetCountAfter ?? "unknown"}`
   );
 
-  if (!isDryRun && sourceCount !== null && targetCountAfter !== null && targetCountAfter < sourceCount) {
-    throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+  if (!isDryRun && sourceCount !== null && targetCountAfter !== null) {
+    if (targetCountAfter < sourceCount) {
+      throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
+    if (targetCountAfter > sourceCount) {
+      console.warn(`Target row count exceeds source for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
   }
 }
 

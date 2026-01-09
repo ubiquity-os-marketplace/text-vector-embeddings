@@ -1,16 +1,19 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
-import { markdownToPlainText } from "../../utils/markdown-to-plaintext";
-import { stripHtmlComments } from "../../../utils/markdown-comments";
+import { COMMENT_DOCUMENT_TYPES, CommentDocumentType } from "../../../types/document";
+import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
+import { isCommandLikeContent } from "../../../utils/markdown-comments";
 
 export interface CommentType {
   id: string;
+  doc_type?: string;
   markdown?: string;
   author_id: number;
   created_at: string;
   modified_at: string;
-  embedding: number[];
+  embedding: number[] | null;
+  deleted_at?: string | null;
 }
 
 export interface CommentData {
@@ -19,7 +22,12 @@ export interface CommentData {
   author_id: number;
   payload: Record<string, unknown> | null;
   isPrivate: boolean;
-  issue_id: string;
+  issue_id: string | null;
+  docType?: CommentDocumentType;
+}
+
+export interface CommentWriteOptions {
+  deferEmbedding?: boolean;
 }
 
 export interface CommentSimilaritySearchResult {
@@ -38,10 +46,21 @@ export class Comment extends SuperSupabase {
     super(supabase, context);
   }
 
-  async createComment(commentData: CommentData) {
+  async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = commentData.docType ?? "issue_comment";
+    const cleanedMarkdown = cleanMarkdown(commentData.markdown);
+    const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
+    const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
+    const shouldSkipEmbedding = isCommandComment || isShortComment;
+    const embeddingSource = shouldSkipEmbedding ? null : cleanedMarkdown;
     //First Check if the comment already exists
-    const { data: existingData, error: existingError } = await this.supabase.from("issue_comments").select("*").eq("id", commentData.id);
+    const { data: existingData, error: existingError } = await this.supabase
+      .from("documents")
+      .select("*")
+      .eq("id", commentData.id)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (existingError) {
       this.context.logger.error("Error creating comment", {
         Error: existingError,
@@ -50,32 +69,32 @@ export class Comment extends SuperSupabase {
       return;
     }
     if (existingData && existingData.length > 0) {
-      this.context.logger.error("Comment already exists", {
+      this.context.logger.warn("Comment already exists", {
         commentData: commentData,
       });
       return;
     }
     //Create the embedding for this comment
-    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown) : commentData.markdown;
-    const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-    let plaintext: string | null = markdownToPlainText(commentData.markdown);
-    let finalMarkdown = commentData.markdown;
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+    }
+    let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
-    const { data, error } = await this.supabase.from("issue_comments").insert([
+    const { data, error } = await this.supabase.from("documents").insert([
       {
         id: commentData.id,
+        doc_type: docType,
+        parent_id: commentData.issue_id,
         markdown: finalMarkdown,
         author_id: commentData.author_id,
         embedding,
         payload: finalPayload,
-        issue_id: commentData.issue_id,
-        plaintext,
       },
     ]);
     if (error) {
@@ -85,39 +104,53 @@ export class Comment extends SuperSupabase {
       });
       return;
     }
-    this.context.logger.info(`Comment created successfully with id: ${commentData.id}`, { data });
+    this.context.logger.ok(`Comment created successfully with id: ${commentData.id}`, { data });
   }
 
-  async updateComment(commentData: CommentData) {
+  async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
+    const { deferEmbedding: shouldDeferEmbedding = false } = options;
+    const docType = commentData.docType ?? "issue_comment";
+    const cleanedMarkdown = cleanMarkdown(commentData.markdown);
+    const isCommandComment = cleanedMarkdown ? isCommandLikeContent(cleanedMarkdown) : false;
+    const isShortComment = isTooShort(cleanedMarkdown, MIN_COMMENT_MARKDOWN_LENGTH);
+    const shouldSkipEmbedding = isCommandComment || isShortComment;
+    const embeddingSource = shouldSkipEmbedding ? null : cleanedMarkdown;
     //Create the embedding for this comment
-    const embeddingSource = commentData.markdown ? stripHtmlComments(commentData.markdown) : commentData.markdown;
-    const embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
-    let plaintext: string | null = markdownToPlainText(commentData.markdown);
-    let finalMarkdown = commentData.markdown;
+    let embedding: number[] | null = null;
+    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+    }
+    let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
     if (isPrivate) {
       finalMarkdown = null;
       finalPayload = null;
-      plaintext = null;
     }
     const comments = await this.getComment(commentData.id);
     if (comments && comments.length == 0) {
-      this.context.logger.info("Comment does not exist, creating a new one");
-      await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate });
+      this.context.logger.debug("Comment does not exist, creating a new one");
+      await this.createComment({ ...commentData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
     } else {
       const { error } = await this.supabase
-        .from("issue_comments")
-        .update({ markdown: finalMarkdown, plaintext, embedding: embedding, payload: finalPayload, modified_at: new Date() })
-        .eq("id", commentData.id);
+        .from("documents")
+        .update({
+          doc_type: docType,
+          parent_id: commentData.issue_id,
+          markdown: finalMarkdown,
+          embedding,
+          payload: finalPayload,
+          modified_at: new Date(),
+        })
+        .eq("id", commentData.id)
+        .in("doc_type", COMMENT_DOCUMENT_TYPES);
       if (error) {
         this.context.logger.error("Error updating comment", {
           Error: error,
           commentData: {
             commentData,
             markdown: finalMarkdown,
-            plaintext,
             embedding,
             payload: finalPayload,
             modified_at: new Date(),
@@ -125,11 +158,10 @@ export class Comment extends SuperSupabase {
         });
         return;
       }
-      this.context.logger.info("Comment updated successfully with id: " + commentData.id, {
+      this.context.logger.ok("Comment updated successfully with id: " + commentData.id, {
         commentData: {
           commentData,
           markdown: finalMarkdown,
-          plaintext,
           embedding,
           payload: finalPayload,
           modified_at: new Date(),
@@ -139,7 +171,12 @@ export class Comment extends SuperSupabase {
   }
 
   async getComment(commentNodeId: string): Promise<CommentType[] | null> {
-    const { data, error } = await this.supabase.from("issue_comments").select("*").eq("id", commentNodeId);
+    const { data, error } = await this.supabase
+      .from("documents")
+      .select("*")
+      .eq("id", commentNodeId)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES)
+      .is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting comment", {
         Error: error,
@@ -153,7 +190,11 @@ export class Comment extends SuperSupabase {
   }
 
   async deleteComment(commentNodeId: string) {
-    const { error } = await this.supabase.from("issue_comments").delete().eq("id", commentNodeId);
+    const { error } = await this.supabase
+      .from("documents")
+      .update({ deleted_at: new Date().toISOString(), modified_at: new Date().toISOString() })
+      .eq("id", commentNodeId)
+      .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (error) {
       this.context.logger.error("Error deleting comment", {
         Error: error,
@@ -163,13 +204,25 @@ export class Comment extends SuperSupabase {
       });
       return;
     }
-    this.context.logger.info("Comment deleted successfully with id: " + commentNodeId);
+    this.context.logger.ok("Comment deleted successfully with id: " + commentNodeId);
   }
 
   async findSimilarComments({ markdown, currentId, threshold }: FindSimilarCommentsParams): Promise<CommentSimilaritySearchResult[] | null> {
     // Create a new issue embedding
     try {
-      const embeddingSource = stripHtmlComments(markdown);
+      const embeddingSource = cleanMarkdown(markdown);
+      if (!embeddingSource) {
+        this.context.logger.debug("Skipping comment similarity search because text is empty after stripping comments.", { currentId });
+        return null;
+      }
+      if (isTooShort(embeddingSource, MIN_COMMENT_MARKDOWN_LENGTH)) {
+        this.context.logger.debug("Skipping comment similarity search because text is too short.", {
+          currentId,
+          length: embeddingSource.length,
+          minLength: MIN_COMMENT_MARKDOWN_LENGTH,
+        });
+        return null;
+      }
       const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
       const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
         query_embedding: embedding,

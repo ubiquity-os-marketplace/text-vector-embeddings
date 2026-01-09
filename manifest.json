@@ -24,6 +24,13 @@
     "issue_comment.created",
     "issue_comment.edited",
     "issue_comment.deleted",
+    "pull_request_review_comment.created",
+    "pull_request_review_comment.edited",
+    "pull_request_review_comment.deleted",
+    "pull_request_review.submitted",
+    "pull_request_review.edited",
+    "pull_request.opened",
+    "pull_request.edited",
     "issues.opened",
     "issues.edited",
     "issues.deleted",
@@ -370,7 +377,7 @@
               "qwen/qwen3-vl-30b-a3b-thinking",
               "qwen/qwen3-vl-8b-instruct",
               "qwen/qwen3-vl-8b-thinking",
-              "qwen/qwq-32b",
+              "qwq-32b",
               "raifle/sorcererlm-8x22b",
               "relace/relace-apply-3",
               "relace/relace-search",
@@ -430,6 +437,6 @@
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
+  "homepage_url": "https://text-vector-embeddings-cod.deno.dev",
   "short_name": "ubiquity-os-marketplace/text-vector-embeddings@main"
 }

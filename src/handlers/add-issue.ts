@@ -1,5 +1,6 @@
 import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function addIssue(context: Context<"issues.opened">) {
   const {
@@ -9,25 +10,39 @@ export async function addIssue(context: Context<"issues.opened">) {
     config,
   } = context;
   const issue = payload.issue;
-  const markdown = payload.issue.body && payload.issue.title ? `${payload.issue.body} ${payload.issue.title}` : null;
+  const authorType = issue.user?.type;
+  const isHumanAuthor = authorType === "User";
+  let markdown = payload.issue.body && payload.issue.title ? `${payload.issue.body} ${payload.issue.title}` : null;
   const authorId = issue.user?.id || -1;
   const id = issue.node_id;
   const isPrivate = payload.repository.private;
 
+  if (!isHumanAuthor) {
+    logger.debug("Issue author is not human; storing issue without embeddings.", {
+      author: issue.user?.login,
+      type: authorType,
+      issue: issue.number,
+    });
+    markdown = null;
+  }
+
   try {
-    if (!markdown) {
-      logger.error("Issue body is empty", { issue });
+    if (isHumanAuthor && !markdown) {
+      logger.warn("Issue body is empty", { issue });
       return;
     }
-    const cleanedIssue = await cleanContent(context, markdown);
+    const cleanedIssue = isHumanAuthor && markdown ? await cleanContent(context, markdown) : null;
+    const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
+      logger.debug("Demo mode active - skipping issue storage", { issue: issue.number, issue_url: issue.html_url });
       return;
     }
 
-    await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId });
-    await kv.addIssue(issue.html_url);
+    await supabase.issue.createIssue({ id, payload, isPrivate, markdown: cleanedIssue, author_id: authorId }, { deferEmbedding: queueSettings.enabled });
+    if (isHumanAuthor) {
+      await kv.addIssue(issue.html_url);
+    }
     logger.ok(`Successfully created issue!`, issue);
   } catch (error) {
     if (error instanceof Error) {
