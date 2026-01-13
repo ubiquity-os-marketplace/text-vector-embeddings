@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Context } from "../../../types/context";
+import { COMMENT_DOCUMENT_TYPES, ISSUE_DOCUMENT_TYPES } from "../../../types/document";
 
 export class SuperSupabase {
   protected supabase: SupabaseClient;
@@ -25,7 +26,7 @@ export class SuperSupabase {
     const { data, error } = await this.supabase
       .from("documents")
       .select("id")
-      .in("doc_type", ["issue", "pull_request", "issue_comment", "review_comment", "pull_request_review"])
+      .in("doc_type", [...ISSUE_DOCUMENT_TYPES, ...COMMENT_DOCUMENT_TYPES])
       .is("embedding", null)
       .is("deleted_at", null)
       .not("markdown", "is", null)
