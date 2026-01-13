@@ -20,4 +20,22 @@ export class SuperSupabase {
       return false;
     }
   }
+
+  async hasPendingEmbeddings(): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from("documents")
+      .select("id")
+      .in("doc_type", ["issue", "pull_request", "issue_comment", "review_comment", "pull_request_review"])
+      .is("embedding", null)
+      .is("deleted_at", null)
+      .not("markdown", "is", null)
+      .limit(1);
+
+    if (error) {
+      this.context.logger.error("Failed to check pending embeddings", { error });
+      return false;
+    }
+
+    return Boolean(data && data.length > 0);
+  }
 }

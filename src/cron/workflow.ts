@@ -1,6 +1,7 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Context } from "../types/index";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function getAuthenticatedOctokit({
   appPrivateKey,
@@ -60,7 +61,12 @@ export async function updateCronState(context: Context) {
     }
 
     const repositories = await db.getAllRepositories();
-    const hasData = repositories.length > 0;
+    const queueSettings = getEmbeddingQueueSettings(context.env);
+    let hasPendingEmbeddings = false;
+    if (queueSettings.enabled && context.adapters?.supabase?.super?.hasPendingEmbeddings) {
+      hasPendingEmbeddings = await context.adapters.supabase.super.hasPendingEmbeddings();
+    }
+    const hasData = repositories.length > 0 || hasPendingEmbeddings;
 
     if (hasData) {
       context.logger.verbose("Enabling cron.yml workflow.", { owner, repo });
