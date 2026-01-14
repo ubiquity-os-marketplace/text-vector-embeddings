@@ -2,14 +2,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "../src/types/database";
 
 type TableSpec = {
-  name: "issues" | "issue_comments";
+  name: keyof Database["public"]["Tables"];
   orderBy: string;
 };
 
-const TABLES: TableSpec[] = [
-  { name: "issues", orderBy: "id" },
-  { name: "issue_comments", orderBy: "id" },
-];
+const TABLES: TableSpec[] = [{ name: "documents", orderBy: "id" }];
+
+const DEFAULT_BATCH_SIZE = 100;
+const MAX_BATCH_SIZE = 1000;
 
 function getEnv(name: string, fallbackName?: string): string {
   const value = process.env[name] ?? (fallbackName ? process.env[fallbackName] : undefined);
@@ -22,9 +22,9 @@ function getEnv(name: string, fallbackName?: string): string {
 }
 
 function parseBatchSize(raw: string | undefined): number {
-  const parsed = Number.parseInt(raw ?? "100", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    console.error(`Invalid BATCH_SIZE: ${raw}`);
+  const parsed = Number.parseInt(raw ?? String(DEFAULT_BATCH_SIZE), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > MAX_BATCH_SIZE) {
+    console.error(`Invalid BATCH_SIZE: ${raw}. Use an integer between 1 and ${MAX_BATCH_SIZE}.`);
     process.exit(1);
   }
   return parsed;
@@ -45,7 +45,7 @@ const target = createClient<Database>(targetUrl, targetKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-async function fetchCount(client: SupabaseClient<Database>, table: "issues" | "issue_comments"): Promise<number | null> {
+async function fetchCount(client: SupabaseClient<Database>, table: TableSpec["name"]): Promise<number | null> {
   const { count, error } = await client.from(table).select("id", { count: "exact", head: true });
   if (error) {
     console.error(`Failed to count ${table}:`, error.message);
@@ -100,8 +100,13 @@ async function copyTable({ name, orderBy }: TableSpec): Promise<void> {
     `Finished ${name}. Source=${sourceCount ?? "unknown"} TargetBefore=${targetCountBefore ?? "unknown"} TargetAfter=${targetCountAfter ?? "unknown"}`
   );
 
-  if (!isDryRun && sourceCount !== null && targetCountAfter !== null && targetCountAfter < sourceCount) {
-    throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+  if (!isDryRun && sourceCount !== null && targetCountAfter !== null) {
+    if (targetCountAfter < sourceCount) {
+      throw new Error(`Row count mismatch for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
+    if (targetCountAfter > sourceCount) {
+      console.warn(`Target row count exceeds source for ${name}: source=${sourceCount} target=${targetCountAfter}`);
+    }
   }
 }
 

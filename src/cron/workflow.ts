@@ -1,6 +1,7 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Context } from "../types/index";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function getAuthenticatedOctokit({
   appPrivateKey,
@@ -35,11 +36,11 @@ export async function getAuthenticatedOctokit({
 }
 
 export async function updateCronState(context: Context) {
-  context.logger.debug("Updating the cron KV workflow state.");
+  context.logger.info("Updating the cron KV workflow state.");
   const db = context.adapters.kv;
 
   if (!process.env.GITHUB_REPOSITORY) {
-    context.logger.error("Can't update the Action Workflow state as GITHUB_REPOSITORY is missing from the env.");
+    context.logger.warn("Can't update the Action Workflow state as GITHUB_REPOSITORY is missing from the env.");
     return;
   }
 
@@ -48,7 +49,7 @@ export async function updateCronState(context: Context) {
   try {
     let authOctokit;
     if (!process.env.APP_ID || !process.env.APP_PRIVATE_KEY) {
-      context.logger.debug("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
+      context.logger.warn("APP_ID or APP_PRIVATE_KEY are missing from the env, will use the default Octokit instance.");
       authOctokit = context.octokit;
     } else {
       authOctokit = await getAuthenticatedOctokit({
@@ -60,7 +61,12 @@ export async function updateCronState(context: Context) {
     }
 
     const repositories = await db.getAllRepositories();
-    const hasData = repositories.length > 0;
+    const queueSettings = getEmbeddingQueueSettings(context.env);
+    let hasPendingEmbeddings = false;
+    if (queueSettings.enabled && context.adapters?.supabase?.super?.hasPendingEmbeddings) {
+      hasPendingEmbeddings = await context.adapters.supabase.super.hasPendingEmbeddings();
+    }
+    const hasData = repositories.length > 0 || hasPendingEmbeddings;
 
     if (hasData) {
       context.logger.verbose("Enabling cron.yml workflow.", { owner, repo });
@@ -69,7 +75,7 @@ export async function updateCronState(context: Context) {
         repo,
         workflow_id: "cron.yml",
       });
-      context.logger.info("Cron workflow state updated with KV data", {
+      context.logger.ok("Cron workflow state updated with KV data", {
         totalRepos: repositories.length,
       });
     } else {
@@ -79,7 +85,7 @@ export async function updateCronState(context: Context) {
         repo,
         workflow_id: "cron.yml",
       });
-      context.logger.info("No data found in KV storage");
+      context.logger.debug("No data found in KV storage");
     }
   } catch (e) {
     context.logger.error("Error updating cron workflow state", { e });

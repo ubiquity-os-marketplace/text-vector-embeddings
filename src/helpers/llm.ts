@@ -1,21 +1,14 @@
 import { TypeBoxError } from "@sinclair/typebox";
 import { LogReturn } from "@ubiquity-os/ubiquity-os-logger";
-import ms, { StringValue } from "ms";
-import { OpenAI } from "openai";
 
 export function checkLlmRetryableState(error: unknown) {
-  if (error instanceof OpenAI.APIError && error.status) {
-    if ([500, 503].includes(error.status)) {
-      return true;
-    }
-    if (error.status === 429 && error.headers) {
-      const retryAfterTokens = error.headers["x-ratelimit-reset-tokens"];
-      const retryAfterRequests = error.headers["x-ratelimit-reset-requests"];
-      if (!retryAfterTokens || !retryAfterRequests) {
-        return true;
-      }
-      const retryAfter = Math.max(ms(retryAfterTokens as StringValue), ms(retryAfterRequests as StringValue));
-      return Number.isFinite(retryAfter) ? retryAfter : true;
+  if (error instanceof Error) {
+    const message = String(error.message ?? "");
+    const match = /LLM API error:\s*(\d{3})\b/.exec(message);
+    if (match) {
+      const status = Number(match[1]);
+      if (status === 429) return true;
+      if (status >= 500) return true;
     }
   }
   return error instanceof SyntaxError || error instanceof TypeBoxError || error instanceof LogReturn;

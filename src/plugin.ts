@@ -3,20 +3,28 @@ import { VoyageAIClient } from "voyageai";
 import { createAdapters } from "./adapters/index";
 import { updateCronState } from "./cron/workflow";
 import { addComments } from "./handlers/add-comments";
+import { addReviewComment } from "./handlers/add-review-comments";
 import { addIssue } from "./handlers/add-issue";
+import { addPullRequest } from "./handlers/add-pull-request";
+import { addPullRequestReview } from "./handlers/add-pull-request-review";
 import { completeIssue } from "./handlers/complete-issue";
 import { deleteComment } from "./handlers/delete-comments";
+import { deleteReviewComment } from "./handlers/delete-review-comments";
 import { deleteIssues } from "./handlers/delete-issue";
 import { issueDedupe } from "./handlers/issue-deduplication";
 import { issueMatchingWithComment } from "./handlers/issue-matching";
 import { issueTransfer } from "./handlers/transfer-issue";
 import { updateComment } from "./handlers/update-comments";
+import { updateReviewComment } from "./handlers/update-review-comments";
 import { updateIssue } from "./handlers/update-issue";
+import { updatePullRequest } from "./handlers/update-pull-request";
+import { updatePullRequestReview } from "./handlers/update-pull-request-review";
 import { commandHandler, userAnnotate } from "./handlers/user-annotate";
 import { isPluginEdit } from "./helpers/plugin-utils";
 import { Database } from "./types/database";
 import { Context } from "./types/index";
-import { isIssueCommentEvent, isIssueEvent } from "./types/typeguards";
+import { isIssueCommentEvent, isIssueEvent, isPullRequestEvent, isPullRequestReviewCommentEvent, isPullRequestReviewEvent } from "./types/typeguards";
+import { getEmbeddingQueueSettings } from "./utils/embedding-queue";
 
 export async function initAdapters(context: Context) {
   const { env } = context;
@@ -43,8 +51,10 @@ export async function runPlugin(context: Context) {
     context.adapters = await initAdapters(context);
   }
 
-  if (context.command) {
-    return await commandHandler(context);
+  const { enabled: shouldDeferEmbeddings } = getEmbeddingQueueSettings(context.env);
+
+  if (context.command && eventName === "issue_comment.created") {
+    return await commandHandler(context as Context<"issue_comment.created">);
   }
 
   if (isIssueCommentEvent(context)) {
@@ -57,17 +67,48 @@ export async function runPlugin(context: Context) {
       case "issue_comment.edited":
         return await updateComment(context as Context<"issue_comment.edited">);
     }
+  } else if (isPullRequestReviewCommentEvent(context)) {
+    switch (eventName) {
+      case "pull_request_review_comment.created":
+        return await addReviewComment(context as Context<"pull_request_review_comment.created">);
+      case "pull_request_review_comment.edited":
+        return await updateReviewComment(context as Context<"pull_request_review_comment.edited">);
+      case "pull_request_review_comment.deleted":
+        return await deleteReviewComment(context as Context<"pull_request_review_comment.deleted">);
+    }
+  } else if (isPullRequestReviewEvent(context)) {
+    switch (eventName) {
+      case "pull_request_review.submitted":
+        return await addPullRequestReview(context as Context<"pull_request_review.submitted">);
+      case "pull_request_review.edited":
+        return await updatePullRequestReview(context as Context<"pull_request_review.edited">);
+    }
+  } else if (isPullRequestEvent(context)) {
+    switch (eventName) {
+      case "pull_request.opened":
+        return await addPullRequest(context as Context<"pull_request.opened">);
+      case "pull_request.edited":
+        return await updatePullRequest(context as Context<"pull_request.edited">);
+    }
   } else if (isIssueEvent(context)) {
     switch (eventName) {
       case "issues.opened":
         await addIssue(context as Context<"issues.opened">);
-        await issueMatchingWithComment(context as Context<"issues.opened">);
+        if (shouldDeferEmbeddings) {
+          logger.debug("Embedding queue enabled; skipping issue matching on open.");
+        } else {
+          await issueMatchingWithComment(context as Context<"issues.opened">);
+        }
         break;
       case "issues.edited":
         if (isPluginEdit(context as Context<"issues.edited">)) {
           logger.info("Plugin edit detected, will run issue matching and checker.");
-          await issueMatchingWithComment(context as Context<"issues.edited">);
-          await issueDedupe(context as Context<"issues.edited">);
+          if (shouldDeferEmbeddings) {
+            logger.debug("Embedding queue enabled; skipping issue matching and dedupe on plugin edit.");
+          } else {
+            await issueMatchingWithComment(context as Context<"issues.edited">);
+            await issueDedupe(context as Context<"issues.edited">);
+          }
         } else {
           await updateIssue(context as Context<"issues.edited">);
         }
@@ -83,9 +124,13 @@ export async function runPlugin(context: Context) {
         break;
     }
   } else if (eventName == "issues.labeled") {
+    if (shouldDeferEmbeddings) {
+      logger.debug("Embedding queue enabled; skipping issue matching on label.");
+      return;
+    }
     return await issueMatchingWithComment(context as Context<"issues.labeled">);
   } else {
-    logger.error(`Unsupported event: ${eventName}`);
+    logger.warn(`Unsupported event: ${eventName}`);
     return;
   }
   await updateCronState(context);

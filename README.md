@@ -9,6 +9,16 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `SUPABASE_URL`: The URL for your Supabase instance.
 - `SUPABASE_KEY`: The key for your Supabase instance.
 - `VOYAGEAI_API_KEY`: The API key for Voyage.
+- `EMBEDDINGS_QUEUE_ENABLED`: Enable deferred embedding processing via cron (default: true).
+- `EMBEDDINGS_QUEUE_BATCH_SIZE`: Max rows per cron batch (default: 50).
+- `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
+- `EMBEDDINGS_QUEUE_MAX_RETRIES`: Max retries on rate limits (default: 3).
+
+Cron GitHub App auth:
+
+- `APP_ID`: GitHub App ID.
+- `APP_PRIVATE_KEY`: GitHub App private key.
+- `APP_INSTALLATION_ID`: GitHub App installation ID.
 
 ## Usage
 
@@ -28,11 +38,6 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 ### HTTP API
 
 - `GET /recommendations?issueUrls=<github-issue-url>&users=alice&users=bob` (or `users=alice,bob`) returns recommendation data per issue URL.
-- `GET /recommendation` is an alias of `/recommendations`.
-
-### Command
-
-- Comment `/recommendation @alice @bob` on an issue to get recommendations filtered to those users (omit users for the global list).
 
 ## Testing Locally
 

@@ -1,22 +1,21 @@
 import { createAppAuth } from "@octokit/auth-app";
+import { ConfigurationHandler } from "@ubiquity-os/plugin-sdk/configuration";
+import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
+import manifest from "../../manifest.json" with { type: "json" };
+import type { Context } from "../types/index";
+import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
 import { createCronDatabase } from "./database-handler";
+import { processPendingEmbeddings } from "./embedding-queue";
 import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
-import { Context } from "@ubiquity-os/plugin-sdk";
+
+function normalizeError(error: unknown): Error | { stack: string } {
+  return error instanceof Error ? error : { stack: String(error) };
+}
 
 async function main() {
   const logger = new Logs((process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO) as unknown as Context["logger"];
-  const octokit = new customOctokit({
-    authStrategy: createAppAuth,
-    auth: {
-      appId: Number(process.env.APP_ID),
-      privateKey: process.env.APP_PRIVATE_KEY,
-      installationId: process.env.APP_INSTALLATION_ID,
-    },
-  });
-
-  const db = await createCronDatabase();
   let env;
   try {
     env = decodeEnv(process.env);
@@ -24,11 +23,46 @@ async function main() {
     logger.error("Missing required env for reprocess; skipping cron run.", { err });
     return;
   }
-  const config = decodeConfig();
   const clients = createReprocessClients(env);
+  const queueSettings = getEmbeddingQueueSettings(env);
+
+  try {
+    const queueResult = await processPendingEmbeddings({ env, clients, logger });
+    logger.ok("Embedding queue processed", queueResult);
+    if (queueResult.stoppedEarly) {
+      logger.warn("Embedding queue stopped early due to rate limiting; skipping reprocess run.");
+      return;
+    }
+  } catch (error) {
+    logger.error("Embedding queue failed", { error: normalizeError(error) });
+    if (queueSettings.enabled) {
+      return;
+    }
+  }
+
+  const appIdRaw = process.env.APP_ID;
+  const appId = Number(appIdRaw);
+  const appPrivateKey = process.env.APP_PRIVATE_KEY ?? "";
+  const appInstallationIdRaw = process.env.APP_INSTALLATION_ID;
+  const appInstallationId = Number(appInstallationIdRaw);
+  if (!appIdRaw || Number.isNaN(appId) || !appPrivateKey || !appInstallationIdRaw || Number.isNaN(appInstallationId)) {
+    logger.warn("APP_ID, APP_PRIVATE_KEY, or APP_INSTALLATION_ID are missing/invalid in the env; skipping cron run.");
+    return;
+  }
+
+  const octokit = new customOctokit({
+    authStrategy: createAppAuth,
+    auth: {
+      appId,
+      privateKey: appPrivateKey,
+      installationId: appInstallationId,
+    },
+  });
+
+  const db = await createCronDatabase();
   const repositories = await db.getAllRepositories();
 
-  logger.info(`Loaded KV data.`, {
+  logger.ok(`Loaded KV data.`, {
     repositories: repositories.length,
   });
 
@@ -44,19 +78,30 @@ async function main() {
         issueIds: issueNumbers,
       });
 
-      const installation = await octokit.rest.apps.getRepoInstallation({
-        owner: owner,
-        repo: repo,
-      });
+      const installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
 
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
         auth: {
-          appId: Number(process.env.APP_ID),
-          privateKey: process.env.APP_PRIVATE_KEY,
+          appId,
+          privateKey: appPrivateKey,
           installationId: installation.data.id,
         },
       });
+
+      const configurationHandler = new ConfigurationHandler(logger, repoOctokit);
+      const repoConfig = await configurationHandler.getSelfConfiguration<Record<string, unknown>>(manifest as Pick<Manifest, "short_name">, {
+        owner,
+        repo,
+      });
+      const config = decodeConfig(repoConfig ?? {});
+
+      const appAuth = createAppAuth({
+        appId,
+        privateKey: appPrivateKey,
+        installationId: installation.data.id,
+      });
+      const { token: authToken } = await appAuth({ type: "installation" });
 
       const repoResponse = await repoOctokit.rest.repos.get({ owner, repo });
       const repository = repoResponse.data;
@@ -70,7 +115,7 @@ async function main() {
             issue_number: issueNumber,
           });
           if (issue.pull_request) {
-            logger.info("Skipping pull request entry in cron list", { owner, repo, issueNumber });
+            logger.debug("Skipping pull request entry in cron list", { owner, repo, issueNumber });
             await db.removeIssue(url);
             continue;
           }
@@ -79,6 +124,7 @@ async function main() {
             issue,
             repository,
             octokit: repoOctokit,
+            authToken,
             env,
             config,
             logger,
@@ -101,6 +147,10 @@ async function main() {
             url,
             err,
           });
+        }
+
+        if (queueSettings.enabled) {
+          await sleep(queueSettings.delayMs);
         }
       }
     } catch (e) {
