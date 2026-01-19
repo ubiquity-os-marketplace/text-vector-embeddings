@@ -13,16 +13,6 @@ function normalizeUserLogins(segments: string[]): string[] {
     .filter((user) => GITHUB_LOGIN_REGEX.test(user));
 }
 
-// GitHub usernames cannot include whitespace or commas, so splitting is safe.
-function parseUserLogins(value: string | string[] | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-  const segments = Array.isArray(value) ? value : [value];
-  const expanded = segments.flatMap((segment) => segment.split(/\s+/));
-  return normalizeUserLogins(expanded);
-}
-
 function parseUserLoginsFromTokens(tokens: string[]): string[] {
   return normalizeUserLogins(tokens);
 }
@@ -75,18 +65,6 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
       commentId = match[1];
     }
     await annotate(context, commentId, scope);
-  }
-
-  if (context.command.name === "recommendation") {
-    const requestedLogins = parseUserLogins(context.command.parameters.users);
-    const result = requestedLogins.length > 0 ? await issueMatchingForUsers(context, requestedLogins) : await issueMatching(context);
-
-    if (!result) {
-      await postCommandResponse(context, ">[!NOTE]\n> No suitable contributors found.");
-      return;
-    }
-
-    await postCommandResponse(context, buildRecommendationComment(result, requestedLogins));
   }
 }
 
