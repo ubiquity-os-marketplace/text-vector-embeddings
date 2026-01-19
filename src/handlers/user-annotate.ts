@@ -2,7 +2,7 @@ import { Context } from "../types/index";
 import { annotate } from "./annotate";
 import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
-// GitHub usernames are 1-39 chars, alnum or hyphen, no leading/trailing hyphen.
+// GitHub usernames are 1-39 chars, alphanumeric or hyphen, no leading/trailing hyphen.
 const GITHUB_LOGIN_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
 
 function normalizeUserLogins(segments: string[]): string[] {
