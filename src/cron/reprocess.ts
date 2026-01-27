@@ -145,8 +145,8 @@ export async function createReprocessContext(params: {
     adapters: {} as ReprocessContext["adapters"],
   };
   const clients = params.clients ?? createReprocessClients(params.env);
-  ctx.adapters = createReprocessAdapters(ctx, clients);
-  return ctx;
+  ctx.adapters = createReprocessAdapters(ctx as unknown as Context, clients) as ReprocessContext["adapters"];
+  return ctx as unknown as Context<"issues.edited">;
 }
 
 export async function reprocessIssue(context: Context<"issues.edited">, options: ReprocessOptions = {}) {
