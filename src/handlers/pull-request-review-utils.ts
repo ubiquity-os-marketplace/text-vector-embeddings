@@ -193,7 +193,8 @@ export async function ensurePullRequestIssue(context: PullRequestContext, pullRe
   }
 
   if (isHumanAuthor && !markdown) {
-    logger.warn("Pull request title/body is empty; storing issue without embeddings", { pullRequestUrl: pullRequest.html_url });
+    logger.warn("Pull request title/body is empty; skipping PR issue creation", { pullRequestUrl: pullRequest.html_url });
+    return id;
   }
 
   if (config.demoFlag) {
