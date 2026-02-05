@@ -15,12 +15,23 @@ export class Embedding extends SuperVoyage {
     if (text === null) {
       throw new Error("Text is null");
     } else {
-      const response = await this.client.embed({
-        input: text,
-        model: "voyage-large-2-instruct",
-        inputType,
-      });
-      return (response.data && response.data[0]?.embedding) || [];
+      const embeddings = await this.createEmbeddings([text], inputType);
+      return embeddings[0] ?? [];
     }
+  }
+
+  async createEmbeddings(texts: string[], inputType: EmbedRequestInputType = "document"): Promise<number[][]> {
+    if (texts.length === 0) {
+      return [];
+    }
+    const response = await this.client.embed({
+      input: texts,
+      model: "voyage-large-2-instruct",
+      inputType,
+    });
+    if (!response.data) {
+      return [];
+    }
+    return response.data.map((item) => item?.embedding ?? []);
   }
 }
