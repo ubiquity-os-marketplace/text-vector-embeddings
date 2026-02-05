@@ -294,6 +294,17 @@ async function processPendingRows(params: {
       }
       if (!update.embedding.length) {
         logger.error("Embedding batch returned empty vector.", { label, id: update.row.id });
+        const { error: clearError } = await supabase
+          .from("documents")
+          .update({ markdown: null, modified_at: new Date().toISOString() })
+          .eq("id", update.row.id);
+        if (clearError) {
+          logger.error("Failed to clear markdown after empty embedding.", {
+            label,
+            id: update.row.id,
+            clearError,
+          });
+        }
         continue;
       }
       const { error: updateError } = await supabase
