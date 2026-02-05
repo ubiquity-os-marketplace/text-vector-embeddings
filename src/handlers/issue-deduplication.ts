@@ -351,12 +351,12 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
     try {
       const linkResponse = await fetch(url);
       if (!linkResponse.ok) {
-        context.logger.warn(`Failed to fetch ${url}`, { linkResponse });
+        context.logger.debug(`Failed to fetch ${url}`, { linkResponse });
         return;
       }
       const contentType = linkResponse.headers.get("content-type");
       if (!contentType?.startsWith("image/")) {
-        context.logger.warn(`Content type is not an image: ${contentType}, will skip ${url}`);
+        context.logger.debug(`Content type is not an image: ${contentType}, will skip ${url}`);
         return;
       }
 
@@ -376,7 +376,7 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
       const linkRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapedSrc}\\)`, "g");
       content = content.replace(linkRegex, `[$1](${url} "${he.encode(altContent)}")`);
     } catch (e) {
-      context.logger.warn(`Failed to process ${url}`, { e });
+      context.logger.debug(`Failed to process ${url}`, { e });
     }
   }
 

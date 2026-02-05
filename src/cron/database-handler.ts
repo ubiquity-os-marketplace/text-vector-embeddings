@@ -1,6 +1,16 @@
 import { parseGitHubUrl } from "../helpers/github";
 
 export const KV_PREFIX = "cron";
+export const KV_MUTE_PREFIX = "cron-mute";
+
+export type RepoMuteEntry = {
+  reason: "missing-installation" | "forbidden" | "unknown";
+  status?: number;
+  count: number;
+  firstSeenAtMs: number;
+  lastSeenAtMs: number;
+  mutedUntilMs: number;
+};
 
 export class CronDatabase {
   private _kv: Deno.Kv;
@@ -58,6 +68,19 @@ export class CronDatabase {
     }
 
     return repositories;
+  }
+
+  async getRepoMute(owner: string, repo: string): Promise<RepoMuteEntry | null> {
+    const result = await this._kv.get<RepoMuteEntry>([KV_MUTE_PREFIX, owner, repo]);
+    return result.value ?? null;
+  }
+
+  async setRepoMute(owner: string, repo: string, entry: RepoMuteEntry): Promise<void> {
+    await this._kv.set([KV_MUTE_PREFIX, owner, repo], entry);
+  }
+
+  async clearRepoMute(owner: string, repo: string): Promise<void> {
+    await this._kv.delete([KV_MUTE_PREFIX, owner, repo]);
   }
 }
 

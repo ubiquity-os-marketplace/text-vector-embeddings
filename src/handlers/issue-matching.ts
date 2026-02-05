@@ -24,15 +24,33 @@ export interface IssueGraphqlResponse {
   similarity: number;
 }
 
-type IssueNodeResponse = IssueGraphqlResponse | { node: null };
-
 type IssueCommentSummary = {
   id: number;
   body?: string | null;
 };
 
-function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
-  return response.node !== null;
+type IssueNode = IssueGraphqlResponse["node"];
+type GraphqlNode = (IssueNode & { __typename?: string }) | { __typename?: string } | null;
+
+const ISSUE_NODE_BATCH_SIZE = 25;
+
+function isIssueNode(node: GraphqlNode): node is IssueNode & { __typename?: string } {
+  return Boolean(node && typeof node === "object" && (node as { __typename?: string }).__typename === "Issue");
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) {
+    return [items];
+  }
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function normalizeError(error: unknown): Error | { stack: string } {
+  return error instanceof Error ? error : { stack: String(error) };
 }
 
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
@@ -159,13 +177,21 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
 
   if (similarIssues && similarIssues.length > 0) {
     similarIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
-    const fetchPromises = similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
+    const similarityById = new Map(similarIssues.map((entry) => [entry.issue_id, entry.similarity]));
+    const issueIdBatches = chunkArray(
+      similarIssues.map((entry) => entry.issue_id),
+      ISSUE_NODE_BATCH_SIZE
+    );
+    const issueList: IssueGraphqlResponse[] = [];
+
+    for (const batch of issueIdBatches) {
       try {
-        const issueObject: IssueNodeResponse = await context.octokit.graphql(
+        const response: { nodes: GraphqlNode[] } = await context.octokit.graphql(
           /* GraphQL */
           `
-            query ($issueNodeId: ID!) {
-              node(id: $issueNodeId) {
+            query ($issueNodeIds: [ID!]!) {
+              nodes(ids: $issueNodeIds) {
+                __typename
                 ... on Issue {
                   title
                   url
@@ -188,27 +214,35 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
               }
             }
           `,
-          { issueNodeId: issue.issue_id }
+          { issueNodeIds: batch }
         );
-        if (!hasIssueNode(issueObject)) {
-          context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId: issue.issue_id });
-          return null;
-        }
-        issueObject.similarity = issue.similarity;
-        return issueObject;
+
+        response.nodes.forEach((node, index) => {
+          const issueId = batch[index];
+          if (!issueId) {
+            return;
+          }
+          if (!isIssueNode(node)) {
+            context.logger.debug("Skipping non-issue node in recommendations.", { issueNodeId: issueId });
+            return;
+          }
+          const similarity = similarityById.get(issueId);
+          if (similarity === undefined) {
+            context.logger.debug("Skipping issue node missing similarity mapping.", { issueNodeId: issueId });
+            return;
+          }
+          issueList.push({ node, similarity });
+        });
       } catch (error) {
-        context.logger.error(`Failed to fetch issue ${issue.issue_id}: ${error}`, { issue });
-        return null;
+        context.logger.error("Failed to fetch issue batch for recommendations.", {
+          batchSize: batch.length,
+          error: normalizeError(error),
+        });
       }
-    });
-    const issueList = await Promise.allSettled(fetchPromises);
+    }
 
     logger.debug("Fetched similar issues", { issueList });
-    issueList.forEach((issuePromise: PromiseSettledResult<IssueGraphqlResponse | null>) => {
-      if (!issuePromise || issuePromise.status === "rejected" || !issuePromise.value) {
-        return;
-      }
-      const issue = issuePromise.value as IssueGraphqlResponse;
+    issueList.forEach((issue: IssueGraphqlResponse) => {
       const hasAssignees = issue.node.assignees.nodes.length > 0;
       const isCompletedWithAssignees = issue.node.closed && issue.node.stateReason === "COMPLETED" && hasAssignees;
       const isEligible = options.includeNonCompleted ? hasAssignees : isCompletedWithAssignees;

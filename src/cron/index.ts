@@ -6,12 +6,45 @@ import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import manifest from "../../manifest.json" with { type: "json" };
 import type { Context } from "../types/index";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
-import { createCronDatabase } from "./database-handler";
+import { RepoMuteEntry, createCronDatabase } from "./database-handler";
 import { processPendingEmbeddings } from "./embedding-queue";
 import { createReprocessClients, createReprocessContext, decodeConfig, decodeEnv, reprocessIssue } from "./reprocess";
 
 function normalizeError(error: unknown): Error | { stack: string } {
   return error instanceof Error ? error : { stack: String(error) };
+}
+
+const REPO_MUTE_WINDOW_MS = 6 * 60 * 60 * 1000;
+
+function createFilteredLogger(baseLogger: Context["logger"]): Context["logger"] {
+  const downgradeWarnMessages = new Set(["No configuration file found", "No raw configuration data", "Could not parse YAML"]);
+  const debug = baseLogger.debug?.bind(baseLogger);
+  const info = baseLogger.info?.bind(baseLogger);
+  const ok = baseLogger.ok?.bind(baseLogger);
+  const error = baseLogger.error?.bind(baseLogger);
+
+  return {
+    debug,
+    info,
+    ok,
+    error,
+    warn: (message: string, metadata?: Record<string, unknown>) => {
+      if (typeof message === "string" && downgradeWarnMessages.has(message)) {
+        const fallback = debug ?? info ?? baseLogger.warn.bind(baseLogger);
+        fallback(message, metadata);
+        return;
+      }
+      baseLogger.warn(message, metadata);
+    },
+  } as Context["logger"];
+}
+
+function parseOctokitStatus(error: unknown): number | null {
+  if (error && typeof error === "object" && "status" in error) {
+    const status = Number((error as { status?: number }).status);
+    return Number.isNaN(status) ? null : status;
+  }
+  return null;
 }
 
 async function main() {
@@ -71,6 +104,23 @@ async function main() {
       continue;
     }
 
+    let existingMute = await db.getRepoMute(owner, repo);
+    const nowMs = Date.now();
+    if (existingMute && existingMute.mutedUntilMs > nowMs) {
+      logger.debug?.("Skipping muted repository", {
+        owner,
+        repo,
+        mutedUntil: new Date(existingMute.mutedUntilMs).toISOString(),
+        reason: existingMute.reason,
+        issueCount: issueNumbers.length,
+      });
+      continue;
+    }
+    if (existingMute && existingMute.mutedUntilMs <= nowMs) {
+      await db.clearRepoMute(owner, repo);
+      existingMute = null;
+    }
+
     try {
       logger.info(`Triggering update`, {
         organization: owner,
@@ -78,7 +128,35 @@ async function main() {
         issueIds: issueNumbers,
       });
 
-      const installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
+      let installation;
+      try {
+        installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
+      } catch (error) {
+        const status = parseOctokitStatus(error);
+        if (status === 404 || status === 403) {
+          const reason: RepoMuteEntry["reason"] = status === 404 ? "missing-installation" : "forbidden";
+          const mutedUntilMs = nowMs + REPO_MUTE_WINDOW_MS;
+          const updatedMute: RepoMuteEntry = {
+            reason,
+            status: status ?? undefined,
+            count: (existingMute?.count ?? 0) + 1,
+            firstSeenAtMs: existingMute?.firstSeenAtMs ?? nowMs,
+            lastSeenAtMs: nowMs,
+            mutedUntilMs: Math.max(existingMute?.mutedUntilMs ?? 0, mutedUntilMs),
+          };
+          await db.setRepoMute(owner, repo, updatedMute);
+          logger.warn("Skipping repository due to missing installation or access", {
+            owner,
+            repo,
+            status,
+            reason,
+            mutedUntil: new Date(updatedMute.mutedUntilMs).toISOString(),
+            issueCount: issueNumbers.length,
+          });
+          continue;
+        }
+        throw error;
+      }
 
       const repoOctokit = new customOctokit({
         authStrategy: createAppAuth,
@@ -89,7 +167,7 @@ async function main() {
         },
       });
 
-      const configurationHandler = new ConfigurationHandler(logger, repoOctokit);
+      const configurationHandler = new ConfigurationHandler(createFilteredLogger(logger), repoOctokit);
       const repoConfig = await configurationHandler.getSelfConfiguration<Record<string, unknown>>(manifest as Pick<Manifest, "short_name">, {
         owner,
         repo,
