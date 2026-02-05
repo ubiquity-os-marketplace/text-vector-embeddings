@@ -259,13 +259,7 @@ async function processPendingRows(params: {
   }
 
   const embeddingSources = prepared.map((entry) => entry.embeddingSource);
-  const embeddings = await createEmbeddingsWithRetry(
-    embedder,
-    embeddingSources,
-    settings.maxRetries,
-    settings.delayMs,
-    logger
-  );
+  const embeddings = await createEmbeddingsWithRetry(embedder, embeddingSources, settings.maxRetries, settings.delayMs, logger);
   if (!embeddings) {
     return { processed: 0, stoppedEarly: true };
   }
