@@ -56,6 +56,6 @@
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
-  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@copilot/upgrade-to-voyage-4-large"
+  "homepage_url": "https://text-vector-embeddings-cop.deno.dev",
+  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@fix/cron"
 }
