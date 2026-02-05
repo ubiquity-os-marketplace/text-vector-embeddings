@@ -17,8 +17,9 @@ export class Embedding extends SuperVoyage {
     } else {
       const response = await this.client.embed({
         input: text,
-        model: "voyage-large-2-instruct",
+        model: "voyage-4-large",
         inputType,
+        outputDimension: 1024,
       });
       return (response.data && response.data[0]?.embedding) || [];
     }
