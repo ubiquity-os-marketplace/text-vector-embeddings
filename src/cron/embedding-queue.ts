@@ -165,7 +165,7 @@ async function createEmbeddingsWithRetry(
 
 async function preparePendingRow(params: {
   row: PendingRow;
-  label: "issues" | "comments";
+  label: string;
   supabase: SupabaseClient<Database>;
   logger: QueueLogger;
 }): Promise<{ row: PendingRow; embeddingSource: string } | null> {
@@ -218,13 +218,20 @@ async function preparePendingRow(params: {
 
 async function processPendingRows(params: {
   docTypes: DocumentType[];
-  label: "issues" | "comments";
+  label: string;
   supabase: SupabaseClient<Database>;
   embedder: VoyageEmbedding;
   settings: ReturnType<typeof getEmbeddingQueueSettings>;
   logger: QueueLogger;
-}): Promise<{ processed: number; stoppedEarly: boolean }> {
+}): Promise<{ processed: number; stoppedEarly: boolean; processedByType: Record<DocumentType, number> }> {
   const { docTypes, label, supabase, embedder, settings, logger } = params;
+  const processedByType: Record<DocumentType, number> = {
+    issue: 0,
+    pull_request: 0,
+    issue_comment: 0,
+    review_comment: 0,
+    pull_request_review: 0,
+  };
   const { data, error } = await supabase
     .from("documents")
     .select("id, markdown, modified_at, payload, doc_type")
@@ -237,11 +244,11 @@ async function processPendingRows(params: {
 
   if (error) {
     logger.error("Failed to load pending embeddings.", { label, error });
-    return { processed: 0, stoppedEarly: false };
+    return { processed: 0, stoppedEarly: false, processedByType };
   }
 
   if (!data || data.length === 0) {
-    return { processed: 0, stoppedEarly: false };
+    return { processed: 0, stoppedEarly: false, processedByType };
   }
 
   const rows = (data as PendingRow[]).slice();
@@ -255,13 +262,13 @@ async function processPendingRows(params: {
   }
 
   if (prepared.length === 0) {
-    return { processed: 0, stoppedEarly: false };
+    return { processed: 0, stoppedEarly: false, processedByType };
   }
 
   const embeddingSources = prepared.map((entry) => entry.embeddingSource);
   const embeddings = await createEmbeddingsWithRetry(embedder, embeddingSources, settings.maxRetries, settings.delayMs, logger);
   if (!embeddings) {
-    return { processed: 0, stoppedEarly: true };
+    return { processed: 0, stoppedEarly: true, processedByType };
   }
   if (embeddings.length !== prepared.length) {
     logger.error("Embedding batch response size mismatch.", {
@@ -269,7 +276,7 @@ async function processPendingRows(params: {
       expected: prepared.length,
       received: embeddings.length,
     });
-    return { processed: 0, stoppedEarly: true };
+    return { processed: 0, stoppedEarly: true, processedByType };
   }
 
   const updates = prepared.map((entry, index) => ({
@@ -310,6 +317,10 @@ async function processPendingRows(params: {
         logger.error("Failed to update embedding.", { label, id: update.row.id, updateError });
         continue;
       }
+      const docType = update.row.doc_type as DocumentType;
+      if (processedByType[docType] !== undefined) {
+        processedByType[docType] += 1;
+      }
       processed += 1;
     }
   }
@@ -320,7 +331,7 @@ async function processPendingRows(params: {
     await sleep(settings.delayMs);
   }
 
-  return { processed, stoppedEarly: false };
+  return { processed, stoppedEarly: false, processedByType };
 }
 
 export async function processPendingEmbeddings(params: { env: Env; clients: QueueClients; logger: QueueLogger }): Promise<QueueStats> {
@@ -334,27 +345,24 @@ export async function processPendingEmbeddings(params: { env: Env; clients: Queu
 
   const embedder = new VoyageEmbedding(clients.voyage, { logger } as unknown as Context);
 
-  const issueResult = await processPendingRows({
-    docTypes: ["issue", "pull_request"],
-    label: "issues",
+  const combinedResult = await processPendingRows({
+    docTypes: ["issue", "pull_request", "issue_comment", "review_comment", "pull_request_review"],
+    label: "documents",
     supabase: clients.supabase,
     embedder,
     settings,
     logger,
   });
 
-  const commentResult = await processPendingRows({
-    docTypes: ["issue_comment", "review_comment", "pull_request_review"],
-    label: "comments",
-    supabase: clients.supabase,
-    embedder,
-    settings,
-    logger,
-  });
+  const issuesProcessed = (combinedResult.processedByType.issue ?? 0) + (combinedResult.processedByType.pull_request ?? 0);
+  const commentsProcessed =
+    (combinedResult.processedByType.issue_comment ?? 0) +
+    (combinedResult.processedByType.review_comment ?? 0) +
+    (combinedResult.processedByType.pull_request_review ?? 0);
 
   return {
-    issuesProcessed: issueResult.processed,
-    commentsProcessed: commentResult.processed,
-    stoppedEarly: issueResult.stoppedEarly || commentResult.stoppedEarly,
+    issuesProcessed,
+    commentsProcessed,
+    stoppedEarly: combinedResult.stoppedEarly,
   };
 }
