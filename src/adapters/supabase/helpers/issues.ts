@@ -3,6 +3,7 @@ import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { IssueDocumentType, ISSUE_DOCUMENT_TYPES } from "../../../types/document";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
+import { VOYAGE_EMBEDDING_DIM, VOYAGE_EMBEDDING_MODEL } from "../../voyage/helpers/embedding";
 
 export interface IssueType {
   id: string;
@@ -92,6 +93,8 @@ export class Issue extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
+    const embeddingModel = embedding ? VOYAGE_EMBEDDING_MODEL : null;
+    const embeddingDim = embedding ? VOYAGE_EMBEDDING_DIM : null;
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -106,6 +109,8 @@ export class Issue extends SuperSupabase {
         doc_type: docType,
         parent_id: null,
         embedding,
+        embedding_model: embeddingModel,
+        embedding_dim: embeddingDim,
         payload: finalPayload,
         author_id: issueData.author_id,
         markdown: finalMarkdown,
@@ -133,6 +138,8 @@ export class Issue extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
+    const embeddingModel = embedding ? VOYAGE_EMBEDDING_MODEL : null;
+    const embeddingDim = embedding ? VOYAGE_EMBEDDING_DIM : null;
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -154,6 +161,8 @@ export class Issue extends SuperSupabase {
         doc_type: docType,
         markdown: finalMarkdown,
         embedding,
+        embedding_model: embeddingModel,
+        embedding_dim: embeddingDim,
         payload: finalPayload,
         modified_at: new Date(),
       })

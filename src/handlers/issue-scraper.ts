@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
-import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
+import { Embedding as VoyageEmbedding, VOYAGE_EMBEDDING_DIM, VOYAGE_EMBEDDING_MODEL } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 interface IssueMetadata {
@@ -251,6 +251,8 @@ export async function issueScraper(username: string, token?: string): Promise<st
         const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
         const embedding =
           shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown || isShortIssue ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
+        const embeddingModel = embedding ? VOYAGE_EMBEDDING_MODEL : null;
+        const embeddingDim = embedding ? VOYAGE_EMBEDDING_DIM : null;
         const storedMarkdown = isShortIssue ? null : markdown;
 
         const payload = {
@@ -284,6 +286,8 @@ export async function issueScraper(username: string, token?: string): Promise<st
           parent_id: null,
           markdown: storedMarkdown,
           embedding: embedding ?? null,
+          embedding_model: embeddingModel,
+          embedding_dim: embeddingDim,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,
           payload: payload,

@@ -4,6 +4,7 @@ import { Context } from "../../../types/context";
 import { COMMENT_DOCUMENT_TYPES, CommentDocumentType } from "../../../types/document";
 import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 import { isCommandLikeContent } from "../../../utils/markdown-comments";
+import { VOYAGE_EMBEDDING_DIM, VOYAGE_EMBEDDING_MODEL } from "../../voyage/helpers/embedding";
 
 export interface CommentType {
   id: string;
@@ -79,6 +80,8 @@ export class Comment extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
+    const embeddingModel = embedding ? VOYAGE_EMBEDDING_MODEL : null;
+    const embeddingDim = embedding ? VOYAGE_EMBEDDING_DIM : null;
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
@@ -94,6 +97,8 @@ export class Comment extends SuperSupabase {
         markdown: finalMarkdown,
         author_id: commentData.author_id,
         embedding,
+        embedding_model: embeddingModel,
+        embedding_dim: embeddingDim,
         payload: finalPayload,
       },
     ]);
@@ -121,6 +126,8 @@ export class Comment extends SuperSupabase {
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
+    const embeddingModel = embedding ? VOYAGE_EMBEDDING_MODEL : null;
+    const embeddingDim = embedding ? VOYAGE_EMBEDDING_DIM : null;
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
 
@@ -140,6 +147,8 @@ export class Comment extends SuperSupabase {
           parent_id: commentData.issue_id,
           markdown: finalMarkdown,
           embedding,
+          embedding_model: embeddingModel,
+          embedding_dim: embeddingDim,
           payload: finalPayload,
           modified_at: new Date(),
         })
