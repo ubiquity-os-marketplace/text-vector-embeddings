@@ -82,6 +82,10 @@ export class CronDatabase {
   async clearRepoMute(owner: string, repo: string): Promise<void> {
     await this._kv.delete([KV_MUTE_PREFIX, owner, repo]);
   }
+
+  async removeRepository(owner: string, repo: string): Promise<void> {
+    await this._kv.delete([KV_PREFIX, owner, repo]);
+  }
 }
 
 export type CronDatabaseClient = Pick<CronDatabase, "getIssueNumbers" | "addIssue" | "removeIssue" | "updateIssue" | "getAllRepositories">;

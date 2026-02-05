@@ -133,8 +133,19 @@ async function main() {
         installation = await octokit.rest.apps.getRepoInstallation({ owner, repo });
       } catch (error) {
         const status = parseOctokitStatus(error);
-        if (status === 404 || status === 403) {
-          const reason: RepoMuteEntry["reason"] = status === 404 ? "missing-installation" : "forbidden";
+        if (status === 404) {
+          await db.removeRepository(owner, repo);
+          await db.clearRepoMute(owner, repo);
+          logger.warn("Removed repository from cron queue due to missing installation.", {
+            owner,
+            repo,
+            status,
+            issueCount: issueNumbers.length,
+          });
+          continue;
+        }
+        if (status === 403) {
+          const reason: RepoMuteEntry["reason"] = "forbidden";
           const mutedUntilMs = nowMs + REPO_MUTE_WINDOW_MS;
           const updatedMute: RepoMuteEntry = {
             reason,
