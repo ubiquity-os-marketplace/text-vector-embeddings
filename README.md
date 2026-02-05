@@ -117,7 +117,7 @@ if (isIssueCommentEvent(context)) {
 
 ### Vector Embeddings: The Core Technology
 
-The most fascinating aspect of this system is its use of vector embeddings to understand and process text. The implementation uses Voyage AI's embedding service with their large instruction model:
+The most fascinating aspect of this system is its use of vector embeddings to understand and process text. The implementation uses Voyage AI's embedding service with their voyage-4-large model:
 
 ```typescript
 async createEmbedding(text: string | null, inputType: EmbedRequestInputType = "document"): Promise<number[]> {
@@ -126,8 +126,9 @@ async createEmbedding(text: string | null, inputType: EmbedRequestInputType = "d
   } else {
     const response = await this.client.embed({
       input: text,
-      model: "voyage-large-2-instruct",
+      model: "voyage-4-large",
       inputType,
+      outputDimension: 1024,
     });
     return (response.data && response.data[0]?.embedding) || [];
   }
