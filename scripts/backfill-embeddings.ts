@@ -225,12 +225,25 @@ async function main() {
 
     if (isTokenLimited) {
       emptyPasses = 0;
-      if (options.autoBatch && batchSize > 1) {
-        hasBatchFailure = true;
-        batchCeil = Math.max(batchFloor, batchSize - 1);
-        nextBatchSize = Math.max(batchFloor, Math.floor((batchFloor + batchCeil) / 2));
-      } else if (batchSize <= 1) {
+      if (!options.autoBatch) {
+        logger.error("Token limit hit while auto-batch is disabled. Reduce EMBEDDINGS_QUEUE_BATCH_SIZE or pass --auto-batch.", {
+          batchSize,
+        });
+        process.exit(1);
+      }
+      if (batchSize <= 1) {
         logger.error("Token limit hit at batch size 1; cannot auto-recover.", { batchSize });
+        process.exit(1);
+      }
+      hasBatchFailure = true;
+      batchCeil = Math.max(batchFloor, batchSize - 1);
+      nextBatchSize = Math.max(batchFloor, Math.floor((batchFloor + batchCeil) / 2));
+      if (nextBatchSize >= batchSize) {
+        logger.error("Token limit hit but batch size cannot shrink further. Lower EMBEDDINGS_QUEUE_BATCH_SIZE.", {
+          batchSize,
+          batchFloor,
+          batchCeil,
+        });
         process.exit(1);
       }
     } else if (result.stoppedEarly) {

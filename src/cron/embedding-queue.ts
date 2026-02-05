@@ -27,6 +27,8 @@ type QueueStats = {
   stoppedEarly: boolean;
 };
 
+type QueueLabel = "issues" | "comments" | "documents";
+
 type PendingRow = {
   id: string;
   markdown: string | null;
@@ -165,7 +167,7 @@ async function createEmbeddingsWithRetry(
 
 async function preparePendingRow(params: {
   row: PendingRow;
-  label: string;
+  label: QueueLabel;
   supabase: SupabaseClient<Database>;
   logger: QueueLogger;
 }): Promise<{ row: PendingRow; embeddingSource: string } | null> {
@@ -218,7 +220,7 @@ async function preparePendingRow(params: {
 
 async function processPendingRows(params: {
   docTypes: DocumentType[];
-  label: string;
+  label: QueueLabel;
   supabase: SupabaseClient<Database>;
   embedder: VoyageEmbedding;
   settings: ReturnType<typeof getEmbeddingQueueSettings>;
