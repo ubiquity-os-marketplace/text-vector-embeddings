@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
-import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
+import { Embedding as VoyageEmbedding, VOYAGE_EMBEDDING_DIM, VOYAGE_EMBEDDING_MODEL } from "../adapters/voyage/helpers/embedding";
 import { DocumentType } from "../types/document";
 import { Context } from "../types/context";
 import { Database } from "../types/database";
@@ -303,7 +303,13 @@ async function processPendingRows(params: {
       }
       const { error: updateError } = await supabase
         .from("documents")
-        .update({ embedding: update.embedding, modified_at: new Date().toISOString() })
+        .update({
+          embedding: update.embedding,
+          embedding_model: VOYAGE_EMBEDDING_MODEL,
+          embedding_dim: VOYAGE_EMBEDDING_DIM,
+          embedding_status: "ready",
+          modified_at: new Date().toISOString(),
+        })
         .eq("id", update.row.id);
 
       if (updateError) {
