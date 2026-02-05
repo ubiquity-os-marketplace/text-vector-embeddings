@@ -249,9 +249,16 @@ export async function issueScraper(username: string, token?: string): Promise<st
         const markdown = metadata.body + " " + metadata.title;
         const cleanedMarkdown = cleanMarkdown(markdown);
         const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
+        if (!cleanedMarkdown || isShortIssue) {
+          processedIssues.push({
+            issue: metadata,
+            error: "Skipped issue with empty or too-short content.",
+          });
+          continue;
+        }
         const embedding =
           shouldSkipEmbeddings || !voyageEmbedding || !cleanedMarkdown || isShortIssue ? null : await voyageEmbedding.createEmbedding(cleanedMarkdown);
-        const storedMarkdown = isShortIssue ? null : markdown;
+        const storedMarkdown = markdown;
 
         const payload = {
           issue: metadata,

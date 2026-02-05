@@ -38,6 +38,9 @@ jobs:
       - name: Install packages
         run: bun install --frozen-lockfile
 
+      - name: Backfill embeddings queue
+        run: bun run scripts/backfill-embeddings.ts --max-empty 5 --interval-ms 0
+
       - name: Get GitHub App token
         if: env.APP_ID != '' && env.APP_PRIVATE_KEY != ''
         uses: actions/create-github-app-token@v1

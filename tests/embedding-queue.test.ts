@@ -1,6 +1,6 @@
-import { describe, expect, it, mock } from "bun:test";
+import { beforeEach, describe, expect, it, mock } from "bun:test";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { processPendingEmbeddings } from "../src/cron/embedding-queue";
+import { processPendingEmbeddings, resetEmbeddingQueueRateLimits } from "../src/cron/embedding-queue";
 import { Database } from "../src/types/database";
 import { Env } from "../src/types/index";
 
@@ -64,6 +64,9 @@ function createLogger() {
 }
 
 describe("processPendingEmbeddings", () => {
+  beforeEach(() => {
+    resetEmbeddingQueueRateLimits();
+  });
   it("processes pull request documents with issue-length thresholds", async () => {
     const env = {
       EMBEDDINGS_QUEUE_ENABLED: "true",
@@ -94,7 +97,7 @@ describe("processPendingEmbeddings", () => {
     expect(updates.length).toBe(1);
   });
 
-  it("marks the queue as stopped when rate limits persist", async () => {
+  it("does not clear markdown when rate limits persist for a single document", async () => {
     const env = {
       EMBEDDINGS_QUEUE_ENABLED: "true",
       EMBEDDINGS_QUEUE_DELAY_MS: "0",
@@ -150,5 +153,107 @@ describe("processPendingEmbeddings", () => {
 
     expect(result.commentsProcessed).toBe(1);
     expect(updates.length).toBe(1);
+  });
+
+  it("splits batches on TPM limits and completes updates", async () => {
+    const env = {
+      EMBEDDINGS_QUEUE_ENABLED: "true",
+      EMBEDDINGS_QUEUE_DELAY_MS: "0",
+      EMBEDDINGS_QUEUE_MAX_RETRIES: "0",
+    } as Env;
+    const issueRows: QueueRow[] = [
+      {
+        id: "issue-1",
+        markdown: "a".repeat(6000),
+        modified_at: new Date().toISOString(),
+        payload: { issue: { user: { type: "User" } } },
+        doc_type: "issue",
+      },
+      {
+        id: "issue-2",
+        markdown: "b".repeat(6000),
+        modified_at: new Date().toISOString(),
+        payload: { issue: { user: { type: "User" } } },
+        doc_type: "issue",
+      },
+      {
+        id: "issue-3",
+        markdown: "c".repeat(6000),
+        modified_at: new Date().toISOString(),
+        payload: { issue: { user: { type: "User" } } },
+        doc_type: "issue",
+      },
+    ];
+    const { client, updates } = createMockSupabase([issueRows, []]);
+    let callCount = 0;
+    const voyage = {
+      embed: mock(async (payload: { input: string[] }) => {
+        callCount += 1;
+        if (callCount === 1) {
+          const err = new Error("rate limit") as Error & { statusCode?: number; body?: { detail?: string } };
+          err.statusCode = 429;
+          err.body = { detail: "10K TPM" };
+          throw err;
+        }
+        return { data: payload.input.map(() => ({ embedding: [1, 2, 3] })) };
+      }),
+    };
+
+    const result = await processPendingEmbeddings({
+      env,
+      clients: { supabase: client, voyage: voyage as never },
+      logger: createLogger(),
+    });
+
+    expect(result.issuesProcessed).toBe(3);
+    expect(result.commentsProcessed).toBe(0);
+    expect(result.stoppedEarly).toBe(false);
+    expect(updates.length).toBe(3);
+    expect(updates.every((update) => update.values.embedding_status === "ready")).toBe(true);
+  });
+
+  it("splits batches using RPM-aware request budgets", async () => {
+    const env = {
+      EMBEDDINGS_QUEUE_ENABLED: "true",
+      EMBEDDINGS_QUEUE_DELAY_MS: "0",
+      EMBEDDINGS_QUEUE_MAX_RETRIES: "0",
+    } as Env;
+    const issueRows: QueueRow[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      issueRows.push({
+        id: `issue-${index + 1}`,
+        markdown: "a".repeat(2000),
+        modified_at: new Date().toISOString(),
+        payload: { issue: { user: { type: "User" } } },
+        doc_type: "issue",
+      });
+    }
+    const { client, updates } = createMockSupabase([issueRows, []]);
+    let callCount = 0;
+    const voyage = {
+      embed: mock(async (payload: { input: string[] }) => {
+        callCount += 1;
+        if (callCount === 1) {
+          const err = new Error("rate limit") as Error & { statusCode?: number; body?: { detail?: string } };
+          err.statusCode = 429;
+          err.body = { detail: "3 RPM and 10K TPM" };
+          throw err;
+        }
+        return { data: payload.input.map(() => ({ embedding: [1, 2, 3] })) };
+      }),
+    };
+
+    const result = await processPendingEmbeddings({
+      env,
+      clients: { supabase: client, voyage: voyage as never },
+      logger: createLogger(),
+    });
+
+    expect(result.issuesProcessed).toBe(4);
+    expect(result.stoppedEarly).toBe(false);
+    expect(updates.length).toBe(4);
+    const callInputs = voyage.embed.mock.calls.map((call) => call[0]?.input?.length ?? 0);
+    expect(callInputs[0]).toBe(4);
+    expect(callInputs.slice(1)).toEqual([2, 2]);
   });
 });

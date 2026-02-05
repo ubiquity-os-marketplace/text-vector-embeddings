@@ -46,14 +46,14 @@ function parseArgs(argv: string[]): CliOptions {
     autoBatch: true,
   };
 
-  const requireValue = (flag: string, offset: number): string => {
+  function requireValue(flag: string, offset: number): string {
     const value = argv[offset];
     if (!value || value.startsWith("-")) {
       console.error(`Missing value for ${flag}`);
       process.exit(1);
     }
     return value;
-  };
+  }
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -193,6 +193,7 @@ async function main() {
   let pass = 0;
   let totalProcessed = 0;
   let emptyPasses = 0;
+  let rateLimitPasses = 0;
 
   while (true) {
     env.EMBEDDINGS_QUEUE_BATCH_SIZE = String(batchSize);
@@ -246,6 +247,7 @@ async function main() {
 
     if (isTokenLimited) {
       emptyPasses = 0;
+      rateLimitPasses = 0;
       if (!options.autoBatch) {
         logger.error("Token limit hit while auto-batch is disabled. Reduce EMBEDDINGS_QUEUE_BATCH_SIZE or pass --auto-batch.", {
           batchSize,
@@ -281,6 +283,22 @@ async function main() {
           nextDelayMs = nextDelayIncrease(delayMs, delayMin, delayMax);
         }
       }
+      if (!isTokenLimited && !hasProgress) {
+        rateLimitPasses += 1;
+        if (options.autoBatch && rateLimitPasses >= 2 && batchSize > 1) {
+          hasBatchFailure = true;
+          batchCeil = Math.max(batchFloor, batchSize - 1);
+          nextBatchSize = Math.max(batchFloor, Math.floor((batchFloor + batchCeil) / 2));
+          logger.warn("Rate limit persisted; shrinking batch size.", {
+            batchSize,
+            nextBatchSize,
+            rateLimitPasses,
+          });
+          rateLimitPasses = 0;
+        }
+      } else {
+        rateLimitPasses = 0;
+      }
     }
 
     if (!result.stoppedEarly && !isTokenLimited) {
@@ -296,6 +314,7 @@ async function main() {
       } else {
         emptyPasses = 0;
       }
+      rateLimitPasses = 0;
 
       if (processed > 0) {
         if (options.autoBatch) {
