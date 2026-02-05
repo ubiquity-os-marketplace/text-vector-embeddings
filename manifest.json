@@ -57,5 +57,5 @@
     }
   },
   "homepage_url": "https://text-vector-embeddings-bat.deno.dev",
-  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@fix/cron"
+  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@batch-embedding-queue"
 }
