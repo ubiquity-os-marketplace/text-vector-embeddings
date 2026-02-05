@@ -106,6 +106,16 @@ async function main() {
 
     let existingMute = await db.getRepoMute(owner, repo);
     const nowMs = Date.now();
+    if (existingMute?.reason === "missing-installation") {
+      await db.removeRepository(owner, repo);
+      await db.clearRepoMute(owner, repo);
+      logger.warn("Removed repository from cron queue due to missing installation.", {
+        owner,
+        repo,
+        issueCount: issueNumbers.length,
+      });
+      continue;
+    }
     if (existingMute && existingMute.mutedUntilMs > nowMs) {
       logger.debug?.("Skipping muted repository", {
         owner,
