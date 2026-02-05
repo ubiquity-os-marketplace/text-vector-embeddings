@@ -136,23 +136,23 @@ function getAuthorType(payload: unknown, docType: DocumentType): string | null {
   return getNestedString(payload, ["comment", "user", "type"]) ?? getNestedString(payload, ["sender", "type"]);
 }
 
-async function createEmbeddingWithRetry(
+async function createEmbeddingsWithRetry(
   embedder: VoyageEmbedding,
-  text: string,
+  texts: string[],
   maxRetries: number,
   delayMs: number,
   logger: QueueLogger
-): Promise<number[] | null> {
+): Promise<number[][] | null> {
   let attempt = 0;
   while (attempt <= maxRetries) {
     try {
-      return await embedder.createEmbedding(text);
+      return await embedder.createEmbeddings(texts);
     } catch (error) {
       if (!isRateLimitError(error)) {
         throw error;
       }
       const backoffMs = getRateLimitDelayMs(delayMs, attempt, error);
-      logger.warn("Voyage rate limit hit while creating embedding.", { attempt: attempt + 1, backoffMs });
+      logger.warn("Voyage rate limit hit while creating embeddings batch.", { attempt: attempt + 1, backoffMs });
       if (attempt >= maxRetries) {
         return null;
       }
@@ -163,15 +163,13 @@ async function createEmbeddingWithRetry(
   return null;
 }
 
-async function processPendingRow(params: {
+async function preparePendingRow(params: {
   row: PendingRow;
   label: "issues" | "comments";
   supabase: SupabaseClient<Database>;
-  embedder: VoyageEmbedding;
-  settings: ReturnType<typeof getEmbeddingQueueSettings>;
   logger: QueueLogger;
-}): Promise<{ processed: boolean; stoppedEarly: boolean }> {
-  const { row, label, supabase, embedder, settings, logger } = params;
+}): Promise<{ row: PendingRow; embeddingSource: string } | null> {
+  const { row, label, supabase, logger } = params;
   const docType = row.doc_type as DocumentType;
   const authorType = getAuthorType(row.payload, docType);
   if (authorType && authorType !== "User") {
@@ -182,7 +180,7 @@ async function processPendingRow(params: {
       if (updateError) {
         logger.error("Failed to clear markdown for non-human author.", { label, id: row.id, updateError });
       }
-      return { processed: false, stoppedEarly: false };
+      return null;
     }
     logger.debug("Allowing bot-authored root review comment for embedding.", { label, id: row.id, authorType, docType });
   }
@@ -196,7 +194,7 @@ async function processPendingRow(params: {
     if (updateError) {
       logger.error("Failed to clear markdown for command-like comment.", { label, id: row.id, updateError });
     }
-    return { processed: false, stoppedEarly: false };
+    return null;
   }
   if (!cleaned) {
     logger.debug("Skipping empty markdown embedding.", { label, id: row.id, docType });
@@ -204,7 +202,7 @@ async function processPendingRow(params: {
     if (updateError) {
       logger.error("Failed to clear markdown for empty content.", { label, id: row.id, updateError });
     }
-    return { processed: false, stoppedEarly: false };
+    return null;
   }
   if (isTooShort(cleaned, minLength)) {
     logger.debug("Skipping embedding for short content.", { label, id: row.id, length: cleaned.length, minLength, docType });
@@ -212,22 +210,10 @@ async function processPendingRow(params: {
     if (updateError) {
       logger.error("Failed to clear markdown for short content.", { label, id: row.id, updateError });
     }
-    return { processed: false, stoppedEarly: false };
+    return null;
   }
 
-  const embedding = await createEmbeddingWithRetry(embedder, cleaned, settings.maxRetries, settings.delayMs, logger);
-  if (!embedding) {
-    return { processed: false, stoppedEarly: true };
-  }
-
-  const { error: updateError } = await supabase.from("documents").update({ embedding, modified_at: new Date().toISOString() }).eq("id", row.id);
-
-  if (updateError) {
-    logger.error("Failed to update embedding.", { label, id: row.id, updateError });
-    return { processed: false, stoppedEarly: false };
-  }
-
-  return { processed: true, stoppedEarly: false };
+  return { row, embeddingSource: cleaned };
 }
 
 async function processPendingRows(params: {
@@ -259,30 +245,82 @@ async function processPendingRows(params: {
   }
 
   const rows = (data as PendingRow[]).slice();
-  let processed = 0;
-  let shouldStopEarly = false;
-  const concurrency = Math.max(1, Math.min(settings.concurrency, rows.length));
+  const prepared: Array<{ row: PendingRow; embeddingSource: string }> = [];
 
-  async function worker() {
-    while (rows.length > 0 && !shouldStopEarly) {
-      const row = rows.shift();
-      if (!row) {
-        return;
-      }
-      const result = await processPendingRow({ row, label, supabase, embedder, settings, logger });
-      if (result.stoppedEarly) {
-        shouldStopEarly = true;
-        return;
-      }
-      if (result.processed) {
-        processed += 1;
-        await sleep(settings.delayMs);
-      }
+  for (const row of rows) {
+    const result = await preparePendingRow({ row, label, supabase, logger });
+    if (result) {
+      prepared.push(result);
     }
   }
+
+  if (prepared.length === 0) {
+    return { processed: 0, stoppedEarly: false };
+  }
+
+  const embeddingSources = prepared.map((entry) => entry.embeddingSource);
+  const embeddings = await createEmbeddingsWithRetry(embedder, embeddingSources, settings.maxRetries, settings.delayMs, logger);
+  if (!embeddings) {
+    return { processed: 0, stoppedEarly: true };
+  }
+  if (embeddings.length !== prepared.length) {
+    logger.error("Embedding batch response size mismatch.", {
+      label,
+      expected: prepared.length,
+      received: embeddings.length,
+    });
+    return { processed: 0, stoppedEarly: true };
+  }
+
+  const updates = prepared.map((entry, index) => ({
+    row: entry.row,
+    embedding: embeddings[index] ?? [],
+  }));
+
+  let processed = 0;
+  const concurrency = Math.max(1, Math.min(settings.concurrency, updates.length));
+
+  async function worker() {
+    while (updates.length > 0) {
+      const update = updates.shift();
+      if (!update) {
+        return;
+      }
+      if (!update.embedding.length) {
+        logger.error("Embedding batch returned empty vector.", { label, id: update.row.id });
+        const { error: clearError } = await supabase
+          .from("documents")
+          .update({ markdown: null, modified_at: new Date().toISOString() })
+          .eq("id", update.row.id);
+        if (clearError) {
+          logger.error("Failed to clear markdown after empty embedding.", {
+            label,
+            id: update.row.id,
+            clearError,
+          });
+        }
+        continue;
+      }
+      const { error: updateError } = await supabase
+        .from("documents")
+        .update({ embedding: update.embedding, modified_at: new Date().toISOString() })
+        .eq("id", update.row.id);
+
+      if (updateError) {
+        logger.error("Failed to update embedding.", { label, id: update.row.id, updateError });
+        continue;
+      }
+      processed += 1;
+    }
+  }
+
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
 
-  return { processed, stoppedEarly: shouldStopEarly };
+  if (processed > 0) {
+    await sleep(settings.delayMs);
+  }
+
+  return { processed, stoppedEarly: false };
 }
 
 export async function processPendingEmbeddings(params: { env: Env; clients: QueueClients; logger: QueueLogger }): Promise<QueueStats> {
