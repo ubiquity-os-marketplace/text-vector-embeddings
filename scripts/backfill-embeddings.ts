@@ -46,11 +46,20 @@ function parseArgs(argv: string[]): CliOptions {
     autoBatch: true,
   };
 
+  const requireValue = (flag: string, offset: number): string => {
+    const value = argv[offset];
+    if (!value || value.startsWith("-")) {
+      console.error(`Missing value for ${flag}`);
+      process.exit(1);
+    }
+    return value;
+  };
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
       case "--env-file":
-        options.envFile = argv[index + 1];
+        options.envFile = requireValue("--env-file", index + 1);
         index += 1;
         break;
       case "--once":
@@ -67,7 +76,7 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "--max-empty":
         {
-          const parsed = Number(argv[index + 1]);
+          const parsed = Number(requireValue("--max-empty", index + 1));
           if (Number.isFinite(parsed) && parsed >= 0) {
             options.maxEmpty = parsed;
           }
@@ -76,7 +85,7 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "--interval-ms":
         {
-          const parsed = Number(argv[index + 1]);
+          const parsed = Number(requireValue("--interval-ms", index + 1));
           if (Number.isFinite(parsed) && parsed >= 0) {
             options.intervalMs = parsed;
           }
@@ -84,7 +93,7 @@ function parseArgs(argv: string[]): CliOptions {
         index += 1;
         break;
       case "--log-level":
-        options.logLevel = argv[index + 1];
+        options.logLevel = requireValue("--log-level", index + 1);
         index += 1;
         break;
       case "--help":
