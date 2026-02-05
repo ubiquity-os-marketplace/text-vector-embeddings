@@ -229,6 +229,8 @@ async function main() {
     totalProcessed += processed;
 
     const pendingAfter = await getPendingCount(clients.supabase);
+    const pendingDelta = pendingBefore - pendingAfter;
+    const hasProgress = pendingDelta > 0;
 
     let nextBatchSize = batchSize;
     let nextDelayMs = delayMs;
@@ -273,7 +275,7 @@ async function main() {
     }
 
     if (!result.stoppedEarly && !isTokenLimited) {
-      if (processed === 0) {
+      if (!hasProgress && processed === 0) {
         emptyPasses += 1;
         if (emptyPasses >= options.maxEmpty) {
           logger.error("No progress detected; aborting to avoid an infinite loop.", {
