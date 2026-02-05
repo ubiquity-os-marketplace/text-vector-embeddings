@@ -66,11 +66,21 @@ function parseArgs(argv: string[]): CliOptions {
         options.autoBatch = true;
         break;
       case "--max-empty":
-        options.maxEmpty = Number(argv[index + 1]) || options.maxEmpty;
+        {
+          const parsed = Number(argv[index + 1]);
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            options.maxEmpty = parsed;
+          }
+        }
         index += 1;
         break;
       case "--interval-ms":
-        options.intervalMs = Number(argv[index + 1]) || 0;
+        {
+          const parsed = Number(argv[index + 1]);
+          if (Number.isFinite(parsed) && parsed >= 0) {
+            options.intervalMs = parsed;
+          }
+        }
         index += 1;
         break;
       case "--log-level":
