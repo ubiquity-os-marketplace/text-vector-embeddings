@@ -19,8 +19,8 @@ async function main() {
   let env;
   try {
     env = decodeEnv(process.env);
-  } catch (err) {
-    logger.error("Missing required env for reprocess; skipping cron run.", { err });
+  } catch (error) {
+    logger.warn("Missing required env for reprocess; skipping cron run.", { error: normalizeError(error) });
     return;
   }
   const clients = createReprocessClients(env);
