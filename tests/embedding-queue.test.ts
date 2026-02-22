@@ -137,7 +137,7 @@ describe("processPendingEmbeddings", () => {
       payload: { comment: { user: { type: "Bot" }, in_reply_to_id: null } },
       doc_type: "review_comment",
     };
-    const { client, updates } = createMockSupabase([[], [reviewRow]]);
+    const { client, updates } = createMockSupabase([[reviewRow]]);
     const voyage = {
       embed: mock(async () => ({ data: [{ embedding: [1, 2, 3] }] })),
     };
