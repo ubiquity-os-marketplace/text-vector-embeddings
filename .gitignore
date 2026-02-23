@@ -20,3 +20,6 @@ script.ts
 test-dashboard.md
 auth.users.json
 *.code-workspace
+
+manifest.json
+dist/
