@@ -30,6 +30,9 @@ jobs:
           if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then echo "Missing SUPABASE_ACCESS_TOKEN"; exit 1; fi
           if [ "${{ inputs.dry_run }}" != "true" ] && [ -z "${{ secrets.SUPABASE_TARGET_DB_PASSWORD }}" ]; then echo "Missing SUPABASE_TARGET_DB_PASSWORD"; exit 1; fi
 
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
