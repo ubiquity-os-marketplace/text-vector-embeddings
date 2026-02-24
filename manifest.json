@@ -1,12 +1,12 @@
 {
-  "name": "Text Vector Embeddings",
-  "description": "Enables the storage, updating, and deletion of issue comment embeddings.",
-  "skipBotEvents": false,
+  "name": "@ubiquity-os/text-vector-embeddings",
+  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@codex/issue-23-redact-switch",
+  "description": "Generates vector embeddings of GitHub comments and stores them in Supabase.",
   "commands": {},
   "ubiquity:listeners": [
     "issue_comment.created",
-    "issue_comment.edited",
     "issue_comment.deleted",
+    "issue_comment.edited",
     "pull_request_review_comment.created",
     "pull_request_review_comment.edited",
     "pull_request_review_comment.deleted",
@@ -18,8 +18,10 @@
     "issues.edited",
     "issues.deleted",
     "issues.labeled",
+    "issues.transferred",
     "issues.closed"
   ],
+  "skipBotEvents": true,
   "configuration": {
     "default": {},
     "type": "object",
@@ -53,9 +55,13 @@
         "default": false,
         "description": "When true, disables storing issues and comments in the database.",
         "type": "boolean"
+      },
+      "redactPrivateRepoComments": {
+        "default": false,
+        "description": "When true, redact markdown and payload content for private repositories before persisting.",
+        "type": "boolean"
       }
     }
   },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev",
-  "short_name": "ubiquity-os-marketplace/text-vector-embeddings@fix/retry"
+  "homepage_url": "https://text-vector-embeddings-dev.deno.dev"
 }
