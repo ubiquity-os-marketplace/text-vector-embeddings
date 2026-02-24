@@ -21,7 +21,7 @@
     "issues.transferred",
     "issues.closed"
   ],
-  "skipBotEvents": true,
+  "skipBotEvents": false,
   "configuration": {
     "default": {},
     "type": "object",
