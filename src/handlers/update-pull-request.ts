@@ -1,6 +1,7 @@
 import { Context } from "../types/index";
 import { cleanContent } from "./issue-deduplication";
 import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
+import { shouldRedactPrivateRepoComments } from "../utils/privacy";
 import { buildPullRequestMarkdown } from "./pull-request-review-utils";
 
 export async function updatePullRequest(context: Context<"pull_request.edited">) {
@@ -16,7 +17,7 @@ export async function updatePullRequest(context: Context<"pull_request.edited">)
   const markdown = isHumanAuthor ? buildPullRequestMarkdown(pullRequest) : null;
   const authorId = pullRequest.user?.id || -1;
   const id = pullRequest.node_id;
-  const isPrivate = payload.repository.private;
+  const isPrivate = shouldRedactPrivateRepoComments(payload.repository.private, config.redactPrivateRepoComments);
 
   if (!isHumanAuthor) {
     logger.debug("Pull request author is not human; storing PR without embeddings.", {

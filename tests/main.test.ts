@@ -579,6 +579,51 @@ describe("Plugin tests", () => {
     expect(comment.embedding).toBeDefined();
   });
 
+  it("When repository is private and redactPrivateRepoComments is false, it should preserve comment embeddings", async () => {
+    db.repo.update({
+      where: { id: { equals: 1 } },
+      data: { private: true },
+    });
+
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "privateCommentNoRedact", DEFAULT_ISSUE_ID);
+    context.config.redactPrivateRepoComments = false;
+
+    await runPlugin(context);
+
+    const comment = (await context.adapters.supabase.comment.getComment("privateCommentNoRedact")) as unknown as CommentMock;
+    expect(comment.embedding[0]).toBe(1);
+  });
+
+  it("When repository is private and redactPrivateRepoComments is true, it should redact comment embeddings", async () => {
+    db.repo.update({
+      where: { id: { equals: 1 } },
+      data: { private: true },
+    });
+
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "privateCommentRedacted", DEFAULT_ISSUE_ID);
+    context.config.redactPrivateRepoComments = true;
+
+    await runPlugin(context);
+
+    const comment = (await context.adapters.supabase.comment.getComment("privateCommentRedacted")) as unknown as CommentMock;
+    expect(comment.embedding[0]).toBe(0);
+  });
+
+  it("When repository is public and redactPrivateRepoComments is true, it should keep comment embeddings", async () => {
+    db.repo.update({
+      where: { id: { equals: 1 } },
+      data: { private: false },
+    });
+
+    const { context } = createContext(DEFAULT_BODY, 1, 1, 1, "publicCommentNoRedact", DEFAULT_ISSUE_ID);
+    context.config.redactPrivateRepoComments = true;
+
+    await runPlugin(context);
+
+    const comment = (await context.adapters.supabase.comment.getComment("publicCommentNoRedact")) as unknown as CommentMock;
+    expect(comment.embedding[0]).toBe(1);
+  });
+
   it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
@@ -702,6 +747,7 @@ describe("Plugin tests", () => {
         jobMatchingThreshold: 0.95,
         annotateThreshold: 0.65,
         demoFlag: false,
+        redactPrivateRepoComments: false,
       },
       command: null,
       adapters: {} as Context["adapters"],
