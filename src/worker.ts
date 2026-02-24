@@ -4,6 +4,7 @@ import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
+import "@hono/standard-validator"; // Ensure Deno deploy includes optional peer for hono-openapi.
 import { rateLimiter } from "hono-rate-limiter";
 import { env } from "hono/adapter";
 import { cors } from "hono/cors";
