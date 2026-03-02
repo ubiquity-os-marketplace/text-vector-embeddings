@@ -126,6 +126,39 @@ type IssueMatchingInternalOptions = {
   includeNonCompleted?: boolean;
 };
 
+function getIssueNodeId(issue: IssueSimilaritySearchResult): string {
+  return issue.issue_id || issue.id;
+}
+
+function dedupeSimilarIssues(similarIssues: IssueSimilaritySearchResult[]): IssueSimilaritySearchResult[] {
+  const bestByIssueId = new Map<string, IssueSimilaritySearchResult>();
+
+  for (const issue of similarIssues) {
+    const issueNodeId = getIssueNodeId(issue);
+    if (!issueNodeId) {
+      continue;
+    }
+    const existing = bestByIssueId.get(issueNodeId);
+    if (!existing || issue.similarity > existing.similarity) {
+      bestByIssueId.set(issueNodeId, issue);
+    }
+  }
+
+  return Array.from(bestByIssueId.values());
+}
+
+function addUniqueMatch(matchResultArray: Map<string, Array<string>>, login: string, match: string): void {
+  const existingMatches = matchResultArray.get(login);
+  if (!existingMatches) {
+    matchResultArray.set(login, [match]);
+    return;
+  }
+
+  if (!existingMatches.includes(match)) {
+    existingMatches.push(match);
+  }
+}
+
 async function issueMatchingInternal(context: Context<IssueMatchingEvents>, options: IssueMatchingInternalOptions) {
   const {
     logger,
@@ -158,8 +191,12 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
   });
 
   if (similarIssues && similarIssues.length > 0) {
-    similarIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
-    const fetchPromises = similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
+    const dedupedSimilarIssues = dedupeSimilarIssues(similarIssues).sort(
+      (a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity
+    ); // Sort by similarity
+
+    const fetchPromises = dedupedSimilarIssues.map(async (issue: IssueSimilaritySearchResult) => {
+      const issueNodeId = getIssueNodeId(issue);
       try {
         const issueObject: IssueNodeResponse = await context.octokit.graphql(
           /* GraphQL */
@@ -188,16 +225,16 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
               }
             }
           `,
-          { issueNodeId: issue.issue_id }
+          { issueNodeId }
         );
         if (!hasIssueNode(issueObject)) {
-          context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId: issue.issue_id });
+          context.logger.warn("Skipping non-issue node in recommendations.", { issueNodeId });
           return null;
         }
         issueObject.similarity = issue.similarity;
         return issueObject;
       } catch (error) {
-        context.logger.error(`Failed to fetch issue ${issue.issue_id}: ${error}`, { issue });
+        context.logger.error(`Failed to fetch issue ${issueNodeId}: ${error}`, { issue });
         return null;
       }
     });
@@ -221,17 +258,10 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           }
           const similarityPercentage = Math.round(issue.similarity * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
-          if (matchResultArray.has(assignee.login)) {
-            matchResultArray
-              .get(assignee.login)
-              ?.push(
-                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
-              );
-          } else {
-            matchResultArray.set(assignee.login, [
-              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`,
-            ]);
-          }
+          const matchEntry = `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url
+            .split("/")
+            .pop()}](${issueLink})`;
+          addUniqueMatch(matchResultArray, assignee.login, matchEntry);
         });
       }
     });
@@ -256,7 +286,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
       .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
 
     logger.debug("Sorted contributors", { sortedContributors });
-    return { matchResultArray, similarIssues, sortedContributors };
+    return { matchResultArray, similarIssues: dedupedSimilarIssues, sortedContributors };
   }
 
   if (options.ensureLogins && options.ensureLogins.length > 0) {
