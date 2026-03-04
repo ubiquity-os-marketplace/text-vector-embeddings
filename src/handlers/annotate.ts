@@ -43,12 +43,21 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
-    const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
-    });
-    await commentChecker(context, data, scope);
+    try {
+      const { data } = await octokit.rest.issues.getComment({
+        owner: repository.owner.login,
+        repo: repository.name,
+        comment_id: parseInt(commentId, 10),
+      });
+      await commentChecker(context, data, scope);
+    } catch (error: unknown) {
+      const err = error as { status?: number; message?: string };
+      if (err.status === 404) {
+        logger.error("Cannot annotate: Comment not found or no permission to access it. This issue/comment may be in a private repository or you lack permission to view it.");
+        return;
+      }
+      throw error;
+    }
   }
 }
 
