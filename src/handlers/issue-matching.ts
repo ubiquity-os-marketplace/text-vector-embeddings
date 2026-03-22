@@ -158,8 +158,17 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
   });
 
   if (similarIssues && similarIssues.length > 0) {
-    similarIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
-    const fetchPromises = similarIssues.map(async (issue: IssueSimilaritySearchResult) => {
+    // Deduplicate similar issues by issue_id to prevent duplicate recommendations
+    const uniqueIssues = new Map();
+    similarIssues.forEach((issue: IssueSimilaritySearchResult) => {
+      if (!uniqueIssues.has(issue.issue_id)) {
+        uniqueIssues.set(issue.issue_id, issue);
+      }
+    });
+    const deduplicatedIssues = Array.from(uniqueIssues.values());
+    
+    deduplicatedIssues.sort((a: IssueSimilaritySearchResult, b: IssueSimilaritySearchResult) => b.similarity - a.similarity); // Sort by similarity
+    const fetchPromises = deduplicatedIssues.map(async (issue: IssueSimilaritySearchResult) => {
       try {
         const issueObject: IssueNodeResponse = await context.octokit.graphql(
           /* GraphQL */
@@ -256,7 +265,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
       .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
 
     logger.debug("Sorted contributors", { sortedContributors });
-    return { matchResultArray, similarIssues, sortedContributors };
+    return { matchResultArray, similarIssues: deduplicatedIssues, sortedContributors };
   }
 
   if (options.ensureLogins && options.ensureLogins.length > 0) {
