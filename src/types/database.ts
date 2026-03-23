@@ -1,6 +1,11 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "11.2.0 (c820efb)";
+  };
   public: {
     Tables: {
       documents: {
@@ -9,7 +14,7 @@ export type Database = {
           created_at: string;
           deleted_at: string | null;
           doc_type: string;
-          embedding: number[] | null;
+          embedding: string | null;
           embedding_dim: number | null;
           embedding_model: string | null;
           embedding_status: string;
@@ -24,7 +29,7 @@ export type Database = {
           created_at?: string;
           deleted_at?: string | null;
           doc_type: string;
-          embedding?: number[] | null;
+          embedding?: string | null;
           embedding_dim?: number | null;
           embedding_model?: string | null;
           embedding_status?: string;
@@ -39,7 +44,7 @@ export type Database = {
           created_at?: string;
           deleted_at?: string | null;
           doc_type?: string;
-          embedding?: number[] | null;
+          embedding?: string | null;
           embedding_dim?: number | null;
           embedding_model?: string | null;
           embedding_status?: string;
@@ -59,63 +64,407 @@ export type Database = {
           },
         ];
       };
+      locations: {
+        Row: {
+          comment_id: number | null;
+          created: string;
+          id: number;
+          issue_id: number | null;
+          node_id: string | null;
+          node_type: string | null;
+          node_url: string | null;
+          organization_id: number | null;
+          repository_id: number | null;
+          updated: string | null;
+          user_id: number | null;
+        };
+        Insert: {
+          comment_id?: number | null;
+          created?: string;
+          id?: number;
+          issue_id?: number | null;
+          node_id?: string | null;
+          node_type?: string | null;
+          node_url?: string | null;
+          organization_id?: number | null;
+          repository_id?: number | null;
+          updated?: string | null;
+          user_id?: number | null;
+        };
+        Update: {
+          comment_id?: number | null;
+          created?: string;
+          id?: number;
+          issue_id?: number | null;
+          node_id?: string | null;
+          node_type?: string | null;
+          node_url?: string | null;
+          organization_id?: number | null;
+          repository_id?: number | null;
+          updated?: string | null;
+          user_id?: number | null;
+        };
+        Relationships: [];
+      };
+      partners: {
+        Row: {
+          created: string;
+          id: number;
+          location_id: number | null;
+          updated: string | null;
+          wallet_id: number | null;
+        };
+        Insert: {
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          updated?: string | null;
+          wallet_id?: number | null;
+        };
+        Update: {
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          updated?: string | null;
+          wallet_id?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_partners_location";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fk_partners_location";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "partners_wallet_id_fkey";
+            columns: ["wallet_id"];
+            isOneToOne: true;
+            referencedRelation: "wallets";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      permits: {
+        Row: {
+          amount: string;
+          beneficiary_id: number;
+          created: string;
+          deadline: string;
+          id: number;
+          invalidation: string | null;
+          location_id: number | null;
+          network_id: number | null;
+          nonce: string;
+          partner_id: number | null;
+          permit2_address: string | null;
+          signature: string;
+          token_id: number | null;
+          transaction: string | null;
+          updated: string | null;
+        };
+        Insert: {
+          amount: string;
+          beneficiary_id: number;
+          created?: string;
+          deadline: string;
+          id?: number;
+          invalidation?: string | null;
+          location_id?: number | null;
+          network_id?: number | null;
+          nonce: string;
+          partner_id?: number | null;
+          permit2_address?: string | null;
+          signature: string;
+          token_id?: number | null;
+          transaction?: string | null;
+          updated?: string | null;
+        };
+        Update: {
+          amount?: string;
+          beneficiary_id?: number;
+          created?: string;
+          deadline?: string;
+          id?: number;
+          invalidation?: string | null;
+          location_id?: number | null;
+          network_id?: number | null;
+          nonce?: string;
+          partner_id?: number | null;
+          permit2_address?: string | null;
+          signature?: string;
+          token_id?: number | null;
+          transaction?: string | null;
+          updated?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_permits_location";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "fk_permits_location";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permits_beneficiary_id_fkey";
+            columns: ["beneficiary_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permits_partner_id_fkey";
+            columns: ["partner_id"];
+            isOneToOne: false;
+            referencedRelation: "partners";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "permits_token_fkey";
+            columns: ["token_id"];
+            isOneToOne: false;
+            referencedRelation: "tokens";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      tokens: {
+        Row: {
+          address: string;
+          created: string;
+          id: number;
+          location_id: number | null;
+          network: number;
+          updated: string | null;
+        };
+        Insert: {
+          address: string;
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          network?: number;
+          updated?: string | null;
+        };
+        Update: {
+          address?: string;
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          network?: number;
+          updated?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "tokens_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "tokens_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      users: {
+        Row: {
+          created: string;
+          id: number;
+          location_id: number | null;
+          updated: string | null;
+          wallet_id: number | null;
+        };
+        Insert: {
+          created?: string;
+          id: number;
+          location_id?: number | null;
+          updated?: string | null;
+          wallet_id?: number | null;
+        };
+        Update: {
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          updated?: string | null;
+          wallet_id?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "users_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "users_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "users_wallet_id_fkey";
+            columns: ["wallet_id"];
+            isOneToOne: false;
+            referencedRelation: "wallets";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      wallets: {
+        Row: {
+          address: string | null;
+          created: string;
+          id: number;
+          location_id: number | null;
+          updated: string | null;
+        };
+        Insert: {
+          address?: string | null;
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          updated?: string | null;
+        };
+        Update: {
+          address?: string | null;
+          created?: string;
+          id?: number;
+          location_id?: number | null;
+          updated?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "wallets_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "wallets_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      xp_penalties: {
+        Row: {
+          amount: string | null;
+          beneficiary_id: number;
+          created: string;
+          id: number;
+          location_id: number;
+          updated: string | null;
+        };
+        Insert: {
+          amount?: string | null;
+          beneficiary_id: number;
+          created?: string;
+          id?: number;
+          location_id: number;
+          updated?: string | null;
+        };
+        Update: {
+          amount?: string | null;
+          beneficiary_id?: number;
+          created?: string;
+          id?: number;
+          location_id?: number;
+          updated?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "xp_penalties_beneficiary_id_fkey";
+            columns: ["beneficiary_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "xp_penalties_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "issues_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "xp_penalties_location_id_fkey";
+            columns: ["location_id"];
+            isOneToOne: false;
+            referencedRelation: "locations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
-      [_ in never]: never;
+      issues_view: {
+        Row: {
+          comment_id: number | null;
+          created: string | null;
+          id: number | null;
+          issue_id: number | null;
+          node_id: string | null;
+          node_type: string | null;
+          node_url: string | null;
+          organization_id: number | null;
+          repository_id: number | null;
+          updated: string | null;
+          user_id: number | null;
+        };
+        Relationships: [];
+      };
+      memory_messages: {
+        Row: {
+          author_id: string | null;
+          created_at: string | null;
+          embedding: string | null;
+          issue_number: string | null;
+          markdown: string | null;
+          modified_at: string | null;
+          owner: string | null;
+          repo: string | null;
+          source_id: string | null;
+          source_type: string | null;
+          source_url: string | null;
+        };
+        Relationships: [];
+      };
     };
     Functions: {
-      binary_quantize:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: unknown;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          };
-      find_similar_issues: {
-        Args: {
-          current_id: string;
-          query_embedding: number[];
-          threshold: number;
-          top_k: number;
-        };
-        Returns: {
-          issue_id: string;
-          similarity: number;
-        }[];
-      };
       find_similar_comments: {
-        Args: {
-          query_embedding: number[];
-          threshold: number;
-          top_k: number;
-        };
+        Args: { query_embedding: string; threshold: number; top_k: number };
         Returns: {
           comment_id: string;
-          similarity: number;
-        }[];
-      };
-      find_similar_issues_annotate: {
-        Args: {
-          current_id: string;
-          query_embedding: number[];
-          threshold: number;
-          top_k: number;
-        };
-        Returns: {
-          issue_id: string;
           similarity: number;
         }[];
       };
       find_similar_comments_annotate: {
         Args: {
           current_id: string;
-          query_embedding: number[];
+          query_embedding: string;
           threshold: number;
           top_k: number;
         };
@@ -124,10 +473,10 @@ export type Database = {
           similarity: number;
         }[];
       };
-      find_similar_issues_to_match: {
+      find_similar_issues: {
         Args: {
           current_id: string;
-          query_embedding: number[];
+          query_embedding: string;
           threshold: number;
           top_k: number;
         };
@@ -136,168 +485,113 @@ export type Database = {
           similarity: number;
         }[];
       };
-      halfvec_avg: {
+      find_similar_issues_annotate: {
         Args: {
-          "": number[];
+          current_id: string;
+          query_embedding: string;
+          threshold: number;
+          top_k: number;
         };
-        Returns: unknown;
+        Returns: {
+          issue_id: string;
+          similarity: number;
+        }[];
       };
-      halfvec_out: {
+      find_similar_issues_to_match: {
         Args: {
-          "": unknown;
+          current_id: string;
+          query_embedding: string;
+          threshold: number;
+          top_k: number;
         };
-        Returns: unknown;
+        Returns: {
+          issue_id: string;
+          similarity: number;
+        }[];
       };
-      halfvec_send: {
+      insert_with_exception_handling: { Args: never; Returns: undefined };
+      read_secret: { Args: { secret_name: string }; Returns: string };
+      upsert_permit_max: {
         Args: {
-          "": unknown;
+          p_amount: string;
+          p_beneficiary_id: number;
+          p_deadline: string;
+          p_location_id?: number;
+          p_network_id?: number;
+          p_nonce: string;
+          p_partner_id?: number;
+          p_permit2_address?: string;
+          p_signature: string;
+          p_token_id?: number;
         };
-        Returns: string;
-      };
-      halfvec_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
-      };
-      hnsw_bit_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnsw_halfvec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnsw_sparsevec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      hnswhandler: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflat_bit_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflat_halfvec_support: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      ivfflathandler: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      l2_norm:
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          };
-      l2_normalize:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: string;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: unknown;
-          };
-      sparsevec_out: {
-        Args: {
-          "": unknown;
-        };
-        Returns: unknown;
-      };
-      sparsevec_send: {
-        Args: {
-          "": unknown;
-        };
-        Returns: string;
-      };
-      sparsevec_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
-      };
-      vector_avg: {
-        Args: {
-          "": number[];
-        };
-        Returns: string;
-      };
-      vector_dims:
-        | {
-            Args: {
-              "": string;
-            };
-            Returns: number;
-          }
-        | {
-            Args: {
-              "": unknown;
-            };
-            Returns: number;
-          };
-      vector_norm: {
-        Args: {
-          "": string;
-        };
-        Returns: number;
-      };
-      vector_out: {
-        Args: {
-          "": string;
-        };
-        Returns: unknown;
-      };
-      vector_send: {
-        Args: {
-          "": string;
-        };
-        Returns: string;
-      };
-      vector_typmod_in: {
-        Args: {
-          "": unknown[];
-        };
-        Returns: number;
+        Returns: undefined;
       };
     };
     Enums: {
-      [_ in never]: never;
+      github_node_type:
+        | "App"
+        | "Bot"
+        | "CheckRun"
+        | "CheckSuite"
+        | "ClosedEvent"
+        | "CodeOfConduct"
+        | "Commit"
+        | "CommitComment"
+        | "CommitContributionsByRepository"
+        | "ContributingGuidelines"
+        | "ConvertToDraftEvent"
+        | "CreatedCommitContribution"
+        | "CreatedIssueContribution"
+        | "CreatedPullRequestContribution"
+        | "CreatedPullRequestReviewContribution"
+        | "CreatedRepositoryContribution"
+        | "CrossReferencedEvent"
+        | "Discussion"
+        | "DiscussionComment"
+        | "Enterprise"
+        | "EnterpriseUserAccount"
+        | "FundingLink"
+        | "Gist"
+        | "Issue"
+        | "IssueComment"
+        | "JoinedGitHubContribution"
+        | "Label"
+        | "License"
+        | "Mannequin"
+        | "MarketplaceCategory"
+        | "MarketplaceListing"
+        | "MergeQueue"
+        | "MergedEvent"
+        | "MigrationSource"
+        | "Milestone"
+        | "Organization"
+        | "PackageFile"
+        | "Project"
+        | "ProjectCard"
+        | "ProjectColumn"
+        | "ProjectV2"
+        | "PullRequest"
+        | "PullRequestCommit"
+        | "PullRequestReview"
+        | "PullRequestReviewComment"
+        | "ReadyForReviewEvent"
+        | "Release"
+        | "ReleaseAsset"
+        | "Repository"
+        | "RepositoryContactLink"
+        | "RepositoryTopic"
+        | "RestrictedContribution"
+        | "ReviewDismissedEvent"
+        | "SecurityAdvisoryReference"
+        | "SocialAccount"
+        | "SponsorsListing"
+        | "Team"
+        | "TeamDiscussion"
+        | "TeamDiscussionComment"
+        | "User"
+        | "Workflow"
+        | "WorkflowRun"
+        | "WorkflowRunFile";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -305,21 +599,29 @@ export type Database = {
   };
 };
 
-type PublicSchema = Database[Extract<keyof Database, "public">];
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
-  PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] & PublicSchema["Views"]) | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] & Database[PublicTableNameOrOptions["schema"]]["Views"])
+  DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"]) | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] & Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R;
     }
     ? R
     : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    ? (PublicSchema["Tables"] & PublicSchema["Views"])[PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R;
       }
       ? R
@@ -327,16 +629,22 @@ export type Tables<
     : never;
 
 export type TablesInsert<
-  PublicTableNameOrOptions extends keyof PublicSchema["Tables"] | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database } ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"] : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I;
     }
     ? I
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I;
       }
       ? I
@@ -344,16 +652,22 @@ export type TablesInsert<
     : never;
 
 export type TablesUpdate<
-  PublicTableNameOrOptions extends keyof PublicSchema["Tables"] | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database } ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"] : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+  DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U;
     }
     ? U
     : never
-  : PublicTableNameOrOptions extends keyof PublicSchema["Tables"]
-    ? PublicSchema["Tables"][PublicTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U;
       }
       ? U
@@ -361,23 +675,103 @@ export type TablesUpdate<
     : never;
 
 export type Enums<
-  PublicEnumNameOrOptions extends keyof PublicSchema["Enums"] | { schema: keyof Database },
-  EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database } ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"] : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
-    ? PublicSchema["Enums"][PublicEnumNameOrOptions]
+  DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never;
 
 export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"] | { schema: keyof Database },
+  PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database;
+    schema: keyof DatabaseWithoutInternals;
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
-    ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals;
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never;
+
+export const Constants = {
+  public: {
+    Enums: {
+      github_node_type: [
+        "App",
+        "Bot",
+        "CheckRun",
+        "CheckSuite",
+        "ClosedEvent",
+        "CodeOfConduct",
+        "Commit",
+        "CommitComment",
+        "CommitContributionsByRepository",
+        "ContributingGuidelines",
+        "ConvertToDraftEvent",
+        "CreatedCommitContribution",
+        "CreatedIssueContribution",
+        "CreatedPullRequestContribution",
+        "CreatedPullRequestReviewContribution",
+        "CreatedRepositoryContribution",
+        "CrossReferencedEvent",
+        "Discussion",
+        "DiscussionComment",
+        "Enterprise",
+        "EnterpriseUserAccount",
+        "FundingLink",
+        "Gist",
+        "Issue",
+        "IssueComment",
+        "JoinedGitHubContribution",
+        "Label",
+        "License",
+        "Mannequin",
+        "MarketplaceCategory",
+        "MarketplaceListing",
+        "MergeQueue",
+        "MergedEvent",
+        "MigrationSource",
+        "Milestone",
+        "Organization",
+        "PackageFile",
+        "Project",
+        "ProjectCard",
+        "ProjectColumn",
+        "ProjectV2",
+        "PullRequest",
+        "PullRequestCommit",
+        "PullRequestReview",
+        "PullRequestReviewComment",
+        "ReadyForReviewEvent",
+        "Release",
+        "ReleaseAsset",
+        "Repository",
+        "RepositoryContactLink",
+        "RepositoryTopic",
+        "RestrictedContribution",
+        "ReviewDismissedEvent",
+        "SecurityAdvisoryReference",
+        "SocialAccount",
+        "SponsorsListing",
+        "Team",
+        "TeamDiscussion",
+        "TeamDiscussionComment",
+        "User",
+        "Workflow",
+        "WorkflowRun",
+        "WorkflowRunFile",
+      ],
+    },
+  },
+} as const;
