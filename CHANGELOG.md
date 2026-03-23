@@ -1,5 +1,80 @@
 # Changelog
 
+## 1.1.1 (2026-01-02)
+
+
+### Features
+
+* add dedupe prefix to warning and match thresholds ([194d410](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/194d410d398bfd0e97d75b8b826d436e8572befe))
+* add supabase annotate functions ([fa02a6a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/fa02a6a2e04b28a5e2392704b12244237a754ce9))
+* add supabase migration workflow ([b410e99](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b410e992f6359223ca4af61fb0ccc5a86a9fbc7b))
+* add supabase migration workflow ([b736662](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b7366624c5553c77eadb69316b0fd5731d9f2202))
+* batch update for issue bodies ([bb4f48c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/bb4f48c07a339a60e952a0b72fa2b736cf8cc8a3))
+* bootstrap embeddings schema via psql ([f31743d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/f31743d92fc4745347b53bd92ff97a3aee6833c5))
+* **demoflag:** add demoflag to config ([f643197](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/f64319767bdbc725f9fb02efce856304162844c4))
+* **demoflag:** add demoflag to config ([a4c62bc](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/a4c62bc49a95476a7e34a16e7347f31704ded79c))
+* filter recommendations by users ([4b6354b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4b6354b09a8038711b21263c9fb4445f19a8b50d))
+* find similar comments for annotate command ([48e57b3](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/48e57b316bb74e234801a9feab6ef87931ef61a6))
+* implement annotate config ([6c03744](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6c037446f2e7f565d8832d6c23f4d51058602f72))
+* implement annotate config ([2e3bdf5](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2e3bdf5c7462e244bb7e9d7cb74cce03cf691a0e))
+* improve logging for commentChecker function ([a413012](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/a413012d169d4730cea6573ff2e065198027f117))
+* the LLM example list auto-generates ([5c9798b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5c9798b8a7dd519ad8d3a43be00ff50e825e835a))
+* used ubiquity's knip-reporter ([5391355](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/53913554e126acf4dff139eed41efc720ff33e5f))
+* used ubiquity's knip-reporter ([01dcaf7](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/01dcaf7f4c925e5106579b8f918cc82f54df0cb1))
+
+
+### Bug Fixes
+
+* add dedupe timeout ([124bde5](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/124bde50256c366f269f23bdd1226ec258efcdd9))
+* add issue/comment url to log when ignoring ([cb43a9c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/cb43a9c794090d69eda92e3b4352e91a7115e9bc))
+* add issue/comment url to log when ignoring ([2c67723](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2c6772329f2526566a1064b83bd58ecc519ad343))
+* add optional flag mentions ([5ced789](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5ced789d8d0641e0dfee040b695e939d309eaea0))
+* add optional flag mentions ([886f8c7](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/886f8c76cde312130d90ca3831173b942fe6a817))
+* adjust footnote insertion for code blocks and update dev script ([99a17e1](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/99a17e1a3aba9d4f12232b47e24b0ba0d889ec43))
+* auto-confirm supabase migrations ([2014e11](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2014e1155e0d00f989b3b7e38427a432e876e81e))
+* build issue ([2802f97](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2802f97f3bef7b2777f34200ee6472def96144aa))
+* bumped SDK ([6183ac5](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6183ac5d1a46bf2defdf263303f8a00c56aaacf4))
+* bumped SDK ([b432c5b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b432c5bb5939255f1d612c5d37ef62c52d7d2fe8))
+* **config:** add descriptions to JSON schema properties ([264893a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/264893a967872ad464ceff58e40575b244383cc3))
+* empty commit ([4657618](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/46576188277ce41f917061e7cf8f3f5bdebbf3f0))
+* enhance alt text processing for images in issue content ([4f06796](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4f067967b49c76f8226546818572edd5b77e518f))
+* error logging ([8c890f6](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/8c890f6b033bbd25982a697e18896120c9e67751))
+* fix tests ([de56daf](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/de56daf22c6660d55b05819603cb109a611d4b80))
+* footnotes display properly with code blocks ([155ea07](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/155ea07ae8c975ae62b726fec29e99ba6118d479))
+* force ipv4 for supabase db ([827a4eb](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/827a4eb1984cdc2a6557098766376dc1cfe2fdd2))
+* formatting ([4f4f094](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4f4f094657dfc2cd96c584a6af17ce56e08f3856))
+* formatting and tests ([0630096](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/063009620f9d7cc7400a721410b8565920f72e77))
+* jest ([af1d31e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/af1d31e313b0a9bea000424fd609b9b354d06aeb))
+* jest ([2b19964](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2b19964b14a3379f2d5e53cdce4fbf02475f160f))
+* lastEditTime ([05ace2a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/05ace2ac8f051be86d40d2e6007217d7dbca9c7e))
+* latest issue details fetching ([e0cb8bb](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/e0cb8bb733e5ee986a54e586dd2d3fb1069dde9f))
+* modularize schemas, routes, and rate limiter for improved organization and reusability ([47445b8](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/47445b85a2f0c1348a2c8b2aaeb904a8a412fe2b))
+* no sleep state ([6020d20](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6020d20b69d066011a97851231c7af0a92ab6a4d))
+* pipe yes to supabase db push ([32cde56](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/32cde56558111b12a7b4e771a2dfc8fafabcffdc))
+* place footnotes near matches ([39d79e4](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/39d79e4b93e09721c6e19eaf384fa072ad06a9aa))
+* place footnotes near matches ([0599276](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0599276a3265aee89b14e46cf5e0bef7703b5b31))
+* prevent update comment spam ([7d0c353](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/7d0c353409153919d382894f8196fc6d8a00d15f))
+* prevent update comment spam ([2808f3a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2808f3a362014c4182c49299fe857cec26a75c82))
+* release please script fix ([488d7b1](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/488d7b123b0a1b07e9e3e961b7c9f9ce1ccac2d4))
+* remove optional from demo flag ([0992b3f](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0992b3fcd46602736dd747fc2bd741aa7dce1d29))
+* remove optional from demo flag ([98d407c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/98d407c1169a02fd7180e97b3b19a9739748830e))
+* rename supabase functions for annotate ([b2f59ab](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b2f59ab42784553dfa25d003c33186eaa597e5ab))
+* set environment main for main branch and tags ([86bab28](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/86bab28c18c5f7b929cc6e0d8953be178b9bad36))
+* set environment main for main branch and tags ([aaecabe](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/aaecabeac21b21a5e26edc0bf3bfa3019a8b3341))
+* set environment main for main branch and tags ([c96ea16](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/c96ea16252bf5c488c73a1f9fcc835a076cdb907))
+* sleep logging ([1e5af63](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/1e5af63e4b3ac0f3f346382577814195cf12941d))
+* sync supabase migration history ([0f8ac6a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0f8ac6a35c6723df8277a43a059b619f5f9f550c))
+* time logging ([9205f86](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/9205f862a90d1a4e04073be0eb2993130e435b36))
+* types are properly deduced for octokit and logger ([74c6336](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/74c6336e9fc704da842b44c7732a0cc399a2024e))
+* update annotateThreshold to 0.65 ([ec58c6b](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/ec58c6b3f03e98dd114ac1f6d3ce1e5a082765cb))
+* updated time calc ([6fee4df](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6fee4dfddc5fbe2d7de1add7c68b25be54b71b16))
+* use supavisor for migrations ([cf21f6e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/cf21f6ee2077b476ca0713287c9b126235ddc33b))
+
+
+### Miscellaneous Chores
+
+* release 1.1.1 ([1906a4a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/1906a4a188973ad0bf15e3a6c23c8f09364d50d4))
+
 ## [1.1.0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/compare/v1.0.0...v1.1.0) (2025-07-23)
 
 
