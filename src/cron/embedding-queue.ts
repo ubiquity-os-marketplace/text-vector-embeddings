@@ -5,6 +5,7 @@ import { DocumentType } from "../types/document";
 import { Context } from "../types/context";
 import { Database } from "../types/database";
 import { Env } from "../types/env";
+import { serializeEmbeddingForDatabase } from "../utils/database-embedding";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";
 import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 import { isCommandLikeContent } from "../utils/markdown-comments";
@@ -312,7 +313,7 @@ async function processPendingRows(params: {
       }
       const { error: updateError } = await supabase
         .from("documents")
-        .update({ embedding: update.embedding, modified_at: new Date().toISOString() })
+        .update({ embedding: serializeEmbeddingForDatabase(update.embedding), modified_at: new Date().toISOString() })
         .eq("id", update.row.id);
 
       if (updateError) {

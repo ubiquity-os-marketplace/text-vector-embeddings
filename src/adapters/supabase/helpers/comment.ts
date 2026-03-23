@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { COMMENT_DOCUMENT_TYPES, CommentDocumentType } from "../../../types/document";
+import { serializeEmbeddingForDatabase } from "../../../utils/database-embedding";
 import { cleanMarkdown, isTooShort, MIN_COMMENT_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 import { isCommandLikeContent } from "../../../utils/markdown-comments";
 
@@ -93,7 +94,7 @@ export class Comment extends SuperSupabase {
         parent_id: commentData.issue_id,
         markdown: finalMarkdown,
         author_id: commentData.author_id,
-        embedding,
+        embedding: serializeEmbeddingForDatabase(embedding),
         payload: finalPayload,
       },
     ]);
@@ -139,7 +140,7 @@ export class Comment extends SuperSupabase {
           doc_type: docType,
           parent_id: commentData.issue_id,
           markdown: finalMarkdown,
-          embedding,
+          embedding: serializeEmbeddingForDatabase(embedding),
           payload: finalPayload,
           modified_at: new Date(),
         })

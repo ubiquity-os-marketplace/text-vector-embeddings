@@ -4,6 +4,7 @@ import "dotenv/config";
 import { VoyageAIClient } from "voyageai";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
+import { serializeEmbeddingForDatabase } from "../utils/database-embedding";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 interface IssueMetadata {
   nodeId: string;
@@ -283,7 +284,7 @@ export async function issueScraper(username: string, token?: string): Promise<st
           doc_type: "issue",
           parent_id: null,
           markdown: storedMarkdown,
-          embedding: embedding ?? null,
+          embedding: serializeEmbeddingForDatabase(embedding ?? null),
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,
           payload: payload,

@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
 import { IssueDocumentType, ISSUE_DOCUMENT_TYPES } from "../../../types/document";
+import { serializeEmbeddingForDatabase } from "../../../utils/database-embedding";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
 
 export interface IssueType {
@@ -105,7 +106,7 @@ export class Issue extends SuperSupabase {
         id: issueData.id,
         doc_type: docType,
         parent_id: null,
-        embedding,
+        embedding: serializeEmbeddingForDatabase(embedding),
         payload: finalPayload,
         author_id: issueData.author_id,
         markdown: finalMarkdown,
@@ -153,7 +154,7 @@ export class Issue extends SuperSupabase {
       .update({
         doc_type: docType,
         markdown: finalMarkdown,
-        embedding,
+        embedding: serializeEmbeddingForDatabase(embedding),
         payload: finalPayload,
         modified_at: new Date(),
       })
