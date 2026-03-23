@@ -94,5 +94,6 @@
         "type": "boolean"
       }
     }
-  }
+  },
+  "homepage_url": "https://text-vector-embeddings-mai.deno.dev"
 }
