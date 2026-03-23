@@ -1,8 +1,8 @@
-import { RestEndpointMethodTypes } from "@octokit/plugin-rest-endpoint-methods";
 import { Value } from "@sinclair/typebox/value";
-import { CommentHandler } from "@ubiquity-os/plugin-sdk";
-import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { SupabaseClient, createClient } from "@supabase/supabase-js";
+import { CommentHandler } from "@ubiquity-os/plugin-sdk";
+import type { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { VoyageAIClient } from "voyageai";
 import { LlmAdapter } from "../adapters/llm";
 import { Comment } from "../adapters/supabase/helpers/comment";
@@ -14,11 +14,13 @@ import { issueDedupe } from "../handlers/issue-deduplication";
 import { issueMatchingWithComment } from "../handlers/issue-matching";
 import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
-import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
 import { Database } from "../types/database";
+import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
+import { CronDatabaseClient } from "./database-handler";
 
-type IssuePayload = RestEndpointMethodTypes["issues"]["get"]["response"]["data"];
-type RepoPayload = RestEndpointMethodTypes["repos"]["get"]["response"]["data"];
+type Octokit = InstanceType<typeof customOctokit>;
+type IssuePayload = Awaited<ReturnType<Octokit["rest"]["issues"]["get"]>>["data"];
+type RepoPayload = Awaited<ReturnType<Octokit["rest"]["repos"]["get"]>>["data"];
 type ReprocessAdapters = ReturnType<typeof createReprocessAdapters>;
 type ReprocessContext = Omit<Context<"issues.edited">, "adapters"> & { adapters: ReprocessAdapters };
 
@@ -34,7 +36,7 @@ type ReprocessClients = {
   voyage: VoyageAIClient;
 };
 
-class MemoryCronDatabase {
+class MemoryCronDatabase implements CronDatabaseClient {
   private readonly _entries = new Map<string, number[]>();
 
   async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
@@ -95,7 +97,8 @@ export function createReprocessClients(env: Env): ReprocessClients {
   };
 }
 
-export function createReprocessAdapters(context: Context, clients: ReprocessClients) {
+export function createReprocessAdapters(context: Context, clients: ReprocessClients): Context["adapters"] {
+  const kv: CronDatabaseClient = new MemoryCronDatabase();
   return {
     supabase: {
       comment: new Comment(clients.supabase, context),
@@ -106,7 +109,7 @@ export function createReprocessAdapters(context: Context, clients: ReprocessClie
       embedding: new VoyageEmbedding(clients.voyage, context),
       super: new SuperVoyage(clients.voyage, context),
     },
-    kv: new MemoryCronDatabase(),
+    kv,
     llm: new LlmAdapter(context),
   };
 }
@@ -115,6 +118,7 @@ export async function createReprocessContext(params: {
   issue: IssuePayload;
   repository: RepoPayload;
   octokit: Context<"issues.edited">["octokit"];
+  authToken?: string;
   env: Env;
   config?: PluginSettings;
   logger?: Context<"issues.edited">["logger"];
@@ -128,6 +132,7 @@ export async function createReprocessContext(params: {
     eventName: "issues.edited",
     command: null,
     commentHandler: new CommentHandler(),
+    authToken: params.authToken ?? "",
     payload: {
       issue: params.issue,
       repository: params.repository,
@@ -140,8 +145,8 @@ export async function createReprocessContext(params: {
     adapters: {} as ReprocessContext["adapters"],
   };
   const clients = params.clients ?? createReprocessClients(params.env);
-  ctx.adapters = createReprocessAdapters(ctx as unknown as Context, clients) as ReprocessContext["adapters"];
-  return ctx as unknown as Context<"issues.edited">;
+  ctx.adapters = createReprocessAdapters(ctx, clients);
+  return ctx;
 }
 
 export async function reprocessIssue(context: Context<"issues.edited">, options: ReprocessOptions = {}) {

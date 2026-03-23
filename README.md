@@ -9,6 +9,16 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `SUPABASE_URL`: The URL for your Supabase instance.
 - `SUPABASE_KEY`: The key for your Supabase instance.
 - `VOYAGEAI_API_KEY`: The API key for Voyage.
+- `EMBEDDINGS_QUEUE_ENABLED`: Enable deferred embedding processing via cron (default: true).
+- `EMBEDDINGS_QUEUE_BATCH_SIZE`: Max rows per cron batch (default: 50).
+- `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
+- `EMBEDDINGS_QUEUE_MAX_RETRIES`: Max retries on rate limits (default: 3).
+
+Cron GitHub App auth:
+
+- `APP_ID`: GitHub App ID.
+- `APP_PRIVATE_KEY`: GitHub App private key.
+- `APP_INSTALLATION_ID`: GitHub App installation ID.
 
 ## Usage
 
@@ -28,11 +38,6 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 ### HTTP API
 
 - `GET /recommendations?issueUrls=<github-issue-url>&users=alice&users=bob` (or `users=alice,bob`) returns recommendation data per issue URL.
-- `GET /recommendation` is an alias of `/recommendations`.
-
-### Command
-
-- Comment `/recommendation @alice @bob` on an issue to get recommendations filtered to those users (omit users for the global list).
 
 ## Testing Locally
 
@@ -112,20 +117,17 @@ if (isIssueCommentEvent(context)) {
 
 ### Vector Embeddings: The Core Technology
 
-The most fascinating aspect of this system is its use of vector embeddings to understand and process text. The implementation uses Voyage AI's embedding service with their large instruction model:
+The most fascinating aspect of this system is its use of vector embeddings to understand and process text. The implementation uses Voyage AI's embedding service with the `voyage-4-large` model (1024 dimensions) and supports batch requests:
 
 ```typescript
-async createEmbedding(text: string | null, inputType: EmbedRequestInputType = "document"): Promise<number[]> {
-  if (text === null) {
-    throw new Error("Text is null");
-  } else {
-    const response = await this.client.embed({
-      input: text,
-      model: "voyage-large-2-instruct",
-      inputType,
-    });
-    return (response.data && response.data[0]?.embedding) || [];
-  }
+async createEmbeddings(texts: string[], inputType: EmbedRequestInputType = "document"): Promise<number[][]> {
+  const response = await this.client.embed({
+    input: texts,
+    model: "voyage-4-large",
+    outputDimension: 1024,
+    inputType,
+  });
+  return response.data?.map((item) => item?.embedding ?? []) ?? [];
 }
 ```
 

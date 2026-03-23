@@ -12,6 +12,8 @@ node_modules
 .env.dev
 .dev.vars
 static/dist
+dist
+manifest.json
 coverage
 junit.xml
 cypress/screenshots
@@ -20,3 +22,6 @@ script.ts
 test-dashboard.md
 auth.users.json
 *.code-workspace
+
+manifest.json
+dist/

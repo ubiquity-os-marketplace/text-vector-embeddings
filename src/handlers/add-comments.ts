@@ -1,6 +1,8 @@
 import { Context } from "../types/index";
 import { addIssue } from "./add-issue";
 import { removeAnnotateFootnotes } from "./annotate";
+import { ensurePullRequestIssue } from "./pull-request-review-utils";
+import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 
 export async function addComments(context: Context<"issue_comment.created">) {
   const {
@@ -14,27 +16,40 @@ export async function addComments(context: Context<"issue_comment.created">) {
   const authorId = comment.user?.id || -1;
   const id = comment.node_id;
   const isPrivate = payload.repository.private;
-  const issueId = payload.issue.node_id;
+  const isPullRequestComment = !!payload.issue.pull_request;
+  let issueId = payload.issue.node_id;
+
+  if (comment.user?.type !== "User") {
+    logger.debug("Ignoring comment from non-human author", { author: comment.user?.login, type: comment.user?.type });
+    return;
+  }
 
   try {
     if (!markdown) {
-      logger.error("Comment body is empty");
+      logger.warn("Comment body is empty");
     }
-    if (context.payload.issue.pull_request) {
-      logger.error("Comment is on a pull request");
-    }
-    if ((await supabase.issue.getIssue(issueId)) === null) {
-      logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
-      await addIssue(context as unknown as Context<"issues.opened">);
+    if (isPullRequestComment) {
+      logger.debug("Issue comment is on a pull request; linking to PR document", { commentId: comment.id, pullRequestUrl: payload.issue.html_url });
+      issueId = (await ensurePullRequestIssue(context, payload.issue)) ?? issueId;
+    } else {
+      const existingIssue = await supabase.issue.getIssue(issueId);
+      if (!existingIssue || existingIssue.length === 0) {
+        logger.info("Parent issue not found, creating new issue", { "Issue ID": issueId });
+        await addIssue(context);
+      }
     }
     const cleanComment = removeAnnotateFootnotes(markdown);
+    const queueSettings = getEmbeddingQueueSettings(context.env);
 
     if (config.demoFlag) {
-      logger.info("Demo mode active - skipping comment storage", { comment: comment.id, comment_url: comment.html_url });
+      logger.debug("Demo mode active - skipping comment storage", { comment: comment.id, comment_url: comment.html_url });
       return;
     }
 
-    await supabase.comment.createComment({ markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId });
+    await supabase.comment.createComment(
+      { markdown: cleanComment, id, author_id: authorId, payload, isPrivate, issue_id: issueId },
+      { deferEmbedding: queueSettings.enabled }
+    );
     logger.ok(`Successfully created comment!`, comment);
   } catch (error) {
     if (error instanceof Error) {
