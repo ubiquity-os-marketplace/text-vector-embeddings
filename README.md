@@ -9,6 +9,7 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `SUPABASE_URL`: The URL for your Supabase instance.
 - `SUPABASE_KEY`: The key for your Supabase instance.
 - `VOYAGEAI_API_KEY`: The API key for Voyage.
+- `NOMIC_API_KEY`: The API key for Nomic (optional). When set, enables Nomic Embed v1.5 model (~10% higher accuracy than Voyage-4-large).
 - `EMBEDDINGS_QUEUE_ENABLED`: Enable deferred embedding processing via cron (default: true).
 - `EMBEDDINGS_QUEUE_BATCH_SIZE`: Max rows per cron batch (default: 50).
 - `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
@@ -31,6 +32,7 @@ Cron GitHub App auth:
     dedupeWarningThreshold: 0.75
     annotateThreshold: 0.65
     jobMatchingThreshold: 0.75
+    embeddingModel: "nomic"  # Optional: "voyage" (default, 1024d) or "nomic" (768d, ~10% more accurate)
 ```
 
 ## Recommendations
