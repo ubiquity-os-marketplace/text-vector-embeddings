@@ -53,7 +53,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION find_similar_comments_nomic(query_embedding vector(768), threshold float8, top_k INT)
+CREATE OR REPLACE FUNCTION find_similar_comments_nomic(current_id VARCHAR, query_embedding vector(768), threshold float8, top_k INT)
 RETURNS TABLE(comment_id VARCHAR, similarity float8) AS $$
 BEGIN
     RETURN QUERY
@@ -63,7 +63,8 @@ BEGIN
         SELECT id AS comment_id,
                ((0.8 * (1 - cosine_distance(query_embedding, nomic_embedding))) + 0.8 * (1 / (1 + l2_distance(query_embedding, nomic_embedding)))) as similarity
         FROM documents
-        WHERE deleted_at IS NULL
+        WHERE id <> current_id
+            AND deleted_at IS NULL
             AND nomic_embedding IS NOT NULL
             AND doc_type IN ('issue_comment', 'review_comment', 'pull_request_review')
     ) sub

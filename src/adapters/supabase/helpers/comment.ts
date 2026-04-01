@@ -283,6 +283,7 @@ export class Comment extends SuperSupabase {
       if (model === "nomic" && isNomicAvailable(this.context)) {
         const nomicEmbedding = await this.context.adapters.nomic.embedding.createEmbedding(embeddingSource);
         const { data, error } = await this.supabase.rpc("find_similar_comments_nomic", {
+          current_id: currentId,
           query_embedding: nomicEmbedding,
           threshold,
           top_k: 5,
