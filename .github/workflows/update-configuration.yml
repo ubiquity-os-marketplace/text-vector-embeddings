@@ -183,7 +183,7 @@ jobs:
           EMBEDDINGS_QUEUE_MAX_RETRIES: ${{ secrets.EMBEDDINGS_QUEUE_MAX_RETRIES || '3' }}
           EMBEDDINGS_QUEUE_CONCURRENCY: ${{ secrets.EMBEDDINGS_QUEUE_CONCURRENCY || '1' }}
         with:
-          token: ${{ secrets.DENO_DEPLOY_TOKEN }}
+          token: ${{ secrets.DENO_2_DEPLOY_TOKEN }}
           action: ${{ github.event_name == 'delete' && 'delete' || 'provision' }}
           app: ${{ secrets.DENO_PROJECT_NAME }}
           entrypoint: src/worker.ts
@@ -201,5 +201,5 @@ jobs:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
         with:
-          token: ${{ secrets.DENO_DEPLOY_TOKEN }}
+          token: ${{ secrets.DENO_2_DEPLOY_TOKEN }}
           action: publish-manifest
