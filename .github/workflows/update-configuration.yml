@@ -37,7 +37,6 @@ on:
       - deno_deploy.build.routed
   delete:
 
-
 jobs:
   publish-action-artifact:
     name: "Publish Action Artifact"
@@ -49,7 +48,6 @@ jobs:
       DEPLOY_DENO_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_deno_enabled || vars.DEPLOY_DENO_ENABLED || 'true' }}
       SKIP_BOT_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_bot_events || vars.SKIP_BOT_EVENTS || 'false' }}
       EXCLUDE_SUPPORTED_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.exclude_supported_events || vars.EXCLUDE_SUPPORTED_EVENTS || '' }}
-
 
     steps:
       - name: Resolve source ref
@@ -96,7 +94,7 @@ jobs:
 
       - name: Publish action artifact branch
         if: ${{ env.BUILD_ACTION_ENABLED == 'true' }}
-        uses: ubiquity-os/action-deploy-plugin@main
+        uses: ubiquity-os/action-deploy-plugin@issue-17-deno-deploy-app-migration
         with:
           action: ${{ github.event_name == 'delete' && 'delete' || 'publish' }}
           treatAsEsm: true
@@ -107,7 +105,6 @@ jobs:
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-
 
   deploy-deno:
     name: "Provision Deno App"
@@ -120,7 +117,6 @@ jobs:
       DEPLOY_DENO_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_deno_enabled || vars.DEPLOY_DENO_ENABLED || 'true' }}
       SKIP_BOT_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_bot_events || vars.SKIP_BOT_EVENTS || 'false' }}
       EXCLUDE_SUPPORTED_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.exclude_supported_events || vars.EXCLUDE_SUPPORTED_EVENTS || '' }}
-
 
     steps:
       - name: Resolve source ref
