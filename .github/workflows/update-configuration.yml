@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Update Manifest and Commit Changes
-        uses: ubiquity-os/action-deploy-plugin@main
+        uses: ubiquity-os/action-deploy-plugin@issue-17-deno-deploy-app-migration
         with:
           action: ${{ github.event_name == 'delete' && 'delete' || 'publish' }}
           treatAsEsm: true
