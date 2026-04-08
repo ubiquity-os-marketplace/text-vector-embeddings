@@ -241,7 +241,7 @@ jobs:
           set -e
 
           if [[ $assign_status -ne 0 ]]; then
-            if printf '%s\n' "$assign_output" | tr '[:upper:]' '[:lower:]' | grep -Eq 'already (assigned|attached|linked)'; then
+            if printf '%s\n' "$assign_output" | tr '[:upper:]' '[:lower:]' | grep -Eq 'already (assigned|attached|linked)|already has .*deno kv database assigned'; then
               echo "::notice::Deno KV database '$KV_NAME' is already assigned to '$APP_SLUG'."
             else
               printf '%s\n' "$assign_output"
