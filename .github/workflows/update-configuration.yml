@@ -37,7 +37,6 @@ on:
 jobs:
   resolve-context:
     name: "Resolve Context"
-    if: ${{ github.event_name != 'repository_dispatch' }}
     runs-on: ubuntu-latest
     permissions: read-all
     env:
@@ -252,19 +251,3 @@ jobs:
             printf '%s\n' "$assign_output"
           fi
 
-  publish-deno-manifest:
-    name: "Publish Deno Manifest"
-    if: ${{ github.event_name == 'repository_dispatch' }}
-    runs-on: ubuntu-latest
-    permissions: write-all
-
-    steps:
-      - uses: ubiquity-os/deno-deploy@issue-17-deno-deploy-app-migration
-        env:
-          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-        with:
-          token: ${{ secrets.DENO_DEPLOY_TOKEN }}
-          action: publish-manifest
