@@ -14,7 +14,7 @@ on:
       deploy_deno_enabled:
         description: "Deploy Worker to Deno Deploy."
         required: false
-        default: "true"
+        default: "false"
         type: choice
         options:
           - "true"
@@ -22,7 +22,7 @@ on:
       skip_bot_events:
         description: "manifest.skipBotEvents value for generated manifest."
         required: false
-        default: "false"
+        default: "true"
       exclude_supported_events:
         description: "Comma-separated supported events to exclude from manifest listeners."
         required: false
@@ -32,9 +32,6 @@ on:
       - "dist/**"
     tags-ignore:
       - "*"
-  repository_dispatch:
-    types:
-      - deno_deploy.build.routed
   delete:
 
 jobs:
@@ -45,8 +42,8 @@ jobs:
     permissions: write-all
     env:
       BUILD_ACTION_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.build_action_enabled || vars.BUILD_ACTION_ENABLED || 'true' }}
-      DEPLOY_DENO_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_deno_enabled || vars.DEPLOY_DENO_ENABLED || 'true' }}
-      SKIP_BOT_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_bot_events || vars.SKIP_BOT_EVENTS || 'false' }}
+      DEPLOY_DENO_ENABLED: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_deno_enabled || vars.DEPLOY_DENO_ENABLED || 'false' }}
+      SKIP_BOT_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_bot_events || vars.SKIP_BOT_EVENTS || 'true' }}
       EXCLUDE_SUPPORTED_EVENTS: ${{ github.event_name == 'workflow_dispatch' && inputs.exclude_supported_events || vars.EXCLUDE_SUPPORTED_EVENTS || '' }}
 
     steps:
