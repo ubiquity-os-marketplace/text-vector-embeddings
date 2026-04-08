@@ -1,6 +1,6 @@
 import { swaggerUI } from "@hono/swagger-ui";
 import { createPlugin, Options } from "@ubiquity-os/plugin-sdk";
-import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
+import { Manifest, resolveRuntimeManifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
@@ -26,8 +26,22 @@ import { querySchema, responseSchema } from "./validators";
 const kv = await Deno.openKv();
 const pluginManifest = manifest as Manifest & { homepage_url?: string };
 
+function buildRuntimeManifest(request: Request) {
+  const runtimeManifest = resolveRuntimeManifest(pluginManifest);
+  return {
+    ...runtimeManifest,
+    homepage_url: new URL(request.url).origin,
+  };
+}
+
 export default {
   async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
+    const runtimeManifest = buildRuntimeManifest(request);
+
+    if (new URL(request.url).pathname === "/manifest.json") {
+      return Response.json(runtimeManifest);
+    }
+
     const environment = env<Env>(request as never);
     const honoApp = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
@@ -36,7 +50,7 @@ export default {
           adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
         });
       },
-      pluginManifest,
+      runtimeManifest,
       {
         settingsSchema: pluginSettingsSchema as unknown as Options["settingsSchema"],
         envSchema: envSchema as unknown as Options["envSchema"],
@@ -61,8 +75,8 @@ export default {
     );
 
     const openApiServers = [{ url: "http://localhost:4004", description: "Local Server" }];
-    if (typeof pluginManifest.homepage_url === "string" && pluginManifest.homepage_url.trim().length > 0) {
-      openApiServers.push({ url: pluginManifest.homepage_url, description: "Production Server" });
+    if (typeof runtimeManifest.homepage_url === "string" && runtimeManifest.homepage_url.trim().length > 0) {
+      openApiServers.push({ url: runtimeManifest.homepage_url, description: "Production Server" });
     }
 
     honoApp.get(
