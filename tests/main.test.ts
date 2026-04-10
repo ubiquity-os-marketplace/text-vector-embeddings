@@ -381,6 +381,59 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("50% Match");
   });
 
+  it("When issue matching receives duplicate similar issues, it should not duplicate contributor recommendations", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_dedupe", 12, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.createIssue = mock(async () => {
+      createIssue(
+        taskCompleteIssue.issue_body,
+        "task_complete_dedupe",
+        taskCompleteIssue.title,
+        12,
+        { login: "test", id: 1 },
+        "open",
+        null,
+        STRINGS.TEST_REPO,
+        STRINGS.USER_1
+      );
+    });
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { id: "row-1", issue_id: "issue-node-duplicate", similarity: 0.98 },
+      { id: "row-2", issue_id: "issue-node-duplicate", similarity: 0.92 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+
+    const graphqlMock = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    });
+    context.octokit.graphql = graphqlMock as unknown as typeof context.octokit.graphql;
+
+    context.octokit.paginate = mock(async () => []) as unknown as typeof context.octokit.paginate;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 99, "task_complete_dedupe", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "task_complete_dedupe" } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
+    expect(comments[0].body).toContain("contributor1");
+    expect((comments[0].body.match(/`98% Match`/g) || []).length).toBe(1);
+    expect(graphqlMock.mock.calls.length).toBe(1);
+  });
+
   it("When an issue contains markdown links, footnotes should be added after the entire line", async () => {
     const [markdownLinkIssue1] = fetchSimilarIssues("markdown_link");
     const { context } = createContextIssues(markdownLinkIssue1.issue_body, "markdown1", 7, markdownLinkIssue1.title);
