@@ -58,7 +58,7 @@
     "issues.transferred",
     "issues.closed"
   ],
-  "skipBotEvents": false,
+  "skipBotEvents": true,
   "configuration": {
     "default": {},
     "type": "object",
@@ -94,6 +94,5 @@
         "type": "boolean"
       }
     }
-  },
-  "homepage_url": "https://text-vector-embeddings-dev.deno.dev"
+  }
 }
