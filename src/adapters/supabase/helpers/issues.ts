@@ -4,6 +4,7 @@ import { Context } from "../../../types/context";
 import { IssueDocumentType, ISSUE_DOCUMENT_TYPES } from "../../../types/document";
 import { serializeEmbeddingForDatabase } from "../../../utils/database-embedding";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../../../utils/embedding-content";
+import { PluginSettings } from "../../../types/plugin-input";
 
 export interface IssueType {
   id: string;
@@ -13,6 +14,7 @@ export interface IssueType {
   created_at: string;
   modified_at: string;
   embedding: number[] | null;
+  nomic_embedding: number[] | null;
   deleted_at?: string | null;
 }
 
@@ -56,6 +58,15 @@ function resolveIssueDocType(payload: IssueData["payload"], explicitType?: Issue
   return "issue";
 }
 
+function getEmbeddingModel(context: Context): "voyage" | "nomic" {
+  const config = context.config as PluginSettings | undefined;
+  return config?.embeddingModel ?? "voyage";
+}
+
+function isNomicAvailable(context: Context): boolean {
+  return !!context.env.NOMIC_API_KEY;
+}
+
 export class Issue extends SuperSupabase {
   constructor(supabase: SupabaseClient, context: Context) {
     super(supabase, context);
@@ -68,7 +79,8 @@ export class Issue extends SuperSupabase {
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
     const embeddingSource = !isShortIssue ? cleanedMarkdown : null;
-    //First Check if the issue already exists
+
+    // First Check if the issue already exists
     const { data: existingData, error: existingError } = await this.supabase
       .from("documents")
       .select("*")
@@ -88,11 +100,27 @@ export class Issue extends SuperSupabase {
       return;
     }
 
-    //Create the embedding for this issue
+    // Create embeddings for this issue
     let embedding: number[] | null = null;
+    let nomicEmbedding: number[] | null = null;
+
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      // Always create Voyage embedding
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+
+      // Create Nomic embedding if API key is available
+      if (isNomicAvailable(this.context)) {
+        try {
+          nomicEmbedding = await this.context.adapters.nomic.embedding.createEmbedding(embeddingSource);
+        } catch (nomicError) {
+          this.context.logger.warn("Failed to create Nomic embedding, continuing with Voyage only.", {
+            Error: nomicError instanceof Error ? nomicError : new Error(String(nomicError)),
+            issueId: issueData.id,
+          });
+        }
+      }
     }
+
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -101,17 +129,22 @@ export class Issue extends SuperSupabase {
       finalPayload = null;
     }
 
-    const { data, error } = await this.supabase.from("documents").insert([
-      {
-        id: issueData.id,
-        doc_type: docType,
-        parent_id: null,
-        embedding: serializeEmbeddingForDatabase(embedding),
-        payload: finalPayload,
-        author_id: issueData.author_id,
-        markdown: finalMarkdown,
-      },
-    ]);
+    const insertData: Record<string, unknown> = {
+      id: issueData.id,
+      doc_type: docType,
+      parent_id: null,
+      embedding: serializeEmbeddingForDatabase(embedding),
+      payload: finalPayload,
+      author_id: issueData.author_id,
+      markdown: finalMarkdown,
+    };
+
+    // Only add nomic_embedding if it was successfully created
+    if (nomicEmbedding) {
+      insertData.nomic_embedding = serializeEmbeddingForDatabase(nomicEmbedding);
+    }
+
+    const { data, error } = await this.supabase.from("documents").insert([insertData]);
     if (error) {
       this.context.logger.error("Failed to create issue in database", {
         Error: error,
@@ -129,11 +162,28 @@ export class Issue extends SuperSupabase {
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
     const isShortIssue = isTooShort(cleanedMarkdown, MIN_ISSUE_MARKDOWN_LENGTH);
     const embeddingSource = !isShortIssue ? cleanedMarkdown : null;
-    //Create the embedding for this issue
+
+    // Create embeddings for this issue
     let embedding: number[] | null = null;
+    let nomicEmbedding: number[] | null = null;
+
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+      // Always create Voyage embedding
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+
+      // Create Nomic embedding if API key is available
+      if (isNomicAvailable(this.context)) {
+        try {
+          nomicEmbedding = Array.from(await this.context.adapters.nomic.embedding.createEmbedding(embeddingSource));
+        } catch (nomicError) {
+          this.context.logger.warn("Failed to create Nomic embedding during update, continuing with Voyage only.", {
+            Error: nomicError instanceof Error ? nomicError : new Error(String(nomicError)),
+            issueId: issueData.id,
+          });
+        }
+      }
     }
+
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
@@ -149,17 +199,19 @@ export class Issue extends SuperSupabase {
       return;
     }
 
-    const { error } = await this.supabase
-      .from("documents")
-      .update({
-        doc_type: docType,
-        markdown: finalMarkdown,
-        embedding: serializeEmbeddingForDatabase(embedding),
-        payload: finalPayload,
-        modified_at: new Date(),
-      })
-      .eq("id", issueData.id)
-      .in("doc_type", ISSUE_DOCUMENT_TYPES);
+    const updateData: Record<string, unknown> = {
+      doc_type: docType,
+      markdown: finalMarkdown,
+      embedding: serializeEmbeddingForDatabase(embedding),
+      payload: finalPayload,
+      modified_at: new Date(),
+    };
+
+    if (nomicEmbedding) {
+      updateData.nomic_embedding = serializeEmbeddingForDatabase(nomicEmbedding);
+    }
+
+    const { error } = await this.supabase.from("documents").update(updateData).eq("id", issueData.id).in("doc_type", ISSUE_DOCUMENT_TYPES);
 
     if (error) {
       this.context.logger.error("Error updating issue", {
@@ -214,7 +266,6 @@ export class Issue extends SuperSupabase {
   }
 
   async findSimilarIssues({ markdown, currentId, threshold }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
-    // Create a new issue embedding
     try {
       const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
@@ -229,24 +280,47 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
-        query_embedding: embedding,
-        current_id: currentId,
-        threshold,
-        top_k: 5,
-      });
-      if (error) {
-        this.context.logger.error("Unable to find similar issues", {
-          Error: error,
-          markdown,
-          currentId,
+
+      const model = getEmbeddingModel(this.context);
+
+      if (model === "nomic" && isNomicAvailable(this.context)) {
+        const nomicEmbedding = await this.context.adapters.nomic.embedding.createEmbedding(embeddingSource);
+        const { data, error } = await this.supabase.rpc("find_similar_issues_annotate_nomic", {
+          query_embedding: nomicEmbedding,
+          current_id: currentId,
           threshold,
-          query_embedding: embedding,
+          top_k: 5,
         });
-        return null;
+        if (error) {
+          this.context.logger.error("Unable to find similar issues (Nomic)", {
+            Error: error,
+            markdown,
+            currentId,
+            threshold,
+          });
+          return null;
+        }
+        return data;
+      } else {
+        const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+        const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
+          query_embedding: embedding,
+          current_id: currentId,
+          threshold,
+          top_k: 5,
+        });
+        if (error) {
+          this.context.logger.error("Unable to find similar issues", {
+            Error: error,
+            markdown,
+            currentId,
+            threshold,
+            query_embedding: embedding,
+          });
+          return null;
+        }
+        return data;
       }
-      return data;
     } catch (error) {
       this.context.logger.error("Unable to find similar issues", {
         Error: error,
@@ -259,7 +333,6 @@ export class Issue extends SuperSupabase {
   }
 
   async findSimilarIssuesToMatch({ markdown, currentId, threshold, topK }: FindSimilarIssuesParams): Promise<IssueSimilaritySearchResult[] | null> {
-    // Create a new issue embedding
     try {
       const embeddingSource = cleanMarkdown(markdown);
       if (!embeddingSource) {
@@ -274,23 +347,45 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
-        current_id: currentId,
-        query_embedding: embedding,
-        threshold,
-        top_k: topK ?? 5,
-      });
-      if (error) {
-        this.context.logger.error("Error finding similar issues", {
-          Error: error,
-          markdown,
+
+      const model = getEmbeddingModel(this.context);
+
+      if (model === "nomic" && isNomicAvailable(this.context)) {
+        const nomicEmbedding = await this.context.adapters.nomic.embedding.createEmbedding(embeddingSource);
+        const { data, error } = await this.supabase.rpc("find_similar_issues_to_match_nomic", {
+          current_id: currentId,
+          query_embedding: nomicEmbedding,
           threshold,
-          query_embedding: embedding,
+          top_k: topK ?? 5,
         });
-        return null;
+        if (error) {
+          this.context.logger.error("Error finding similar issues (Nomic)", {
+            Error: error,
+            markdown,
+            threshold,
+          });
+          return null;
+        }
+        return data;
+      } else {
+        const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+        const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
+          current_id: currentId,
+          query_embedding: embedding,
+          threshold,
+          top_k: topK ?? 5,
+        });
+        if (error) {
+          this.context.logger.error("Error finding similar issues", {
+            Error: error,
+            markdown,
+            threshold,
+            query_embedding: embedding,
+          });
+          return null;
+        }
+        return data;
       }
-      return data;
     } catch (error) {
       this.context.logger.error("Error finding similar issues", {
         Error: error,
