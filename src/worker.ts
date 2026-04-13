@@ -34,7 +34,7 @@ function buildRuntimeManifest(request: Request) {
 }
 
 export default {
-  async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
+  async fetch(request: Request, serverInfo: Record<string, unknown>, executionCtx?: ExecutionContext) {
     const runtimeManifest = buildRuntimeManifest(request);
 
     if (new URL(request.url).pathname === "/manifest.json") {
@@ -56,7 +56,7 @@ export default {
         postCommentOnError: true,
         logLevel: environment.LOG_LEVEL as LogLevel,
         kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
-        bypassSignatureVerification: environment.NODE_ENV === "local",
+        bypassSignatureVerification: (environment as Env & { NODE_ENV?: string }).NODE_ENV === "local",
       }
     );
 
