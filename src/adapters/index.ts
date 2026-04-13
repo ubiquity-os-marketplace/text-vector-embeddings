@@ -8,8 +8,12 @@ import { Issue } from "./supabase/helpers/issues";
 import { SuperSupabase } from "./supabase/helpers/supabase";
 import { Embedding as VoyageEmbedding } from "./voyage/helpers/embedding";
 import { SuperVoyage } from "./voyage/helpers/voyage";
+import { Embedding as NomicEmbedding } from "./nomic/helpers/embedding";
+import { SuperNomic } from "./nomic/helpers/nomic";
 
-type AdapterSet = {
+export type EmbeddingModel = "voyage" | "nomic";
+
+export type AdapterSet = {
   supabase: {
     comment: Comment;
     issue: Issue;
@@ -18,6 +22,10 @@ type AdapterSet = {
   voyage: {
     embedding: VoyageEmbedding;
     super: SuperVoyage;
+  };
+  nomic: {
+    embedding: NomicEmbedding;
+    super: SuperNomic;
   };
   kv: CronDatabaseClient;
   llm: LlmAdapter;
@@ -34,7 +42,15 @@ export async function createAdapters(supabaseClient: SupabaseClient, voyage: Voy
       embedding: new VoyageEmbedding(voyage, context),
       super: new SuperVoyage(voyage, context),
     },
+    nomic: {
+      embedding: new NomicEmbedding(context),
+      super: new SuperNomic(context),
+    },
     kv: await createCronDatabase(),
     llm: new LlmAdapter(context),
   };
+}
+
+export function serializeEmbeddingForDatabase(embedding: number[] | null): string | null {
+  return embedding ? JSON.stringify(embedding) : null;
 }

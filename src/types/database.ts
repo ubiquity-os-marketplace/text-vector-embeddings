@@ -21,6 +21,7 @@ export type Database = {
           id: string;
           markdown: string | null;
           modified_at: string;
+          nomic_embedding: string | null;
           parent_id: string | null;
           payload: Json | null;
         };
@@ -36,6 +37,7 @@ export type Database = {
           id: string;
           markdown?: string | null;
           modified_at?: string;
+          nomic_embedding?: string | null;
           parent_id?: string | null;
           payload?: Json | null;
         };
@@ -51,6 +53,7 @@ export type Database = {
           id?: string;
           markdown?: string | null;
           modified_at?: string;
+          nomic_embedding?: string | null;
           parent_id?: string | null;
           payload?: Json | null;
         };

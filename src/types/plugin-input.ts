@@ -20,6 +20,12 @@ export const pluginSettingsSchema = T.Object(
       T.Number({ default: 0, description: "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score." })
     ),
     demoFlag: T.Boolean({ default: false, description: "When true, disables storing issues and comments in the database." }),
+    embeddingModel: T.Optional(
+      T.Union([T.Literal("voyage"), T.Literal("nomic")], {
+        default: "voyage",
+        description: "Which embedding model to use: 'voyage' (Voyage-4-large, 1024d) or 'nomic' (Nomic Embed v1.5, 768d, ~10% more accurate).",
+      })
+    ),
   },
   { default: {} }
 );
