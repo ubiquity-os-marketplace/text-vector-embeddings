@@ -10,7 +10,6 @@ import { rateLimiter } from "hono-rate-limiter";
 import { env } from "hono/adapter";
 import { cors } from "hono/cors";
 import { getConnInfo } from "hono/deno";
-import process from "node:process";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
 import { createAdapters } from "./adapters/index";
@@ -57,7 +56,7 @@ export default {
         postCommentOnError: true,
         logLevel: environment.LOG_LEVEL as LogLevel,
         kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
-        bypassSignatureVerification: process.env.NODE_ENV === "local",
+        bypassSignatureVerification: environment.NODE_ENV === "local",
       }
     );
 
