@@ -29,12 +29,27 @@ export async function annotate(context: Context<"issue_comment.created">, commen
   const repository = payload.repository;
 
   if (!commentId) {
-    const response = await octokit.rest.issues.listComments({
-      owner: repository.owner.login,
-      repo: repository.name,
-      issue_number: context.payload.issue.number,
-      per_page: 100,
-    });
+    let response;
+    try {
+      response = await octokit.rest.issues.listComments({
+        owner: repository.owner.login,
+        repo: repository.name,
+        issue_number: context.payload.issue.number,
+        per_page: 100,
+      });
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isForbidden = errMsg.includes("403") || errMsg.includes("Forbidden");
+      const isNotFound = errMsg.includes("404") || errMsg.includes("Not Found");
+      if (isForbidden || isNotFound) {
+        throw new Error(
+          `Cannot access comments in "${repository.owner.login}/${repository.name}". ` +
+          `This repository is outside the configured organization and the bot does not have permission to annotate it. ` +
+          `Please ensure the bot has read access to this repository, or use an issue within your organization.`
+        );
+      }
+      throw err;
+    }
     const comments = response.data;
     if (comments.length > 1) {
       const commentBeforeAnnotate = comments[comments.length - 2];
@@ -43,11 +58,27 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
-    const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
-    });
+    let data;
+    try {
+      const result = await octokit.rest.issues.getComment({
+        owner: repository.owner.login,
+        repo: repository.name,
+        comment_id: parseInt(commentId, 10),
+      });
+      data = result.data;
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isForbidden = errMsg.includes("403") || errMsg.includes("Forbidden");
+      const isNotFound = errMsg.includes("404") || errMsg.includes("Not Found");
+      if (isForbidden || isNotFound) {
+        throw new Error(
+          `Comment #${commentId} in "${repository.owner.login}/${repository.name}" was not found or is not accessible. ` +
+          `The issue or comment may be in a private repository or outside the bot's permissions. ` +
+          `Ensure the bot has access to this repository and the comment exists.`
+        );
+      }
+      throw err;
+    }
     await commentChecker(context, data, scope);
   }
 }
