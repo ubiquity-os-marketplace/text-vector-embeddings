@@ -105,9 +105,13 @@ export function createRecommendationsRoute(overrides: Partial<RecommendationsDep
           logger,
           adapters: {} as Awaited<ReturnType<typeof createAdapters>>,
         };
-        ctx.adapters = await deps.initAdapters(ctx);
-        const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
-        return { [url]: serializeMatchResult(result) };
+        try {
+          ctx.adapters = await deps.initAdapters(ctx);
+          const result = users.length > 0 ? await deps.issueMatchingForUsers(ctx, users) : await deps.issueMatching(ctx);
+          return { [url]: serializeMatchResult(result) };
+        } finally {
+          await ctx.adapters?.close?.();
+        }
       } catch (error) {
         const errorInfo = error instanceof Error ? error : { stack: String(error) };
         logger.warn("Failed to process recommendations URL", { url, error: errorInfo });

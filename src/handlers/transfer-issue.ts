@@ -4,7 +4,7 @@ import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 export async function issueTransfer(context: Context<"issues.transferred">) {
   const {
     logger,
-    adapters: { supabase, kv },
+    adapters: { supabase, issueStore },
   } = context;
   const { changes, issue } = context.payload;
   const nodeId = issue.node_id;
@@ -37,9 +37,9 @@ export async function issueTransfer(context: Context<"issues.transferred">) {
       { deferEmbedding: queueSettings.enabled }
     );
     if (isHumanAuthor) {
-      await kv.updateIssue(issue.html_url, new_issue.html_url);
+      await issueStore.updateIssue(issue.html_url, new_issue.html_url);
     } else {
-      await kv.removeIssue(issue.html_url);
+      await issueStore.removeIssue(issue.html_url);
     }
     logger.ok(`Successfully transferred issue!`, new_issue);
   } catch (error) {
