@@ -49,9 +49,9 @@ function createQueryHandler(state: MockPostgresState) {
     const sql = normalizeQuery(query);
 
     if (
-      sql.startsWith("CREATE TABLE IF NOT EXISTS tracked_issues") ||
-      sql.startsWith("CREATE INDEX IF NOT EXISTS tracked_issues_owner_repo_idx") ||
-      sql.startsWith("CREATE TABLE IF NOT EXISTS rate_limit_records") ||
+      sql.startsWith("CREATE TABLE IF NOT EXISTS text_vector_embeddings_tracked_issues") ||
+      sql.startsWith("CREATE INDEX IF NOT EXISTS text_vector_embeddings_tracked_issues_owner_repo_idx") ||
+      sql.startsWith("CREATE TABLE IF NOT EXISTS text_vector_embeddings_rate_limit_records") ||
       sql === "BEGIN" ||
       sql === "COMMIT" ||
       sql === "ROLLBACK"
@@ -59,7 +59,7 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: [] as T[] };
     }
 
-    if (sql.startsWith("SELECT issue_number FROM tracked_issues")) {
+    if (sql.startsWith("SELECT issue_number FROM text_vector_embeddings_tracked_issues")) {
       const owner = String(args[0]);
       const repo = String(args[1]);
       const rows = Array.from(state.trackedIssues.get(`${owner}/${repo}`) ?? [])
@@ -68,7 +68,7 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: rows as T[] };
     }
 
-    if (sql.startsWith("INSERT INTO tracked_issues")) {
+    if (sql.startsWith("INSERT INTO text_vector_embeddings_tracked_issues")) {
       const owner = String(args[0]);
       const repo = String(args[1]);
       const issueNumber = Number(args[2]);
@@ -79,7 +79,7 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: [] as T[] };
     }
 
-    if (sql.startsWith("DELETE FROM tracked_issues")) {
+    if (sql.startsWith("DELETE FROM text_vector_embeddings_tracked_issues")) {
       const owner = String(args[0]);
       const repo = String(args[1]);
       const issueNumber = Number(args[2]);
@@ -96,7 +96,7 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: [] as T[] };
     }
 
-    if (sql.startsWith("SELECT owner, repo, array_agg(issue_number ORDER BY issue_number) AS issue_numbers FROM tracked_issues")) {
+    if (sql.startsWith("SELECT owner, repo, array_agg(issue_number ORDER BY issue_number) AS issue_numbers FROM text_vector_embeddings_tracked_issues")) {
       const groupedRows = Array.from(state.trackedIssues.entries())
         .sort(([left], [right]) => left.localeCompare(right))
         .map(([repositoryKey, issueNumbers]) => {
@@ -110,11 +110,11 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: groupedRows as T[] };
     }
 
-    if (sql.startsWith("SELECT EXISTS (SELECT 1 FROM tracked_issues) AS has_data")) {
+    if (sql.startsWith("SELECT EXISTS (SELECT 1 FROM text_vector_embeddings_tracked_issues) AS has_data")) {
       return { rows: [{ has_data: state.trackedIssues.size > 0 }] as T[] };
     }
 
-    if (sql.startsWith("SELECT total_hits, reset_time FROM rate_limit_records")) {
+    if (sql.startsWith("SELECT total_hits, reset_time FROM text_vector_embeddings_rate_limit_records")) {
       const key = String(args[0]);
       const record = state.rateLimitRecords.get(key);
       return {
@@ -122,13 +122,13 @@ function createQueryHandler(state: MockPostgresState) {
       };
     }
 
-    if (sql.startsWith("DELETE FROM rate_limit_records")) {
+    if (sql.startsWith("DELETE FROM text_vector_embeddings_rate_limit_records")) {
       const key = String(args[0]);
       state.rateLimitRecords.delete(key);
       return { rows: [] as T[] };
     }
 
-    if (sql.startsWith("INSERT INTO rate_limit_records")) {
+    if (sql.startsWith("INSERT INTO text_vector_embeddings_rate_limit_records")) {
       const key = String(args[0]);
       const totalHits = Number(args[1]);
       const resetTime = new Date(String(args[2]));
@@ -136,7 +136,7 @@ function createQueryHandler(state: MockPostgresState) {
       return { rows: [] as T[] };
     }
 
-    if (sql.startsWith("UPDATE rate_limit_records")) {
+    if (sql.startsWith("UPDATE text_vector_embeddings_rate_limit_records")) {
       const totalHits = Number(args[0]);
       const resetTime = new Date(String(args[1]));
       const key = String(args[2]);

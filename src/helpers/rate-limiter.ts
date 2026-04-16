@@ -19,7 +19,7 @@ export class PostgresRateLimitStore implements Store {
 
     try {
       await client.queryObject`
-        CREATE TABLE IF NOT EXISTS rate_limit_records (
+        CREATE TABLE IF NOT EXISTS text_vector_embeddings_rate_limit_records (
           key TEXT PRIMARY KEY,
           total_hits INTEGER NOT NULL,
           reset_time TIMESTAMPTZ NOT NULL,
@@ -53,7 +53,7 @@ export class PostgresRateLimitStore implements Store {
 
     try {
       await client.queryObject`
-        DELETE FROM rate_limit_records
+        DELETE FROM text_vector_embeddings_rate_limit_records
         WHERE key = ${key}
       `;
     } finally {
@@ -92,7 +92,7 @@ export class PostgresRateLimitStore implements Store {
     try {
       const result = await client.queryObject<RateLimitRecord>`
         SELECT total_hits, reset_time
-        FROM rate_limit_records
+        FROM text_vector_embeddings_rate_limit_records
         WHERE key = ${key}
       `;
       const row = result.rows[0];
@@ -140,7 +140,7 @@ export class PostgresRateLimitStore implements Store {
 
     try {
       await client.queryObject`
-        INSERT INTO rate_limit_records (key, total_hits, reset_time)
+        INSERT INTO text_vector_embeddings_rate_limit_records (key, total_hits, reset_time)
         VALUES (${key}, ${payload.totalHits}, ${resetTime.toISOString()})
         ON CONFLICT (key) DO UPDATE
         SET
@@ -159,7 +159,7 @@ export class PostgresRateLimitStore implements Store {
 
     try {
       await client.queryObject`
-        UPDATE rate_limit_records
+        UPDATE text_vector_embeddings_rate_limit_records
         SET
           total_hits = ${payload.totalHits},
           reset_time = ${resetTime.toISOString()},

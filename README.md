@@ -24,8 +24,9 @@ Cron GitHub App auth:
 Deployment notes:
 
 - `ubiquity-os/deno-deploy@main` owns Deno app lifecycle.
-- `DATABASE_URL` remains a GitHub environment secret.
-- The Deno provisioning workflow only ensures the backing Prisma database exists.
+- `DATABASE_URL` remains a GitHub environment secret and points at the shared `ubiquity-os-postgres` database.
+- Collision avoidance inside the shared database is handled by project-specific tables.
+- The Deno provisioning workflow only ensures the shared Prisma database exists.
 
 ## Usage
 
