@@ -94,5 +94,6 @@
         "type": "boolean"
       }
     }
-  }
+  },
+  "homepage_url": "https://text-vector-embeddings-developme.ubiquity-os.deno.net"
 }
