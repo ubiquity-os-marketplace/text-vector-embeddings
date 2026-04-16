@@ -5,7 +5,7 @@ import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 export async function updateIssue(context: Context<"issues.edited">) {
   const {
     logger,
-    adapters: { supabase, kv },
+    adapters: { supabase, issueStore },
     payload,
     config,
   } = context;
@@ -42,7 +42,7 @@ export async function updateIssue(context: Context<"issues.edited">) {
 
     await supabase.issue.updateIssue({ markdown: cleanedIssue, id, payload, isPrivate, author_id: authorId }, { deferEmbedding: queueSettings.enabled });
     if (isHumanAuthor) {
-      await kv.addIssue(payload.issue.html_url);
+      await issueStore.addIssue(payload.issue.html_url);
     }
     logger.ok(`Successfully updated issue! ${payload.issue.id}`, payload.issue);
   } catch (error) {

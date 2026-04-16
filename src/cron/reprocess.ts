@@ -4,6 +4,7 @@ import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import type { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { VoyageAIClient } from "voyageai";
+import { IssueStore, TrackedRepository } from "../adapters/postgres-issue-store";
 import { LlmAdapter } from "../adapters/llm";
 import { Comment } from "../adapters/supabase/helpers/comment";
 import { Issue } from "../adapters/supabase/helpers/issues";
@@ -16,7 +17,6 @@ import { updateIssue } from "../handlers/update-issue";
 import { parseGitHubUrl } from "../helpers/github";
 import { Database } from "../types/database";
 import { Context, Env, PluginSettings, envSchema, pluginSettingsSchema } from "../types/index";
-import { CronDatabaseClient } from "./database-handler";
 
 type Octokit = InstanceType<typeof customOctokit>;
 type IssuePayload = Awaited<ReturnType<Octokit["rest"]["issues"]["get"]>>["data"];
@@ -36,7 +36,7 @@ type ReprocessClients = {
   voyage: VoyageAIClient;
 };
 
-class MemoryCronDatabase implements CronDatabaseClient {
+class MemoryIssueStore implements IssueStore {
   private readonly _entries = new Map<string, number[]>();
 
   async getIssueNumbers(owner: string, repo: string): Promise<number[]> {
@@ -69,8 +69,8 @@ class MemoryCronDatabase implements CronDatabaseClient {
     await this.addIssue(newUrl);
   }
 
-  async getAllRepositories(): Promise<Array<{ owner: string; repo: string; issueNumbers: number[] }>> {
-    const repositories: Array<{ owner: string; repo: string; issueNumbers: number[] }> = [];
+  async getAllRepositories(): Promise<TrackedRepository[]> {
+    const repositories: TrackedRepository[] = [];
     for (const [key, issueNumbers] of this._entries) {
       const [owner, repo] = key.split("/");
       if (!owner || !repo) {
@@ -80,6 +80,12 @@ class MemoryCronDatabase implements CronDatabaseClient {
     }
     return repositories;
   }
+
+  async hasData(): Promise<boolean> {
+    return this._entries.size > 0;
+  }
+
+  async close(): Promise<void> {}
 }
 
 export function decodeEnv(values: Record<string, unknown>): Env {
@@ -98,7 +104,7 @@ export function createReprocessClients(env: Env): ReprocessClients {
 }
 
 export function createReprocessAdapters(context: Context, clients: ReprocessClients): Context["adapters"] {
-  const kv: CronDatabaseClient = new MemoryCronDatabase();
+  const issueStore: IssueStore = new MemoryIssueStore();
   return {
     supabase: {
       comment: new Comment(clients.supabase, context),
@@ -109,8 +115,9 @@ export function createReprocessAdapters(context: Context, clients: ReprocessClie
       embedding: new VoyageEmbedding(clients.voyage, context),
       super: new SuperVoyage(clients.voyage, context),
     },
-    kv,
+    issueStore,
     llm: new LlmAdapter(context),
+    close: async () => {},
   };
 }
 

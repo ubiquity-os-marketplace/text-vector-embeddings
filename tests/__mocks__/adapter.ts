@@ -26,6 +26,7 @@ export interface IssueMock {
 export function createMockAdapters(context: Context) {
   const commentMap: Map<string, CommentMock> = new Map();
   const issueMap: Map<string, IssueData> = new Map();
+  const trackedIssues = new Set<string>();
 
   return {
     supabase: {
@@ -137,8 +138,22 @@ export function createMockAdapters(context: Context) {
         }),
       } as unknown as number[],
     },
-    kv: {
-      addIssue: jest.fn(),
+    issueStore: {
+      addIssue: jest.fn(async (url: string) => {
+        trackedIssues.add(url);
+      }),
+      removeIssue: jest.fn(async (url: string) => {
+        trackedIssues.delete(url);
+      }),
+      updateIssue: jest.fn(async (currentUrl: string, newUrl: string) => {
+        trackedIssues.delete(currentUrl);
+        trackedIssues.add(newUrl);
+      }),
+      getIssueNumbers: jest.fn(async () => []),
+      getAllRepositories: jest.fn(async () => []),
+      hasData: jest.fn(async () => trackedIssues.size > 0),
+      close: jest.fn(async () => {}),
     },
+    close: jest.fn(async () => {}),
   };
 }

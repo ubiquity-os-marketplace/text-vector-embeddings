@@ -9,6 +9,7 @@ This is a plugin for [UbiquityOS](https://github.com/ubiquity-os/ubiquity-os-ker
 - `SUPABASE_URL`: The URL for your Supabase instance.
 - `SUPABASE_KEY`: The key for your Supabase instance.
 - `VOYAGEAI_API_KEY`: The API key for Voyage.
+- `DATABASE_URL`: Temporary Postgres store for tracked issues and shared rate limiting. This is required for webhook runs, cron, `/recommendations`, and the Deno worker.
 - `EMBEDDINGS_QUEUE_ENABLED`: Enable deferred embedding processing via cron (default: true).
 - `EMBEDDINGS_QUEUE_BATCH_SIZE`: Max rows per cron batch (default: 50).
 - `EMBEDDINGS_QUEUE_DELAY_MS`: Delay between embeddings in milliseconds (default: 1000).
@@ -19,6 +20,12 @@ Cron GitHub App auth:
 - `APP_ID`: GitHub App ID.
 - `APP_PRIVATE_KEY`: GitHub App private key.
 - `APP_INSTALLATION_ID`: GitHub App installation ID.
+
+Deployment notes:
+
+- `ubiquity-os/deno-deploy@main` owns Deno app lifecycle.
+- `DATABASE_URL` remains a GitHub environment secret.
+- The Deno provisioning workflow only ensures the backing Prisma database exists.
 
 ## Usage
 

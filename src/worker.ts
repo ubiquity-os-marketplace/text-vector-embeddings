@@ -1,6 +1,6 @@
 import { swaggerUI } from "@hono/swagger-ui";
 import { createPlugin, Options } from "@ubiquity-os/plugin-sdk";
-import { Manifest, resolveRuntimeManifest } from "@ubiquity-os/plugin-sdk/manifest";
+import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi";
@@ -13,7 +13,7 @@ import { getConnInfo } from "hono/deno";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
 import { createAdapters } from "./adapters/index";
-import { KvStore } from "./helpers/rate-limiter";
+import { getSharedRateLimitStore } from "./helpers/rate-limiter";
 import { runPlugin } from "./plugin";
 import { recommendationsRoute } from "./routes/recommendations";
 import { Command } from "./types/command";
@@ -22,13 +22,11 @@ import { Env, envSchema } from "./types/env";
 import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 import { querySchema, responseSchema } from "./validators";
 
-const kv = await Deno.openKv();
 const pluginManifest = manifest as Manifest & { homepage_url?: string };
 
 function buildRuntimeManifest(request: Request) {
-  const runtimeManifest = resolveRuntimeManifest(pluginManifest);
   return {
-    ...runtimeManifest,
+    ...pluginManifest,
     homepage_url: new URL(request.url).origin,
   };
 }
@@ -73,7 +71,7 @@ export default {
         keyGenerator: (c) => {
           return getConnInfo(c).remote.address ?? "";
         },
-        store: new KvStore(kv),
+        store: getSharedRateLimitStore(environment.DATABASE_URL),
       })
     );
 

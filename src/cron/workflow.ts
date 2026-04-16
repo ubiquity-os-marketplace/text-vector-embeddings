@@ -36,8 +36,8 @@ export async function getAuthenticatedOctokit({
 }
 
 export async function updateCronState(context: Context) {
-  context.logger.info("Updating the cron KV workflow state.");
-  const db = context.adapters.kv;
+  context.logger.info("Updating the cron workflow state.");
+  const issueStore = context.adapters.issueStore;
 
   if (!process.env.GITHUB_REPOSITORY) {
     context.logger.warn("Can't update the Action Workflow state as GITHUB_REPOSITORY is missing from the env.");
@@ -60,13 +60,13 @@ export async function updateCronState(context: Context) {
       });
     }
 
-    const repositories = await db.getAllRepositories();
+    const hasTrackedIssues = await issueStore.hasData();
     const queueSettings = getEmbeddingQueueSettings(context.env);
     let hasPendingEmbeddings = false;
     if (queueSettings.enabled && context.adapters?.supabase?.super?.hasPendingEmbeddings) {
       hasPendingEmbeddings = await context.adapters.supabase.super.hasPendingEmbeddings();
     }
-    const hasData = repositories.length > 0 || hasPendingEmbeddings;
+    const hasData = hasTrackedIssues || hasPendingEmbeddings;
 
     if (hasData) {
       context.logger.verbose("Enabling cron.yml workflow.", { owner, repo });
@@ -75,8 +75,9 @@ export async function updateCronState(context: Context) {
         repo,
         workflow_id: "cron.yml",
       });
-      context.logger.ok("Cron workflow state updated with KV data", {
-        totalRepos: repositories.length,
+      context.logger.ok("Cron workflow state updated with tracked issue data", {
+        hasTrackedIssues,
+        hasPendingEmbeddings,
       });
     } else {
       context.logger.verbose("Disabling cron.yml workflow.");
@@ -85,7 +86,7 @@ export async function updateCronState(context: Context) {
         repo,
         workflow_id: "cron.yml",
       });
-      context.logger.debug("No data found in KV storage");
+      context.logger.debug("No tracked issue or embedding queue data found");
     }
   } catch (e) {
     context.logger.error("Error updating cron workflow state", { e });

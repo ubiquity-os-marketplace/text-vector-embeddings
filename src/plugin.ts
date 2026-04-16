@@ -47,92 +47,96 @@ export async function initAdapters(context: Context) {
 export async function runPlugin(context: Context) {
   const { logger, eventName } = context;
 
-  if (!context.adapters?.supabase && !context.adapters?.voyage) {
-    context.adapters = await initAdapters(context);
-  }
+  try {
+    if (!context.adapters?.supabase && !context.adapters?.voyage) {
+      context.adapters = await initAdapters(context);
+    }
 
-  const { enabled: shouldDeferEmbeddings } = getEmbeddingQueueSettings(context.env);
+    const { enabled: shouldDeferEmbeddings } = getEmbeddingQueueSettings(context.env);
 
-  if (context.command && eventName === "issue_comment.created") {
-    return await commandHandler(context as Context<"issue_comment.created">);
-  }
+    if (context.command && eventName === "issue_comment.created") {
+      return await commandHandler(context as Context<"issue_comment.created">);
+    }
 
-  if (isIssueCommentEvent(context)) {
-    switch (eventName) {
-      case "issue_comment.created":
-        await addComments(context as Context<"issue_comment.created">);
-        return await userAnnotate(context as Context<"issue_comment.created">);
-      case "issue_comment.deleted":
-        return await deleteComment(context as Context<"issue_comment.deleted">);
-      case "issue_comment.edited":
-        return await updateComment(context as Context<"issue_comment.edited">);
-    }
-  } else if (isPullRequestReviewCommentEvent(context)) {
-    switch (eventName) {
-      case "pull_request_review_comment.created":
-        return await addReviewComment(context as Context<"pull_request_review_comment.created">);
-      case "pull_request_review_comment.edited":
-        return await updateReviewComment(context as Context<"pull_request_review_comment.edited">);
-      case "pull_request_review_comment.deleted":
-        return await deleteReviewComment(context as Context<"pull_request_review_comment.deleted">);
-    }
-  } else if (isPullRequestReviewEvent(context)) {
-    switch (eventName) {
-      case "pull_request_review.submitted":
-        return await addPullRequestReview(context as Context<"pull_request_review.submitted">);
-      case "pull_request_review.edited":
-        return await updatePullRequestReview(context as Context<"pull_request_review.edited">);
-    }
-  } else if (isPullRequestEvent(context)) {
-    switch (eventName) {
-      case "pull_request.opened":
-        return await addPullRequest(context as Context<"pull_request.opened">);
-      case "pull_request.edited":
-        return await updatePullRequest(context as Context<"pull_request.edited">);
-    }
-  } else if (isIssueEvent(context)) {
-    switch (eventName) {
-      case "issues.opened":
-        await addIssue(context as Context<"issues.opened">);
-        if (shouldDeferEmbeddings) {
-          logger.debug("Embedding queue enabled; skipping issue matching on open.");
-        } else {
-          await issueMatchingWithComment(context as Context<"issues.opened">);
-        }
-        break;
-      case "issues.edited":
-        if (isPluginEdit(context as Context<"issues.edited">)) {
-          logger.info("Plugin edit detected, will run issue matching and checker.");
+    if (isIssueCommentEvent(context)) {
+      switch (eventName) {
+        case "issue_comment.created":
+          await addComments(context as Context<"issue_comment.created">);
+          return await userAnnotate(context as Context<"issue_comment.created">);
+        case "issue_comment.deleted":
+          return await deleteComment(context as Context<"issue_comment.deleted">);
+        case "issue_comment.edited":
+          return await updateComment(context as Context<"issue_comment.edited">);
+      }
+    } else if (isPullRequestReviewCommentEvent(context)) {
+      switch (eventName) {
+        case "pull_request_review_comment.created":
+          return await addReviewComment(context as Context<"pull_request_review_comment.created">);
+        case "pull_request_review_comment.edited":
+          return await updateReviewComment(context as Context<"pull_request_review_comment.edited">);
+        case "pull_request_review_comment.deleted":
+          return await deleteReviewComment(context as Context<"pull_request_review_comment.deleted">);
+      }
+    } else if (isPullRequestReviewEvent(context)) {
+      switch (eventName) {
+        case "pull_request_review.submitted":
+          return await addPullRequestReview(context as Context<"pull_request_review.submitted">);
+        case "pull_request_review.edited":
+          return await updatePullRequestReview(context as Context<"pull_request_review.edited">);
+      }
+    } else if (isPullRequestEvent(context)) {
+      switch (eventName) {
+        case "pull_request.opened":
+          return await addPullRequest(context as Context<"pull_request.opened">);
+        case "pull_request.edited":
+          return await updatePullRequest(context as Context<"pull_request.edited">);
+      }
+    } else if (isIssueEvent(context)) {
+      switch (eventName) {
+        case "issues.opened":
+          await addIssue(context as Context<"issues.opened">);
           if (shouldDeferEmbeddings) {
-            logger.debug("Embedding queue enabled; skipping issue matching and dedupe on plugin edit.");
+            logger.debug("Embedding queue enabled; skipping issue matching on open.");
           } else {
-            await issueMatchingWithComment(context as Context<"issues.edited">);
-            await issueDedupe(context as Context<"issues.edited">);
+            await issueMatchingWithComment(context as Context<"issues.opened">);
           }
-        } else {
-          await updateIssue(context as Context<"issues.edited">);
-        }
-        break;
-      case "issues.deleted":
-        await deleteIssues(context as Context<"issues.deleted">);
-        break;
-      case "issues.transferred":
-        await issueTransfer(context as Context<"issues.transferred">);
-        break;
-      case "issues.closed":
-        await completeIssue(context as Context<"issues.closed">);
-        break;
-    }
-  } else if (eventName == "issues.labeled") {
-    if (shouldDeferEmbeddings) {
-      logger.debug("Embedding queue enabled; skipping issue matching on label.");
+          break;
+        case "issues.edited":
+          if (isPluginEdit(context as Context<"issues.edited">)) {
+            logger.info("Plugin edit detected, will run issue matching and checker.");
+            if (shouldDeferEmbeddings) {
+              logger.debug("Embedding queue enabled; skipping issue matching and dedupe on plugin edit.");
+            } else {
+              await issueMatchingWithComment(context as Context<"issues.edited">);
+              await issueDedupe(context as Context<"issues.edited">);
+            }
+          } else {
+            await updateIssue(context as Context<"issues.edited">);
+          }
+          break;
+        case "issues.deleted":
+          await deleteIssues(context as Context<"issues.deleted">);
+          break;
+        case "issues.transferred":
+          await issueTransfer(context as Context<"issues.transferred">);
+          break;
+        case "issues.closed":
+          await completeIssue(context as Context<"issues.closed">);
+          break;
+      }
+    } else if (eventName == "issues.labeled") {
+      if (shouldDeferEmbeddings) {
+        logger.debug("Embedding queue enabled; skipping issue matching on label.");
+        return;
+      }
+      return await issueMatchingWithComment(context as Context<"issues.labeled">);
+    } else {
+      logger.warn(`Unsupported event: ${eventName}`);
       return;
     }
-    return await issueMatchingWithComment(context as Context<"issues.labeled">);
-  } else {
-    logger.warn(`Unsupported event: ${eventName}`);
-    return;
+    await updateCronState(context);
+    logger.ok(`Exiting plugin`);
+  } finally {
+    await context.adapters?.close?.();
   }
-  await updateCronState(context);
-  logger.ok(`Exiting plugin`);
 }
