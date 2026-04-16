@@ -4,6 +4,7 @@ import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import manifest from "../../manifest.json" with { type: "json" };
+import "../adapters/preload-deno-postgres";
 import { createPostgresIssueStore } from "../adapters/postgres-issue-store";
 import type { Context } from "../types/index";
 import { getEmbeddingQueueSettings, sleep } from "../utils/embedding-queue";

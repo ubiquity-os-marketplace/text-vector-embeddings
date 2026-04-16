@@ -12,6 +12,7 @@ import { cors } from "hono/cors";
 import { getConnInfo } from "hono/deno";
 import manifest from "../manifest.json" with { type: "json" };
 import pkg from "../package.json" with { type: "json" };
+import "./adapters/preload-deno-postgres";
 import { createAdapters } from "./adapters/index";
 import { getSharedRateLimitStore } from "./helpers/rate-limiter";
 import { runPlugin } from "./plugin";
