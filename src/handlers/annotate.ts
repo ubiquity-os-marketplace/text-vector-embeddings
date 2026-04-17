@@ -43,12 +43,21 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
-    const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
-    });
-    await commentChecker(context, data, scope);
+    try {
+      const { data } = await octokit.rest.issues.getComment({
+        owner: repository.owner.login,
+        repo: repository.name,
+        comment_id: parseInt(commentId, 10),
+      });
+      await commentChecker(context, data, scope);
+    } catch (error: unknown) {
+      const err = error as { status?: number; message?: string };
+      if (err.status === 404) {
+        logger.error("Cannot annotate: Comment not found or no permission to access it. This issue/comment may be in a private repository or you lack permission to view it.");
+        return;
+      }
+      throw error;
+    }
   }
 }
 
@@ -116,7 +125,7 @@ export async function commentChecker(context: Context<"issue_comment.created">, 
   } else {
     context.logger.info("No similar comments found for comment", { commentBody });
   }
-  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments);
+  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments, context.payload.issue.number);
 }
 
 function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: string, repoName: string, similarIssueRepoName: string): boolean {
@@ -138,9 +147,17 @@ async function handleSimilarIssuesAndComments(
   commentBody: string,
   commentId: number,
   issueList: IssueGraphqlResponse[],
-  commentList: CommentGraphqlResponse[]
+  commentList: CommentGraphqlResponse[],
+  issueNumber?: number
 ) {
-  if (!issueList.length && !commentList.length) {
+  if (!issueList.length && !commentList.length && issueNumber) {
+    // Post an info comment when no similar issues/comments are found
+    await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: issueNumber,
+      body: "🤖 I ran the similarity analysis but couldn't find any issues or comments similar to this one. This doesn't mean your content is bad — it might just be unique!",
+    });
     return;
   }
   // Find existing footnotes in the body
