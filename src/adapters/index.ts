@@ -1,7 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { VoyageAIClient } from "voyageai";
-import { CronDatabaseClient, createCronDatabase } from "../cron/database-handler";
 import { Context } from "../types/index";
+import { createPostgresIssueStore, IssueStore } from "./postgres-issue-store";
 import { LlmAdapter } from "./llm/index";
 import { Comment } from "./supabase/helpers/comment";
 import { Issue } from "./supabase/helpers/issues";
@@ -19,11 +19,14 @@ type AdapterSet = {
     embedding: VoyageEmbedding;
     super: SuperVoyage;
   };
-  kv: CronDatabaseClient;
+  issueStore: IssueStore;
   llm: LlmAdapter;
+  close(): Promise<void>;
 };
 
 export async function createAdapters(supabaseClient: SupabaseClient, voyage: VoyageAIClient, context: Context): Promise<AdapterSet> {
+  const issueStore = await createPostgresIssueStore(context.env.DATABASE_URL);
+
   return {
     supabase: {
       comment: new Comment(supabaseClient, context),
@@ -34,7 +37,10 @@ export async function createAdapters(supabaseClient: SupabaseClient, voyage: Voy
       embedding: new VoyageEmbedding(voyage, context),
       super: new SuperVoyage(voyage, context),
     },
-    kv: await createCronDatabase(),
+    issueStore,
     llm: new LlmAdapter(context),
+    close: async () => {
+      await issueStore.close();
+    },
   };
 }

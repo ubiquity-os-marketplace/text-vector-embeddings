@@ -706,7 +706,7 @@ describe("Plugin tests", () => {
       command: null,
       adapters: {} as Context["adapters"],
       logger: new Logs("debug") as unknown as Context["logger"],
-      env: { EMBEDDINGS_QUEUE_ENABLED: "false" } as Env,
+      env: { DATABASE_URL: "postgres://db.example/text-vector-embeddings", EMBEDDINGS_QUEUE_ENABLED: "false" } as Env,
       octokit: octokit,
     };
   }

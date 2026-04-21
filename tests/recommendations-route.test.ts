@@ -45,12 +45,12 @@ function createContext(urls: string[], users: string[] = []): HonoContext {
 
 function createEnv(overrides?: Record<string, string | undefined>): Env {
   return {
+    DATABASE_URL: "postgres://db.example/text-vector-embeddings",
     LOG_LEVEL: "debug",
     KERNEL_PUBLIC_KEY: "kernel",
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_KEY: "supabase-key",
     VOYAGEAI_API_KEY: "voyage",
-    DENO_KV_URL: "https://kv.example",
     APP_ID: undefined,
     APP_PRIVATE_KEY: undefined,
     ...overrides,
@@ -71,9 +71,12 @@ function setupRoute(options: SetupOptions = {}) {
     void users;
     return options.issueMatchingResult ?? createMatchResult();
   });
+  const closeMock = mock(async () => {});
   const initAdaptersMock = mock(async (ctx: IssueOpenedContext) => {
     void ctx;
-    return {} as unknown as IssueOpenedContext["adapters"];
+    return {
+      close: closeMock,
+    } as unknown as IssueOpenedContext["adapters"];
   });
   const issuesGetMock = mock(async () => ({ data: { id: "issue", number: 7, title: "Issue", body: "body" } }));
 
@@ -98,6 +101,7 @@ function setupRoute(options: SetupOptions = {}) {
       issueMatchingMock,
       issueMatchingForUsersMock,
       initAdaptersMock,
+      closeMock,
       issuesGetMock,
       createOctokitMock,
       getAuthenticatedOctokitMock,
@@ -129,6 +133,7 @@ describe("/recommendations route", () => {
     expect(mocks.getAuthenticatedOctokitMock).toHaveBeenCalledWith({ appId: "123", appPrivateKey: "key", owner: "foo", repo: "bar" });
     expect(mocks.createOctokitMock).not.toHaveBeenCalled();
     expect(mocks.issuesGetMock).toHaveBeenCalledWith({ owner: "foo", repo: "bar", issue_number: 42 });
+    expect(mocks.closeMock).toHaveBeenCalledTimes(1);
   });
 
   it("uses the default Octokit instance when credentials are missing", async () => {
@@ -145,6 +150,7 @@ describe("/recommendations route", () => {
     expect(payload).toEqual({ [url]: matchResult });
     expect(mocks.createOctokitMock).toHaveBeenCalledTimes(1);
     expect(mocks.getAuthenticatedOctokitMock).not.toHaveBeenCalled();
+    expect(mocks.closeMock).toHaveBeenCalledTimes(1);
   });
 
   it("returns a result for every requested user", async () => {

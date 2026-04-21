@@ -5,7 +5,7 @@ import { getEmbeddingQueueSettings } from "../utils/embedding-queue";
 export async function completeIssue(context: Context<"issues.closed">) {
   const {
     logger,
-    adapters: { supabase, kv },
+    adapters: { supabase, issueStore },
     payload,
   } = context;
 
@@ -73,7 +73,7 @@ export async function completeIssue(context: Context<"issues.closed">) {
         },
         { deferEmbedding: queueSettings.enabled }
       );
-      await kv.removeIssue(payload.issue.html_url);
+      await issueStore.removeIssue(payload.issue.html_url);
       logger.ok(`Successfully updated completed issue! ${payload.issue.id}`, payload.issue);
     } else {
       // Create new issue if it doesn't exist
