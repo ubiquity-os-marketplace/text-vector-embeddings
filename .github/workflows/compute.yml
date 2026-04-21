@@ -32,13 +32,12 @@ jobs:
     permissions: write-all
     environment: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'main' || 'development' }}
     env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
       VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
-      DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
-      DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
       APP_ID: ${{ secrets.APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
@@ -49,16 +48,15 @@ jobs:
       - uses: denoland/setup-deno@v2
 
       - name: Execute plugin
-        run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
+        run: deno run --unstable-sloppy-imports --allow-all dist/index.js
         env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           VOYAGEAI_API_KEY: ${{secrets.VOYAGEAI_API_KEY}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KERNEL_PUBLIC_KEY: ${{ github.event.inputs.kernelPublicKey || secrets.KERNEL_PUBLIC_KEY }}
-          DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
-          DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
           APP_ID: ${{ secrets.APP_ID }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
