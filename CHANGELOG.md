@@ -1,5 +1,70 @@
 # Changelog
 
+## [1.2.0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/compare/v1.1.1...v1.2.0) (2026-04-21)
+
+
+### Features
+
+* batch cron embeddings ([d26418a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/d26418a1f33f6457fcfe3a789fec9c04ffb4b7a1))
+* batch embedding queue requests ([51a492d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/51a492da147b1fc0ce3af1c53ff11f161c982d01))
+* replace kv with temporary postgres store ([8b6dcdb](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/8b6dcdb54ac8f5b57da681987a48cae409dfa239))
+* tune embedding queue throughput ([a3104f9](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/a3104f96d55ed07dbe8e27da6937cf9520243efb))
+
+
+### Bug Fixes
+
+* add app installation id to deno deploy ([c81fac2](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/c81fac29576459a7e6dd2711a9bd9a3711802a12))
+* added url for manifest.json homepage_url ([fc44948](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/fc449489ffa09003f10447937283924a668049df))
+* address non-transitive CI failures ([0ec1cf9](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0ec1cf9bd9ae53edfa38aadaf2a4bac1440115d6))
+* address pr review feedback ([310ff07](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/310ff07c150e45562b27db58d8dcae13412332bc))
+* align deno runtime env handling ([44378cd](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/44378cd02931c5ba0aee6d1a9db6c33cf6c15574))
+* align deploy defaults and env examples ([4224c5a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4224c5a2c878a130972de69c14dd8fba33f0a32e))
+* allow zero numeric options ([4553a9c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4553a9c767dbb177ea4dcf4cf00287705e624dac))
+* **ci:** remove temporary deno project fallback ([09c8e31](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/09c8e319d0cc1ba4dbb844432929b433b4f25973))
+* **ci:** restore plugin-specific deploy env vars ([11feac2](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/11feac2c7116a6748579d397cd3135266d673e49))
+* **ci:** set unique deno project fallback name ([5a460d7](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5a460d742ed6593d56d86661b7e411c2474a732d))
+* **ci:** treat demo as production secrets environment ([efc5a9d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/efc5a9dfadfc99afb5d282c8cdec89c4980fc6a9))
+* **ci:** use artifact branch deploy actions ([df30cd6](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/df30cd6b07cb3f28aab838b1738b86c72f98af68))
+* correct deploy action ref and token secret ([caeb715](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/caeb71598121c3e07bdec75eaa4d00d15f6831ab))
+* **deploy:** include hono optional peer on deno ([ad6e27e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/ad6e27e58e87463aed195d1d1a56bf0e343abb7d))
+* **deploy:** include valibot openapi peer ([86f2198](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/86f21987acd101bda3bba2a351c12f926391df11))
+* enable deno kv in deploy config ([e23da9d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/e23da9de292dba2dfd12e745888db7f1f9430b9a))
+* exclude issue_comment.created from manifest listeners ([85cac44](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/85cac44a9d2d2aef8907db3aa2d63adf1159772c))
+* expose deno deploy token env ([8d0c831](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/8d0c831387bdaf0aaef214506057bd096d6e8163))
+* generate manifest on install for tests and deploy ([419bfc6](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/419bfc60bb6e226a79e33ba7c916387f39c67877))
+* handle token-limited batch shrink ([00947f0](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/00947f0d3cce10a37ee162a197a39b07179dd4a8))
+* inline manifest prepare and target deploy action main ([2c2b5ce](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/2c2b5cefdf87e6967009c1e43914fa645c14dbee))
+* install dependencies before deno deploy ([ebee2a3](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/ebee2a36f96911ffc5715ab79d3c6b1f8202484f))
+* integrate pending embeddings check into cron workflow ([1a1219a](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/1a1219a19892036884e9c11f2f43e29a91a01657))
+* make build pass ([2520976](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/25209761244bf94c0f5b9fa961948fe0ecba226d))
+* make build pass ([77f3bf2](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/77f3bf2b5cd16ebf8644afbd3061343bd42911fb))
+* **manifest:** derive short_name from CI repository context ([021bc37](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/021bc37cfeab10a8f3169465f636fd633c0a8cb5))
+* mark empty embeddings as terminal ([b9e6f40](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b9e6f40a16d6c2e54a925d33cf35c5c480e92a13))
+* migrate workflow action refs ([01da83f](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/01da83fa4d02e6c53b36dc9125d9c6dee5dd77a3))
+* **openapi:** tolerate missing homepage_url during build ([81e5e00](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/81e5e006f1eb28a8c6c0602e33babe80c2abfc88))
+* pin manifest workflow to issue-27 deploy action ([bb1615d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/bb1615dcdf1add7676fef763ea80e21058f5083b))
+* preload deno postgres for cached runtimes ([8ac158d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/8ac158df2824299f17b0986dfa222539a93d3249))
+* refactor document type selection to use constants for better maintainability ([3563e6d](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/3563e6d6c1a676ba775b8e82ef3fdb11ab9ed8e1))
+* rely on action-managed kv config ([5d855c7](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/5d855c7c2779e2c44555fea59f995a10be6a5f8f))
+* remove recommendation command and alias route ([451c885](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/451c885c0938c94fcd2d75598a5ae8db443f852c))
+* remove recommendation command and alias route ([90ea8cf](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/90ea8cf252e5930a82afa2121dc02f9768b03b4a))
+* remove unused recommendation command handler ([6777c26](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/6777c26d0956b9c5205667495a583cb997cbf347))
+* require app identity env vars in template ([29f65e2](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/29f65e2a1aae329f9f8d60946d6125eb7b6f6464))
+* restore deno v2 deploy token secret ([b5184e4](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/b5184e417b48d37d18f77d98852254a7edd18e23))
+* serialize embeddings for Supabase document writes ([d7d24e8](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/d7d24e8aab430f9a6aabc0f6dab80b6848df66e6))
+* serialize embeddings for Supabase document writes ([502320e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/502320e0e1b5543612c4c4e17ec0d3041025a18e))
+* set deploy action ref to [@main](https://github.com/main) ([faee17c](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/faee17c442288e91f583116b94610ff2f02b5643))
+* sync manifest workflow metadata for issue 27 ([a375001](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/a3750019c4d468ca03753f62aec3ecfabd8a9d8e))
+* sync workflow skipBotEvents and parameter metadata ([4f52f9e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/4f52f9e84ba21bb50aff0e0a1b30198d1cb4f465))
+* treat pending reduction as progress ([bcabfad](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/bcabfad888193f4e669d0499358da866e1e2d6f0))
+* update llm retry handling ([e70e817](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/e70e817c843d447d1981edcf8ba7fbca33a96c25))
+* update llm retry handling ([0f93eaa](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/0f93eaac45eb220538d03120f57a4819e8d95309))
+* use deno deploy token secret ([a18a156](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/a18a156b84c7cb91d2bc25d70c961707b5bfb25c))
+* validate cli flag values ([c7da951](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/c7da95126cc052f9fe5288ac994611af95e588b5))
+* widen runtime env typing ([558457e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/558457eb682cf5d0fb2853d5e6420ffb4dc7ff71))
+* **workflows:** pin deploy action ref and source branch input ([9c5928e](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/9c5928e55fb8ca3cf4b13dc41b8808905ba969c4))
+* **workflows:** use artifact deploy action branch for dist publish ([d9903f8](https://github.com/ubiquity-os-marketplace/text-vector-embeddings/commit/d9903f8993ce1e279b9b5d5be1e671651f8c1038))
+
 ## 1.1.1 (2026-01-02)
 
 
