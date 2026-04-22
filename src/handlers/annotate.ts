@@ -116,7 +116,7 @@ export async function commentChecker(context: Context<"issue_comment.created">, 
   } else {
     context.logger.info("No similar comments found for comment", { commentBody });
   }
-  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments);
+  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments, context.payload.issue.number);
 }
 
 function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: string, repoName: string, similarIssueRepoName: string): boolean {
@@ -138,9 +138,17 @@ async function handleSimilarIssuesAndComments(
   commentBody: string,
   commentId: number,
   issueList: IssueGraphqlResponse[],
-  commentList: CommentGraphqlResponse[]
+  commentList: CommentGraphqlResponse[],
+  issueNumber?: number
 ) {
-  if (!issueList.length && !commentList.length) {
+  if (!issueList.length && !commentList.length && issueNumber) {
+    // Post an info comment when no similar issues/comments are found
+    await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: issueNumber,
+      body: "🤖 I ran the similarity analysis but couldn't find any issues or comments similar to this one. This doesn't mean your content is bad — it might just be unique!",
+    });
     return;
   }
   // Find existing footnotes in the body
