@@ -36,27 +36,46 @@ function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResp
 }
 
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
-  const { logger, octokit, payload } = context;
+  const { logger, octokit, payload, eventName } = context;
   const issue = payload.issue;
   const commentStart = ">The following contributors may be suitable for this task:";
+  const commentMarker = ">[!NOTE]" + "\n" + commentStart;
+
+  // Create the matchmaking comment as soon as an issue is opened. Label events can
+  // arrive in parallel immediately after issue creation; having this marker in
+  // place lets those later runs edit one comment instead of each creating their
+  // own recommendation comment.
+  let existingComment = await findIssueMatchingComment(context, commentMarker);
+  let didCreatePendingComment = false;
+  if (eventName === "issues.opened" && !existingComment) {
+    const pendingComment = await octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: issue.number,
+      body: commentBuilder(new Map()),
+    });
+    if (pendingComment?.data) {
+      existingComment = { id: pendingComment.data.id, body: pendingComment.data.body };
+      didCreatePendingComment = true;
+    }
+  }
 
   const result = await issueMatching(context);
 
   if (!result) {
+    if (didCreatePendingComment && existingComment) {
+      await octokit.rest.issues.deleteComment({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        comment_id: existingComment.id,
+      });
+    }
     return;
   }
 
   const { matchResultArray, sortedContributors } = result;
 
-  // Fetch if any previous comment exists
-  const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
-    owner: payload.repository.owner.login,
-    repo: payload.repository.name,
-    issue_number: issue.number,
-  })) as IssueCommentSummary[];
-
-  //Check if the comment already exists
-  const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
+  existingComment = existingComment ?? (await findIssueMatchingComment(context, commentMarker));
 
   if (matchResultArray.size === 0) {
     if (existingComment) {
@@ -93,6 +112,23 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
       issue_number: payload.issue.number,
       body: comment,
     });
+  }
+}
+
+async function findIssueMatchingComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">, commentMarker: string) {
+  const { logger, octokit, payload } = context;
+  try {
+    const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: payload.issue.number,
+    })) as IssueCommentSummary[];
+
+    return listIssues.find((comment) => comment.body && comment.body.includes(commentMarker));
+  } catch (error) {
+    const errorInfo = error instanceof Error ? error : { stack: String(error) };
+    logger.warn("Could not list existing issue matching comments", { error: errorInfo });
+    return undefined;
   }
 }
 
