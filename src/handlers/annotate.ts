@@ -4,6 +4,7 @@ import { processSimilarIssues, IssueGraphqlResponse, findMostSimilarSentence } f
 import { CommentSimilaritySearchResult } from "../adapters/supabase/helpers/comment";
 import { stripHtmlComments } from "../utils/markdown-comments";
 import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
+import { normalizeGitHubCommentUrl, normalizeGitHubIssueUrl } from "../utils/github-url";
 
 interface CommentGraphqlResponse {
   node: {
@@ -155,7 +156,7 @@ async function handleSimilarIssuesAndComments(
   issueList.forEach((issue, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
     const footnoteRef = `[^0${footnoteIndex}^]`;
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
+    const modifiedUrl = normalizeGitHubIssueUrl(issue.node.url);
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
     if (!sentence.trim()) {
@@ -185,7 +186,7 @@ async function handleSimilarIssuesAndComments(
   commentList.forEach((comment, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
     const footnoteRef = `[^0${footnoteIndex}^]`;
-    const modifiedUrl = comment.node.url.replace("https://github.com", "https://www.github.com");
+    const modifiedUrl = normalizeGitHubCommentUrl(comment.node.url);
     const { sentence } = comment.mostSimilarSentence;
     // Insert footnote reference in the body
     if (!sentence.trim()) {

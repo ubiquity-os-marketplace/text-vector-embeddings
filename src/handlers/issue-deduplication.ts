@@ -5,6 +5,7 @@ import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues
 import { Context } from "../types/index";
 import { appendPluginUpdateComment, normalizeWhitespace, stripHtmlComments, stripPluginUpdateComments } from "../utils/markdown-comments";
 import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
+import { normalizeGitHubIssueUrl } from "../utils/github-url";
 import { stripDuplicateFootnotes } from "../utils/footnotes";
 import { findEditDistance } from "../utils/string-similarity";
 
@@ -205,7 +206,7 @@ async function handleSimilarIssuesComment(
   relevantIssues.forEach((issue, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
     const footnoteRef = `[^0${footnoteIndex}^]`;
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
+    const modifiedUrl = normalizeGitHubIssueUrl(issue.node.url);
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
     if (!sentence.trim()) {
@@ -271,7 +272,7 @@ async function handleMatchIssuesComment(
   relevantIssues.sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity));
   // Append the similar issues to the resultBuilder
   relevantIssues.forEach((issue) => {
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
+    const modifiedUrl = normalizeGitHubIssueUrl(issue.node.url);
     resultBuilder += `> - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n`;
   });
   // Insert the resultBuilder into the issue body
