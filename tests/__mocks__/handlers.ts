@@ -49,6 +49,8 @@ export const handlers = [
     }
     return HttpResponse.json(item);
   }),
+  // get GitHub issue web pages used by markdown-link enrichment
+  http.get("https://www.github.com/:owner/:repo/issues/:issue_number", () => HttpResponse.json({})),
   // create comment
   http.post("https://api.github.com/repos/:owner/:repo/issues/:issue_number/comments", async ({ params: { issue_number: issueNumber }, request }) => {
     const { body } = await getValue(request.body);
