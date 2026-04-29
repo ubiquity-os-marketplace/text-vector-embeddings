@@ -194,7 +194,7 @@ async function handleSimilarIssuesComment(
     return;
   }
   // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
+  const footnoteRegex = /\[\^(?:deduplication-)?(\d+)\^\]/g;
   const existingFootnotes = issueBody.match(footnoteRegex) || [];
   const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
   let updatedBody = issueBody;
@@ -204,7 +204,7 @@ async function handleSimilarIssuesComment(
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
-    const footnoteRef = `[^0${footnoteIndex}^]`;
+    const footnoteRef = `[^deduplication-${footnoteIndex}^]`;
     const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
@@ -262,7 +262,7 @@ async function handleMatchIssuesComment(
     return;
   }
   // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
+  const footnoteRegex = /\[\^(?:deduplication-)?(\d+)\^\]/g;
   const existingFootnotes = issueBody.match(footnoteRegex) || [];
   // Find the index with respect to the issue body string where the footnotes start if they exist
   const footnoteIndex = existingFootnotes[0] ? issueBody.indexOf(existingFootnotes[0]) : issueBody.length;

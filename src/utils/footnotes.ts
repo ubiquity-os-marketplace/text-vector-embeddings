@@ -1,4 +1,4 @@
-const FOOTNOTE_DEF_REGEX = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
+const FOOTNOTE_DEF_REGEX = /\[\^((?:deduplication-)?\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
 
 export function removeCautionMessages(content: string): string {
   const cautionRegex = />[!CAUTION]\n> This issue may be a duplicate of the following issues:\n((> - \[[^\]]+\]\([^)]+\)\n)+)/g;
