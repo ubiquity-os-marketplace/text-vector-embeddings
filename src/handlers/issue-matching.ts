@@ -225,11 +225,11 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
             matchResultArray
               .get(assignee.login)
               ?.push(
-                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
+                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()?.split("#")[0]}](${issueLink})`
               );
           } else {
             matchResultArray.set(assignee.login, [
-              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`,
+              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()?.split("#")[0]}](${issueLink})`,
             ]);
           }
         });
