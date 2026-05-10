@@ -329,6 +329,77 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("98% Match");
   });
 
+  it("When issue matching finds duplicate recommendation comments, it should keep one updated comment", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_duplicates", 13, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.createIssue = mock(async () => {
+      createIssue(
+        taskCompleteIssue.issue_body,
+        "task_complete_duplicates",
+        taskCompleteIssue.title,
+        13,
+        { login: "test", id: 1 },
+        "open",
+        null,
+        STRINGS.TEST_REPO,
+        STRINGS.USER_1
+      );
+    });
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "task_complete_duplicates", similarity: 0.98 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    const duplicateComment = `>[!NOTE]\n>${STRINGS.CONTRIBUTOR_SUGGESTION_TEXT}\n>### [old](https://www.github.com/old)`;
+    createComment(duplicateComment, 10, "task_complete_duplicates", 13);
+    createComment(duplicateComment, 11, "task_complete_duplicates", 13);
+
+    context.octokit.paginate = mock(async () =>
+      db.issueComments.findMany({ where: { issue_number: { equals: 13 } } })
+    ) as unknown as typeof context.octokit.paginate;
+
+    context.octokit.rest.issues.updateComment = mock(async (params: { comment_id: number; body: string }) => {
+      db.issueComments.update({
+        where: {
+          id: { equals: params.comment_id },
+        },
+        data: {
+          body: params.body,
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+
+    context.octokit.rest.issues.deleteComment = mock(async (params: { comment_id: number }) => {
+      db.issueComments.delete({
+        where: {
+          id: { equals: params.comment_id },
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.deleteComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { issue_number: { equals: 13 } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].id).toBe(10);
+    expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
+    expect(comments[0].body).toContain("contributor1");
+    expect(comments[0].body).toContain("98% Match");
+  });
+
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);
