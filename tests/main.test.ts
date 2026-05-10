@@ -203,7 +203,7 @@ describe("Plugin tests", () => {
     }
   );
 
-  it("When an issue is created with similarity above match threshold, it should close the issue and add a caution alert", async () => {
+  it("When an issue is created with similarity above match threshold, it should mark the issue as a formal duplicate", async () => {
     const [matchThresholdIssue1, matchThresholdIssue2] = fetchSimilarIssues("match_threshold_95");
     const { context } = createContextIssues(matchThresholdIssue1.issue_body, "match1", 3, matchThresholdIssue1.title);
     context.eventName = ISSUES_EDITED_EVENT_NAME;
@@ -229,21 +229,40 @@ describe("Plugin tests", () => {
     context2.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([
       { issue_id: "match1", similarity: 0.96 },
     ] as unknown as IssueSimilaritySearchResult[]);
-    context2.octokit.graphql = mock().mockResolvedValue({
-      node: {
-        title: STRINGS.SIMILAR_ISSUE,
-        url: STRINGS.ISSUE_URL,
-        number: 3,
-        lastEditedAt: "2020-01-12T17:52:02Z",
-        body: matchThresholdIssue1.issue_body,
-        repository: {
-          name: STRINGS.TEST_REPO,
-          owner: {
-            login: STRINGS.USER_1,
+    let markDuplicateVariables: { duplicateId?: string; canonicalId?: string } | undefined;
+    const graphqlMock = mock(async (query: string, variables?: { duplicateId?: string; canonicalId?: string }) => {
+      if (query.includes("markIssueAsDuplicate")) {
+        markDuplicateVariables = variables;
+        return {
+          markIssueAsDuplicate: {
+            duplicate: {
+              id: "match2",
+            },
+            canonical: {
+              id: "match1",
+            },
+          },
+        };
+      }
+
+      return {
+        node: {
+          id: "match1",
+          title: STRINGS.SIMILAR_ISSUE,
+          url: STRINGS.ISSUE_URL,
+          number: 3,
+          lastEditedAt: "2020-01-12T17:52:02Z",
+          body: matchThresholdIssue1.issue_body,
+          repository: {
+            name: STRINGS.TEST_REPO,
+            owner: {
+              login: STRINGS.USER_1,
+            },
           },
         },
-      },
-    }) as unknown as typeof context2.octokit.graphql;
+      };
+    });
+    context2.octokit.graphql = graphqlMock as unknown as typeof context2.octokit.graphql;
 
     context2.adapters.supabase.issue.createIssue = mock(async () => {
       createIssue(
@@ -259,29 +278,18 @@ describe("Plugin tests", () => {
       );
     });
 
-    context2.octokit.rest.issues.update = mock(
-      async (params: { owner: string; repo: string; issue_number: number; body?: string; state?: string; state_reason?: string }) => {
-        const updatedBody = `${matchThresholdIssue2.issue_body}\n\n>[!CAUTION]\n> This issue may be a duplicate of the following issues:\n> - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n`;
-        db.issue.update({
-          where: {
-            number: { equals: params.issue_number },
-          },
-          data: {
-            ...(params.body && { body: updatedBody }),
-            ...(params.state && { state: params.state }),
-            ...(params.state_reason && { state_reason: params.state_reason }),
-          },
-        });
-      }
-    ) as unknown as typeof octokit.rest.issues.update;
+    context2.octokit.rest.issues.update = mock(async () => undefined) as unknown as typeof octokit.rest.issues.update;
 
     await runPlugin(context2);
     const issue = db.issue.findFirst({ where: { number: { equals: 4 } } }) as unknown as Context["payload"]["issue"];
-    expect(issue.state).toBe("closed");
-    expect(issue.state_reason).toBe("not_planned");
-    expect(issue.body).toContain(">[!CAUTION]");
-    expect(issue.body).toContain("This issue may be a duplicate of the following issues:");
-    expect(issue.body).toContain(`- [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    expect(markDuplicateVariables).toEqual({
+      duplicateId: "match2",
+      canonicalId: "match1",
+    });
+    expect(graphqlMock).toHaveBeenCalledTimes(2);
+    expect(context2.octokit.rest.issues.update).not.toHaveBeenCalled();
+    expect(issue.body).not.toContain(">[!CAUTION]");
+    expect(issue.body).not.toContain("This issue may be a duplicate of the following issues:");
   });
 
   it("When issue matching is triggered, it should suggest contributors based on similarity", async () => {

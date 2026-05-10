@@ -10,6 +10,7 @@ import { findEditDistance } from "../utils/string-similarity";
 
 export interface IssueGraphqlResponse {
   node: {
+    id: string;
     title: string;
     number: number;
     url: string;
@@ -74,23 +75,19 @@ export async function issueDedupe(context: Context<"issues.opened" | "issues.edi
     const matchIssues = processedIssues.filter((issue) => parseFloat(issue.similarity) / 100 >= context.config.dedupeMatchThreshold);
     if (matchIssues.length > 0) {
       logger.info(`Similar issue which matches more than ${context.config.dedupeMatchThreshold} already exists`, { matchIssues });
-      //To the issue body, add a footnote with the link to the similar issue
-      const updatedBody = await handleMatchIssuesComment(context, payload, cleanedIssueBody, processedIssues);
-      const outputBody = updatedBody || cleanedIssueBody;
-      const nextBody = updateComment ? appendPluginUpdateComment(outputBody, updateComment) : outputBody;
-      const isBodyUnchanged = normalizeWhitespace(originalIssue.body ?? "") === normalizeWhitespace(nextBody);
-      const shouldClose = originalIssue.state !== "closed" || originalIssue.state_reason !== "not_planned";
-      if (isBodyUnchanged && !shouldClose) {
-        logger.info("Issue body unchanged after dedupe match update", { issueNumber: originalIssue.number });
+      const canonicalIssue = [...matchIssues].sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity))[0];
+      if (originalIssue.state === "closed") {
+        logger.info("Issue already closed; skipping formal duplicate marking", {
+          issueNumber: originalIssue.number,
+          duplicateOf: canonicalIssue.node.number,
+        });
         return;
       }
-      await octokit.rest.issues.update({
-        owner: payload.repository.owner.login,
-        repo: payload.repository.name,
-        issue_number: originalIssue.number,
-        body: nextBody,
-        state: "closed",
-        state_reason: "not_planned",
+
+      await markIssueAsDuplicate(context, originalIssue.node_id, canonicalIssue.node.id);
+      logger.info("Marked issue as a formal duplicate", {
+        issueNumber: originalIssue.number,
+        duplicateOf: canonicalIssue.node.number,
       });
       return;
     }
@@ -251,34 +248,6 @@ async function handleSimilarIssuesComment(
   });
 }
 
-//When similarity is greater than match threshold, Add Caution mentioning the issues to which its is very much similar
-async function handleMatchIssuesComment(
-  context: Context,
-  payload: Context<"issues.opened" | "issues.edited">["payload"],
-  issueBody: string,
-  relevantIssues: IssueGraphqlResponse[]
-): Promise<string | undefined> {
-  if (!issueBody) {
-    return;
-  }
-  // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
-  const existingFootnotes = issueBody.match(footnoteRegex) || [];
-  // Find the index with respect to the issue body string where the footnotes start if they exist
-  const footnoteIndex = existingFootnotes[0] ? issueBody.indexOf(existingFootnotes[0]) : issueBody.length;
-  let resultBuilder = "\n\n>[!CAUTION]\n> This issue may be a duplicate of the following issues:\n";
-  // Sort relevant issues by similarity in descending order
-  relevantIssues.sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity));
-  // Append the similar issues to the resultBuilder
-  relevantIssues.forEach((issue) => {
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
-    resultBuilder += `> - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n`;
-  });
-  // Insert the resultBuilder into the issue body
-  // Update the issue with the modified body
-  return issueBody.slice(0, footnoteIndex) + resultBuilder + issueBody.slice(footnoteIndex);
-}
-
 // Process similar issues and return the list of similar issues with their similarity scores
 export async function processSimilarIssues(similarIssues: IssueSimilaritySearchResult[], context: Context, issueBody: string): Promise<IssueGraphqlResponse[]> {
   const processedIssues = await Promise.all(
@@ -290,6 +259,7 @@ export async function processSimilarIssues(similarIssues: IssueSimilaritySearchR
             query ($issueNodeId: ID!) {
               node(id: $issueNodeId) {
                 ... on Issue {
+                  id
                   title
                   url
                   number
@@ -317,6 +287,28 @@ export async function processSimilarIssues(similarIssues: IssueSimilaritySearchR
     })
   );
   return processedIssues.filter((issue): issue is IssueGraphqlResponse => issue !== null);
+}
+
+async function markIssueAsDuplicate(context: Context<"issues.opened" | "issues.edited">, duplicateId: string, canonicalId: string) {
+  await context.octokit.graphql(
+    /* GraphQL */
+    `
+      mutation MarkIssueAsDuplicate($duplicateId: ID!, $canonicalId: ID!) {
+        markIssueAsDuplicate(input: { duplicateId: $duplicateId, canonicalId: $canonicalId }) {
+          duplicate {
+            id
+          }
+          canonical {
+            id
+          }
+        }
+      }
+    `,
+    {
+      duplicateId,
+      canonicalId,
+    }
+  );
 }
 
 /**
