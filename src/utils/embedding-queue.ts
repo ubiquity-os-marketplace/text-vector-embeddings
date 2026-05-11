@@ -1,3 +1,4 @@
+import ms, { StringValue } from "ms";
 import { Env } from "../types/env";
 
 export type EmbeddingQueueSettings = {
@@ -43,11 +44,21 @@ function parseNonNegativeInt(value: string | undefined, fallback: number): numbe
   if (value === undefined) {
     return fallback;
   }
-  const parsed = Number.parseInt(value, 10);
+  const parsed = parseDurationMs(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
     return fallback;
   }
   return parsed;
+}
+
+function parseDurationMs(value: string): number {
+  const trimmed = value.trim();
+  const parsedNumber = Number.parseInt(trimmed, 10);
+  if (String(parsedNumber) === trimmed) {
+    return parsedNumber;
+  }
+  const parsedDuration = ms(trimmed as StringValue);
+  return typeof parsedDuration === "number" ? parsedDuration : Number.NaN;
 }
 
 export function getEmbeddingQueueSettings(env: Env): EmbeddingQueueSettings {

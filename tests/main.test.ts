@@ -180,17 +180,12 @@ describe("Plugin tests", () => {
       });
 
       context2.octokit.rest.issues.update = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
-        // Find the most similar sentence (first sentence in this case)
-        const updatedBody =
-          warningThresholdIssue2.issue_body.replace(STRINGS.SIMILAR_ISSUE_TITLE, `${STRINGS.SIMILAR_ISSUE_TITLE}[^01^]`) +
-          `\n\n[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
-
         db.issue.update({
           where: {
             number: { equals: params.issue_number },
           },
           data: {
-            body: updatedBody,
+            body: params.body,
           },
         });
       }) as unknown as typeof octokit.rest.issues.update;
@@ -199,7 +194,9 @@ describe("Plugin tests", () => {
 
       const issue = db.issue.findFirst({ where: { node_id: { equals: "warning2" } } }) as unknown as Context["payload"]["issue"];
       expect(issue.state).toBe("open");
-      expect(issue.body).toContain(`[^01^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+      expect(issue.body).toContain(
+        `[^deduplication-1^]: ⚠ 80% possible duplicate - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL.replace("https://github.com", "https://www.github.com")})`
+      );
     }
   );
 
@@ -459,11 +456,11 @@ describe("Plugin tests", () => {
     expect(issue.state).toBe("open");
     // Verify the footnote is added after the line containing the markdown link
     expect(issue.body).toContain(
-      "_Originally posted by @0x4007 in https://www.github.com/ubiquity-os-marketplace/command-start-stop/issues/100#issuecomment-2535532258_ [^01^]"
+      "_Originally posted by @0x4007 in https://www.github.com/ubiquity-os-marketplace/command-start-stop/issues/100#issuecomment-2535532258_ [^deduplication-1^]"
     );
     // Verify the markdown link is not broken
     expect(issue.body).not.toContain(
-      "_Originally posted by @0x4007 in https://www.github.com/ubiquity-os-marketplace/command-start-stop/issues/100#issuecomment-2535532258_[^01^]"
+      "_Originally posted by @0x4007 in https://www.github.com/ubiquity-os-marketplace/command-start-stop/issues/100#issuecomment-2535532258_[^deduplication-1^]"
     );
   });
 
@@ -507,17 +504,12 @@ describe("Plugin tests", () => {
     }) as unknown as typeof octokit.rest.issues.listComments;
 
     context2.octokit.rest.issues.updateComment = mock(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
-      // Find the most similar sentence (first sentence in this case)
-      const updatedBody =
-        annotateComment.body.replace(STRINGS.SIMILAR_COMMENT, `${STRINGS.SIMILAR_COMMENT}[^01^]`) +
-        `\n\n[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
-
       db.issueComments.update({
         where: {
           id: { equals: params.comment_id },
         },
         data: {
-          body: updatedBody,
+          body: params.body,
         },
       });
     }) as unknown as typeof octokit.rest.issues.updateComment;
@@ -525,7 +517,9 @@ describe("Plugin tests", () => {
     await runPlugin(context2);
 
     const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
-    expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    expect(updatedComment.body).toContain(
+      `[^annotation-issue-1^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL.replace("https://github.com", "https://www.github.com")})`
+    );
   });
 
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
@@ -619,17 +613,12 @@ describe("Plugin tests", () => {
     }) as unknown as typeof octokit.rest.issues.getComment;
 
     context2.octokit.rest.issues.updateComment = mock(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
-      // Find the most similar sentence (first sentence in this case)
-      const updatedBody =
-        annotateComment.body.replace(STRINGS.SIMILAR_COMMENT, `${STRINGS.SIMILAR_COMMENT}[^01^]`) +
-        `\n\n[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
-
       db.issueComments.update({
         where: {
           id: { equals: params.comment_id },
         },
         data: {
-          body: updatedBody,
+          body: params.body,
         },
       });
     }) as unknown as typeof octokit.rest.issues.updateComment;
@@ -637,7 +626,9 @@ describe("Plugin tests", () => {
     await runPlugin(context2);
 
     const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
-    expect(updatedComment.body).not.toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    expect(updatedComment.body).not.toContain(
+      `[^annotation-issue-1^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL.replace("https://github.com", "https://www.github.com")})`
+    );
   });
 
   function createContext(

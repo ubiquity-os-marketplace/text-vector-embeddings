@@ -17,6 +17,11 @@ function parseUserLoginsFromTokens(tokens: string[]): string[] {
   return normalizeUserLogins(tokens);
 }
 
+function parseIssueCommentId(commentUrl: string): string | null {
+  const match = commentUrl.trim().match(/(?:^|#)issuecomment-(\d+)(?:$|[/?#&])/);
+  return match?.[1] ?? null;
+}
+
 function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeof issueMatching>>>, requestedLogins: string[]): string {
   const formattedLogins = requestedLogins.map((login) => `@${login}`).join(", ");
   const lines: string[] = [">[!NOTE]", requestedLogins.length > 0 ? `>Recommendation results (filtered): ${formattedLogins}` : ">Recommendation results:"];
@@ -57,12 +62,10 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
     const scope = context.command.parameters.scope ?? "org";
     let commentId = null;
     if (commentUrl) {
-      const commentRegex = /#issuecomment-(\d+)$/;
-      const match = commentUrl.match(commentRegex);
-      if (!match) {
+      commentId = parseIssueCommentId(commentUrl);
+      if (!commentId) {
         throw logger.error("Invalid comment URL");
       }
-      commentId = match[1];
     }
     await annotate(context, commentId, scope);
   }
@@ -87,12 +90,10 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
           throw logger.error("Invalid scope");
         }
 
-        const commentRegex = /#issuecomment-(\d+)$/;
-        const match = commentUrl.match(commentRegex);
-        if (!match) {
+        commentId = parseIssueCommentId(commentUrl);
+        if (!commentId) {
           throw logger.error("Invalid comment URL");
         }
-        commentId = match[1];
       } else {
         throw logger.error("Invalid parameters");
       }

@@ -8,6 +8,13 @@ import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "..
 import { stripDuplicateFootnotes } from "../utils/footnotes";
 import { findEditDistance } from "../utils/string-similarity";
 
+const DEDUPLICATION_FOOTNOTE_PREFIX = "deduplication-";
+
+function formatGitHubIssueUrl(url: string, issueNumber: number): string {
+  const modifiedUrl = url.replace("https://github.com", "https://www.github.com");
+  return modifiedUrl.includes("#") ? modifiedUrl : `${modifiedUrl}#${issueNumber}`;
+}
+
 export interface IssueGraphqlResponse {
   node: {
     title: string;
@@ -186,17 +193,16 @@ async function handleSimilarIssuesComment(
   );
 
   if (relevantIssues.length === 0) {
-    context.logger.info("No relevant issues found with the same repository and organization");
-    return;
+    throw context.logger.info("No relevant issues found with the same repository and organization");
   }
 
   if (!issueBody) {
     return;
   }
   // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
-  const existingFootnotes = issueBody.match(footnoteRegex) || [];
-  const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
+  const footnoteRegex = /\[\^deduplication-(\d+)\^\]/g;
+  const existingFootnotes = Array.from(issueBody.matchAll(footnoteRegex));
+  const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn[1] ?? "0", 10))) : 0;
   let updatedBody = issueBody;
   const footnotes: string[] = [];
   const orphanRefs: string[] = [];
@@ -204,8 +210,8 @@ async function handleSimilarIssuesComment(
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
-    const footnoteRef = `[^0${footnoteIndex}^]`;
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
+    const footnoteRef = `[^${DEDUPLICATION_FOOTNOTE_PREFIX}${footnoteIndex}^]`;
+    const modifiedUrl = formatGitHubIssueUrl(issue.node.url, issue.node.number);
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
     if (!sentence.trim()) {
@@ -228,7 +234,7 @@ async function handleSimilarIssuesComment(
     }
 
     // Add new footnote to the array
-    footnotes.push(`${footnoteRef}: ⚠ ${issue.similarity}% possible duplicate - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n\n`);
+    footnotes.push(`${footnoteRef}: ⚠ ${issue.similarity}% possible duplicate - [${issue.node.title}](${modifiedUrl})\n\n`);
   });
   if (orphanRefs.length > 0) {
     updatedBody = appendFootnoteRefsToFirstLine(updatedBody, orphanRefs);
@@ -262,7 +268,7 @@ async function handleMatchIssuesComment(
     return;
   }
   // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
+  const footnoteRegex = /\[\^(?:deduplication-)?\d+\^\]/g;
   const existingFootnotes = issueBody.match(footnoteRegex) || [];
   // Find the index with respect to the issue body string where the footnotes start if they exist
   const footnoteIndex = existingFootnotes[0] ? issueBody.indexOf(existingFootnotes[0]) : issueBody.length;
@@ -271,8 +277,8 @@ async function handleMatchIssuesComment(
   relevantIssues.sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity));
   // Append the similar issues to the resultBuilder
   relevantIssues.forEach((issue) => {
-    const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
-    resultBuilder += `> - [${issue.node.title}](${modifiedUrl}#${issue.node.number})\n`;
+    const modifiedUrl = formatGitHubIssueUrl(issue.node.url, issue.node.number);
+    resultBuilder += `> - [${issue.node.title}](${modifiedUrl})\n`;
   });
   // Insert the resultBuilder into the issue body
   // Update the issue with the modified body
@@ -344,9 +350,20 @@ async function handleAnchorAndImgElements(context: Context, content: string) {
   const anchors = htmlElement.getElementsByTagName("a");
   const images = htmlElement.getElementsByTagName("img");
 
+  function hasImageExtension(url: string): boolean {
+    try {
+      return /\.(?:avif|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(new URL(url).pathname);
+    } catch {
+      return false;
+    }
+  }
+
   async function processElement(element: HTMLAnchorElement | HTMLImageElement, isImage: boolean) {
     const url = isImage ? (element as HTMLImageElement).getAttribute("src") : (element as HTMLAnchorElement).getAttribute("href");
     if (!url) return;
+    if (!isImage && !hasImageExtension(url)) {
+      return;
+    }
 
     try {
       const linkResponse = await fetch(url);
@@ -401,7 +418,7 @@ export async function cleanContent(context: Context, content: string): Promise<s
  * @returns True if a duplicate footnote exists, false otherwise
  */
 export function checkIfDuplicateFootNoteExists(content: string): boolean {
-  const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
+  const footnoteDefRegex = /\[\^((?:deduplication-)?\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   return !!footnotes;
 }

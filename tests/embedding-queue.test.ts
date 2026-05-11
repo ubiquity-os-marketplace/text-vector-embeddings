@@ -3,6 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { processPendingEmbeddings } from "../src/cron/embedding-queue";
 import { Database } from "../src/types/database";
 import { Env } from "../src/types/index";
+import { getEmbeddingQueueSettings } from "../src/utils/embedding-queue";
 
 type QueueRow = {
   id: string;
@@ -64,6 +65,22 @@ function createLogger() {
 }
 
 describe("processPendingEmbeddings", () => {
+  it("parses human-friendly queue delay durations", () => {
+    const settings = getEmbeddingQueueSettings({
+      EMBEDDINGS_QUEUE_DELAY_MS: "2s",
+    } as Env);
+
+    expect(settings.delayMs).toBe(2000);
+  });
+
+  it("keeps numeric queue delays backward compatible", () => {
+    const settings = getEmbeddingQueueSettings({
+      EMBEDDINGS_QUEUE_DELAY_MS: "250",
+    } as Env);
+
+    expect(settings.delayMs).toBe(250);
+  });
+
   it("processes pull request documents with issue-length thresholds", async () => {
     const env = {
       EMBEDDINGS_QUEUE_ENABLED: "true",

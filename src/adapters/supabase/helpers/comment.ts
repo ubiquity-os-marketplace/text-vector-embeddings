@@ -64,7 +64,7 @@ export class Comment extends SuperSupabase {
       .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (existingError) {
       this.context.logger.error("Error creating comment", {
-        Error: existingError,
+        error: existingError,
         commentData,
       });
       return;
@@ -100,7 +100,7 @@ export class Comment extends SuperSupabase {
     ]);
     if (error) {
       this.context.logger.error("Failed to create comment in database", {
-        Error: error,
+        error,
         commentData,
       });
       return;
@@ -148,7 +148,7 @@ export class Comment extends SuperSupabase {
         .in("doc_type", COMMENT_DOCUMENT_TYPES);
       if (error) {
         this.context.logger.error("Error updating comment", {
-          Error: error,
+          error,
           commentData: {
             commentData,
             markdown: finalMarkdown,
@@ -180,7 +180,7 @@ export class Comment extends SuperSupabase {
       .is("deleted_at", null);
     if (error) {
       this.context.logger.error("Error getting comment", {
-        Error: error,
+        error,
         commentData: {
           id: commentNodeId,
         },
@@ -198,7 +198,7 @@ export class Comment extends SuperSupabase {
       .in("doc_type", COMMENT_DOCUMENT_TYPES);
     if (error) {
       this.context.logger.error("Error deleting comment", {
-        Error: error,
+        error,
         commentData: {
           id: commentNodeId,
         },
@@ -233,7 +233,7 @@ export class Comment extends SuperSupabase {
       });
       if (error) {
         this.context.logger.error("Unable to find similar comments", {
-          Error: error,
+          error,
           markdown,
           currentId,
           threshold,
@@ -243,8 +243,9 @@ export class Comment extends SuperSupabase {
       }
       return data;
     } catch (error) {
+      const normalizedError = error instanceof Error ? error : { stack: String(error) };
       this.context.logger.error("Unable to find similar comments", {
-        Error: error,
+        error: normalizedError,
         markdown,
         currentId,
         threshold,
