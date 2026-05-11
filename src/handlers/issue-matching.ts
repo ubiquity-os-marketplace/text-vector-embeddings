@@ -39,6 +39,7 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   const { logger, octokit, payload } = context;
   const issue = payload.issue;
   const commentStart = ">The following contributors may be suitable for this task:";
+  const canCreateComment = context.eventName !== "issues.labeled";
 
   const result = await issueMatching(context);
 
@@ -85,6 +86,10 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
       repo: payload.repository.name,
       comment_id: existingComment.id,
       body: comment,
+    });
+  } else if (!canCreateComment) {
+    logger.debug("Skipping matchmaking comment creation for label event without an existing comment.", {
+      issue: issue.number,
     });
   } else {
     await context.octokit.rest.issues.createComment({
