@@ -205,6 +205,7 @@ describe("Plugin tests", () => {
 
   it("When an issue is created with similarity above match threshold, it should close the issue and add a caution alert", async () => {
     const [matchThresholdIssue1, matchThresholdIssue2] = fetchSimilarIssues("match_threshold_95");
+    const similarIssueUrl = "https://github.com/ubiquity/test-repo/issues/3";
     const { context } = createContextIssues(matchThresholdIssue1.issue_body, "match1", 3, matchThresholdIssue1.title);
     context.eventName = ISSUES_EDITED_EVENT_NAME;
     context.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
@@ -229,20 +230,50 @@ describe("Plugin tests", () => {
     context2.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([
       { issue_id: "match1", similarity: 0.96 },
     ] as unknown as IssueSimilaritySearchResult[]);
-    context2.octokit.graphql = mock().mockResolvedValue({
-      node: {
-        title: STRINGS.SIMILAR_ISSUE,
-        url: STRINGS.ISSUE_URL,
-        number: 3,
-        lastEditedAt: "2020-01-12T17:52:02Z",
-        body: matchThresholdIssue1.issue_body,
-        repository: {
-          name: STRINGS.TEST_REPO,
-          owner: {
-            login: STRINGS.USER_1,
+    context2.octokit.graphql = mock(async (query: string, variables: { issueId?: string; duplicateIssueId?: string }) => {
+      if (query.includes("mutation CloseIssueAsDuplicate")) {
+        db.issue.update({
+          where: {
+            node_id: { equals: variables.issueId ?? "" },
+          },
+          data: {
+            state: "closed",
+            state_reason: "duplicate",
+          },
+        });
+
+        return {
+          closeIssue: {
+            issue: {
+              id: variables.issueId,
+              number: 4,
+              stateReason: "DUPLICATE",
+              duplicateOf: {
+                id: variables.duplicateIssueId,
+                number: 3,
+                url: similarIssueUrl,
+              },
+            },
+          },
+        };
+      }
+
+      return {
+        node: {
+          id: "match1",
+          title: STRINGS.SIMILAR_ISSUE,
+          url: similarIssueUrl,
+          number: 3,
+          lastEditedAt: "2020-01-12T17:52:02Z",
+          body: matchThresholdIssue1.issue_body,
+          repository: {
+            name: STRINGS.TEST_REPO,
+            owner: {
+              login: STRINGS.USER_1,
+            },
           },
         },
-      },
+      };
     }) as unknown as typeof context2.octokit.graphql;
 
     context2.adapters.supabase.issue.createIssue = mock(async () => {
@@ -259,29 +290,24 @@ describe("Plugin tests", () => {
       );
     });
 
-    context2.octokit.rest.issues.update = mock(
-      async (params: { owner: string; repo: string; issue_number: number; body?: string; state?: string; state_reason?: string }) => {
-        const updatedBody = `${matchThresholdIssue2.issue_body}\n\n>[!CAUTION]\n> This issue may be a duplicate of the following issues:\n> - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n`;
-        db.issue.update({
-          where: {
-            number: { equals: params.issue_number },
-          },
-          data: {
-            ...(params.body && { body: updatedBody }),
-            ...(params.state && { state: params.state }),
-            ...(params.state_reason && { state_reason: params.state_reason }),
-          },
-        });
-      }
-    ) as unknown as typeof octokit.rest.issues.update;
+    context2.octokit.rest.issues.update = mock(async (params: { owner: string; repo: string; issue_number: number; body?: string }) => {
+      db.issue.update({
+        where: {
+          number: { equals: params.issue_number },
+        },
+        data: {
+          ...(params.body && { body: params.body }),
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.update;
 
     await runPlugin(context2);
     const issue = db.issue.findFirst({ where: { number: { equals: 4 } } }) as unknown as Context["payload"]["issue"];
     expect(issue.state).toBe("closed");
-    expect(issue.state_reason).toBe("not_planned");
+    expect(issue.state_reason).toBe("duplicate");
     expect(issue.body).toContain(">[!CAUTION]");
     expect(issue.body).toContain("This issue may be a duplicate of the following issues:");
-    expect(issue.body).toContain(`- [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    expect(issue.body).toContain(`- [${STRINGS.SIMILAR_ISSUE}](https://www.github.com/ubiquity/test-repo/issues/3#3)`);
   });
 
   it("When issue matching is triggered, it should suggest contributors based on similarity", async () => {
