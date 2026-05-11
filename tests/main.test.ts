@@ -20,6 +20,9 @@ const DEFAULT_HOOK = "issue_comment.created";
 const DEFAULT_ISSUE_ID = "1";
 const DEFAULT_BODY = "Test issue body";
 const ISSUES_EDITED_EVENT_NAME = "issues.edited";
+const SIMILAR_MATCH_TITLE = "Similar Issue: Suggest based on Similarity";
+const CONTRIBUTOR_1 = "contributor1";
+const CONTRIBUTOR_1_URL = `https://github.com/${CONTRIBUTOR_1}`;
 
 dotenv.config();
 const octokit = new Octokit();
@@ -306,13 +309,13 @@ describe("Plugin tests", () => {
     // Mock the graphql function to return predefined issue data
     context.octokit.graphql = mock().mockResolvedValue({
       node: {
-        title: "Similar Issue: Suggest based on Similarity",
+        title: SIMILAR_MATCH_TITLE,
         url: STRINGS.ISSUE_URL_TEMPLATE,
         state: "closed",
         stateReason: "COMPLETED",
         closed: true,
         repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
-        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+        assignees: { nodes: [{ login: CONTRIBUTOR_1, url: CONTRIBUTOR_1_URL }] },
       },
     }) as unknown as typeof context.octokit.graphql;
 
@@ -325,7 +328,7 @@ describe("Plugin tests", () => {
     const comments = db.issueComments.findMany({ where: { node_id: { equals: "task_complete" } } });
     expect(comments.length).toBe(1);
     expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
-    expect(comments[0].body).toContain("contributor1");
+    expect(comments[0].body).toContain(CONTRIBUTOR_1);
     expect(comments[0].body).toContain("98% Match");
   });
 
@@ -379,6 +382,117 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
     expect(comments[0].body).toContain("contributor3");
     expect(comments[0].body).toContain("50% Match");
+  });
+
+  it("When duplicate matchmaking comments exist it should update one and delete the rest", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const issueNodeId = "duplicate_matching_comment";
+    const issueNumber = 11;
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, issueNodeId, issueNumber, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    const duplicateCommentBody = ">[!NOTE]\n>The following contributors may be suitable for this task:\n>### [old](https://www.github.com/old)";
+    createComment(duplicateCommentBody, 41, issueNodeId, issueNumber);
+    createComment(duplicateCommentBody, 42, issueNodeId, issueNumber);
+
+    context.adapters.supabase.issue.createIssue = mock(async () => {
+      createIssue(
+        taskCompleteIssue.issue_body,
+        issueNodeId,
+        taskCompleteIssue.title,
+        issueNumber,
+        { login: "test", id: 1 },
+        "open",
+        null,
+        STRINGS.TEST_REPO,
+        STRINGS.USER_1
+      );
+    });
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "similar3", similarity: 0.98 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: SIMILAR_MATCH_TITLE,
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: CONTRIBUTOR_1, url: CONTRIBUTOR_1_URL }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.paginate = mock(async () =>
+      db.issueComments.findMany({ where: { issue_number: { equals: issueNumber } } }).map((comment) => ({
+        id: comment.id,
+        body: comment.body,
+      }))
+    ) as unknown as typeof octokit.paginate;
+    context.octokit.rest.issues.createComment = mock(async () => {
+      throw new Error("Existing matchmaking comments should be updated, not recreated");
+    }) as unknown as typeof octokit.rest.issues.createComment;
+    context.octokit.rest.issues.updateComment = mock(async (params: { comment_id: number; body: string }) => {
+      db.issueComments.update({
+        where: { id: { equals: params.comment_id } },
+        data: { body: params.body },
+      });
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+    context.octokit.rest.issues.deleteComment = mock(async (params: { comment_id: number }) => {
+      db.issueComments.delete({
+        where: { id: { equals: params.comment_id } },
+      });
+    }) as unknown as typeof octokit.rest.issues.deleteComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { issue_number: { equals: issueNumber } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].id).toBe(41);
+    expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
+    expect(comments[0].body).toContain(CONTRIBUTOR_1);
+    expect(comments[0].body).toContain("98% Match");
+  });
+
+  it("When issue matching is triggered by a label event without an existing comment it should not create one", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const issueNodeId = "labeled_matching_comment";
+    const issueNumber = 12;
+    const { context } = createContextIssues(
+      taskCompleteIssue.issue_body,
+      issueNodeId,
+      issueNumber,
+      taskCompleteIssue.title,
+      { login: "test", id: 1 },
+      "open",
+      null,
+      "issues.labeled"
+    );
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "similar3", similarity: 0.98 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: SIMILAR_MATCH_TITLE,
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: CONTRIBUTOR_1, url: CONTRIBUTOR_1_URL }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+    context.octokit.paginate = mock(async () => []) as unknown as typeof octokit.paginate;
+    context.octokit.rest.issues.createComment = mock(async () => {
+      throw new Error("Label events should not create the first matchmaking comment");
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { issue_number: { equals: issueNumber } } });
+    expect(comments.length).toBe(0);
   });
 
   it("When an issue contains markdown links, footnotes should be added after the entire line", async () => {
