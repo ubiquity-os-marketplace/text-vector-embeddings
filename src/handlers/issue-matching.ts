@@ -86,6 +86,11 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
       comment_id: existingComment.id,
       body: comment,
     });
+  } else if (context.eventName === "issues.labeled") {
+    logger.debug("Skipping contributor suggestion comment creation for labeled issue event.", {
+      eventName: context.eventName,
+      issue: issue.number,
+    });
   } else {
     await context.octokit.rest.issues.createComment({
       owner: payload.repository.owner.login,
