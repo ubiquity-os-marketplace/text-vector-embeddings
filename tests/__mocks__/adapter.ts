@@ -8,6 +8,7 @@ import { stripHtmlComments } from "../../src/utils/markdown-comments";
 export interface CommentMock {
   id: string;
   author_id: number;
+  markdown: string | null;
   payload?: Record<string, unknown> | null;
   type?: string;
   issue_id?: string;
@@ -28,6 +29,8 @@ export function createMockAdapters(context: Context) {
   const issueMap: Map<string, IssueData> = new Map();
   const trackedIssues = new Set<string>();
 
+  const shouldRedactPrivateContent = (isPrivate?: boolean) => Boolean(isPrivate && context.config.redactPrivateRepoComments);
+
   return {
     supabase: {
       comment: {
@@ -36,12 +39,15 @@ export function createMockAdapters(context: Context) {
             throw new Error("Comment already exists");
           }
           const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : "";
-          const embeddingSource = commentData.isPrivate ? "" : cleanedMarkdown;
+          const shouldRedact = shouldRedactPrivateContent(commentData.isPrivate);
+          const embeddingSource = shouldRedact ? "" : cleanedMarkdown;
           const embedding = await context.adapters.voyage.embedding.createEmbedding(embeddingSource);
           commentMap.set(commentData.id, {
             id: commentData.id,
             author_id: commentData.author_id,
+            markdown: shouldRedact ? null : commentData.markdown,
             embedding,
+            payload: shouldRedact ? null : commentData.payload,
             issue_id: commentData.issue_id,
           });
           console.log("Comment created", commentData.id, commentMap.get(commentData.id));
@@ -52,13 +58,15 @@ export function createMockAdapters(context: Context) {
             throw new Error(STRINGS.COMMENT_DOES_NOT_EXIST);
           }
           const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : "";
-          const embeddingSource = commentData.isPrivate ? "" : cleanedMarkdown;
+          const shouldRedact = shouldRedactPrivateContent(commentData.isPrivate);
+          const embeddingSource = shouldRedact ? "" : cleanedMarkdown;
           const embedding = await context.adapters.voyage.embedding.createEmbedding(embeddingSource);
           commentMap.set(commentData.id, {
             id: commentData.id,
             author_id: commentData.author_id,
+            markdown: shouldRedact ? null : commentData.markdown,
             embedding,
-            payload: commentData.payload,
+            payload: shouldRedact ? null : commentData.payload,
             issue_id: commentData.issue_id,
           });
         }),
@@ -118,10 +126,20 @@ export function createMockAdapters(context: Context) {
           return [];
         }),
         createIssue: jest.fn(async (issue: IssueData) => {
-          issueMap.set(issue.id, issue);
+          const shouldRedact = shouldRedactPrivateContent(issue.isPrivate);
+          issueMap.set(issue.id, {
+            ...issue,
+            markdown: shouldRedact ? null : issue.markdown,
+            payload: shouldRedact ? null : issue.payload,
+          });
         }),
         updateIssue: jest.fn(async (issue: IssueData) => {
-          issueMap.set(issue.id, issue);
+          const shouldRedact = shouldRedactPrivateContent(issue.isPrivate);
+          issueMap.set(issue.id, {
+            ...issue,
+            markdown: shouldRedact ? null : issue.markdown,
+            payload: shouldRedact ? null : issue.payload,
+          });
         }),
       },
       fetchComments: jest.fn(async (issueId: string) => {

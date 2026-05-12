@@ -63,6 +63,7 @@ export class Issue extends SuperSupabase {
 
   async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
+    const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
@@ -90,13 +91,13 @@ export class Issue extends SuperSupabase {
 
     //Create the embedding for this issue
     let embedding: number[] | null = null;
-    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+    if (!shouldDeferEmbedding && embeddingSource && !shouldRedactPrivateContent) {
       embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
-    if (isPrivate) {
+    if (shouldRedactPrivateContent) {
       finalMarkdown = null;
       finalPayload = null;
     }
@@ -124,6 +125,7 @@ export class Issue extends SuperSupabase {
 
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
+    const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
@@ -131,13 +133,13 @@ export class Issue extends SuperSupabase {
     const embeddingSource = !isShortIssue ? cleanedMarkdown : null;
     //Create the embedding for this issue
     let embedding: number[] | null = null;
-    if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
+    if (!shouldDeferEmbedding && embeddingSource && !shouldRedactPrivateContent) {
       embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
 
-    if (isPrivate) {
+    if (shouldRedactPrivateContent) {
       finalMarkdown = null;
       finalPayload = null;
     }

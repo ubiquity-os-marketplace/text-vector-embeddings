@@ -579,6 +579,48 @@ describe("Plugin tests", () => {
     expect(comment.embedding).toBeDefined();
   });
 
+  it("When private repository redaction is disabled by default, it should store private issue and comment content", async () => {
+    const { context: issueContext } = createContextIssues(DEFAULT_BODY, "privateIssue", 12, "Private Test Issue");
+    issueContext.payload.repository.private = true;
+
+    await runPlugin(issueContext);
+
+    const issue = (await issueContext.adapters.supabase.issue.getIssue("privateIssue")) as unknown as IssueMock;
+    expect(issue.markdown).toContain(DEFAULT_BODY);
+    expect(issue.payload).toBeDefined();
+
+    const { context: commentContext } = createContext(DEFAULT_BODY, 1, 1, 1, "privateComment", DEFAULT_ISSUE_ID);
+    commentContext.payload.repository.private = true;
+
+    await runPlugin(commentContext);
+
+    const comment = (await commentContext.adapters.supabase.comment.getComment("privateComment")) as unknown as CommentMock;
+    expect(comment.markdown).toContain(DEFAULT_BODY);
+    expect(comment.payload).toBeDefined();
+  });
+
+  it("When private repository redaction is enabled, it should redact private issue and comment content", async () => {
+    const { context: issueContext } = createContextIssues(DEFAULT_BODY, "redactedPrivateIssue", 13, "Redacted Private Test Issue");
+    issueContext.payload.repository.private = true;
+    issueContext.config.redactPrivateRepoComments = true;
+
+    await runPlugin(issueContext);
+
+    const issue = (await issueContext.adapters.supabase.issue.getIssue("redactedPrivateIssue")) as unknown as IssueMock;
+    expect(issue.markdown).toBeNull();
+    expect(issue.payload).toBeNull();
+
+    const { context: commentContext } = createContext(DEFAULT_BODY, 1, 1, 1, "redactedPrivateComment", DEFAULT_ISSUE_ID);
+    commentContext.payload.repository.private = true;
+    commentContext.config.redactPrivateRepoComments = true;
+
+    await runPlugin(commentContext);
+
+    const comment = (await commentContext.adapters.supabase.comment.getComment("redactedPrivateComment")) as unknown as CommentMock;
+    expect(comment.markdown).toBeNull();
+    expect(comment.payload).toBeNull();
+  });
+
   it("When a user uses annotate command with a specified comment and 'repo' scope and the comment doesn't have similarity above match threshold with any issue from the same repository, it shouldn't update comment body with footnotes", async () => {
     const [annotateIssue] = fetchSimilarIssues("annotate");
     const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
@@ -702,6 +744,7 @@ describe("Plugin tests", () => {
         jobMatchingThreshold: 0.95,
         annotateThreshold: 0.65,
         demoFlag: false,
+        redactPrivateRepoComments: false,
       },
       command: null,
       adapters: {} as Context["adapters"],
