@@ -329,6 +329,59 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("98% Match");
   });
 
+  it("When issue matching creates concurrent duplicate comments, it keeps one matchmaking comment", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete", 3, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.createIssue = mock(async () => {
+      createIssue(
+        taskCompleteIssue.issue_body,
+        "task_complete",
+        taskCompleteIssue.title,
+        3,
+        { login: "test", id: 1 },
+        "open",
+        null,
+        STRINGS.TEST_REPO,
+        STRINGS.USER_1
+      );
+    });
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.paginate = mock(async () =>
+      db.issueComments.findMany({ where: { issue_number: { equals: 3 } } })
+    ) as unknown as typeof context.octokit.paginate;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 10, "task_complete", params.issue_number);
+      createComment(params.body, 11, "task_complete_duplicate", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    context.octokit.rest.issues.deleteComment = mock(async (params: { owner: string; repo: string; comment_id: number }) => {
+      db.issueComments.delete({ where: { id: { equals: params.comment_id } } });
+    }) as unknown as typeof octokit.rest.issues.deleteComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { issue_number: { equals: 3 } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].id).toBe(10);
+    expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
+    expect(context.octokit.rest.issues.deleteComment).toHaveBeenCalledTimes(1);
+  });
+
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);

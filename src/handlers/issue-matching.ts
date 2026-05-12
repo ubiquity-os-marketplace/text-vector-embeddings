@@ -31,14 +31,75 @@ type IssueCommentSummary = {
   body?: string | null;
 };
 
+type IssueMatchingCommentContext = Context<"issues.opened" | "issues.edited" | "issues.labeled">;
+
+const MATCHMAKING_COMMENT_START = ">The following contributors may be suitable for this task:";
+const MATCHMAKING_COMMENT_MARKER = `>[!NOTE]\n${MATCHMAKING_COMMENT_START}`;
+
 function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
   return response.node !== null;
 }
 
-export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
+function isMatchmakingComment(comment: IssueCommentSummary) {
+  return Boolean(comment.body?.includes(MATCHMAKING_COMMENT_MARKER));
+}
+
+function sortCommentsById(comments: IssueCommentSummary[]) {
+  return [...comments].sort((first, second) => first.id - second.id);
+}
+
+async function listMatchmakingComments(context: IssueMatchingCommentContext) {
+  const { octokit, payload } = context;
+  const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
+    owner: payload.repository.owner.login,
+    repo: payload.repository.name,
+    issue_number: payload.issue.number,
+  })) as IssueCommentSummary[];
+
+  return sortCommentsById(listIssues.filter(isMatchmakingComment));
+}
+
+async function deleteMatchmakingComment(context: IssueMatchingCommentContext, comment: IssueCommentSummary) {
   const { logger, octokit, payload } = context;
-  const issue = payload.issue;
-  const commentStart = ">The following contributors may be suitable for this task:";
+  try {
+    await octokit.rest.issues.deleteComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      comment_id: comment.id,
+    });
+  } catch (error) {
+    logger.warn("Failed to delete duplicate matchmaking comment.", { commentId: comment.id, error: error instanceof Error ? error : new Error(String(error)) });
+  }
+}
+
+async function deleteMatchmakingComments(context: IssueMatchingCommentContext, comments: IssueCommentSummary[]) {
+  await Promise.all(comments.map((comment) => deleteMatchmakingComment(context, comment)));
+}
+
+async function reconcileMatchmakingComments(context: IssueMatchingCommentContext, body: string, preferredCommentId?: number) {
+  const { octokit, payload } = context;
+  const matchingComments = await listMatchmakingComments(context);
+  if (matchingComments.length === 0) {
+    return;
+  }
+
+  const keeper = matchingComments.find((comment) => comment.id === preferredCommentId) ?? matchingComments[0];
+  const duplicateComments = matchingComments.filter((comment) => comment.id !== keeper.id);
+
+  if (keeper.body !== body) {
+    await octokit.rest.issues.updateComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      comment_id: keeper.id,
+      body,
+    });
+  }
+
+  await deleteMatchmakingComments(context, duplicateComments);
+}
+
+export async function issueMatchingWithComment(context: IssueMatchingCommentContext) {
+  const { logger, octokit, payload } = context;
 
   const result = await issueMatching(context);
 
@@ -48,25 +109,11 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
 
   const { matchResultArray, sortedContributors } = result;
 
-  // Fetch if any previous comment exists
-  const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
-    owner: payload.repository.owner.login,
-    repo: payload.repository.name,
-    issue_number: issue.number,
-  })) as IssueCommentSummary[];
-
-  //Check if the comment already exists
-  const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
+  const matchingComments = await listMatchmakingComments(context);
+  const existingComment = matchingComments[0];
 
   if (matchResultArray.size === 0) {
-    if (existingComment) {
-      // If the comment already exists, delete it
-      await octokit.rest.issues.deleteComment({
-        owner: payload.repository.owner.login,
-        repo: payload.repository.name,
-        comment_id: existingComment.id,
-      });
-    }
+    await deleteMatchmakingComments(context, matchingComments);
     logger.debug("No suitable contributors found");
     return;
   }
@@ -80,19 +127,21 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   logger.debug("Comment to be added", { comment });
 
   if (existingComment) {
-    await context.octokit.rest.issues.updateComment({
+    await octokit.rest.issues.updateComment({
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
       comment_id: existingComment.id,
       body: comment,
     });
+    await reconcileMatchmakingComments(context, comment, existingComment.id);
   } else {
-    await context.octokit.rest.issues.createComment({
+    await octokit.rest.issues.createComment({
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
       issue_number: payload.issue.number,
       body: comment,
     });
+    await reconcileMatchmakingComments(context, comment);
   }
 }
 
