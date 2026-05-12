@@ -40,8 +40,7 @@ export function createMockAdapters(context: Context) {
           }
           const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : "";
           const shouldRedact = shouldRedactPrivateContent(commentData.isPrivate);
-          const embeddingSource = shouldRedact ? "" : cleanedMarkdown;
-          const embedding = await context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+          const embedding = shouldRedact ? new Array(3072).fill(0) : await context.adapters.voyage.embedding.createEmbedding(cleanedMarkdown);
           commentMap.set(commentData.id, {
             id: commentData.id,
             author_id: commentData.author_id,
@@ -59,8 +58,7 @@ export function createMockAdapters(context: Context) {
           }
           const cleanedMarkdown = commentData.markdown ? stripHtmlComments(commentData.markdown).trim() : "";
           const shouldRedact = shouldRedactPrivateContent(commentData.isPrivate);
-          const embeddingSource = shouldRedact ? "" : cleanedMarkdown;
-          const embedding = await context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+          const embedding = shouldRedact ? new Array(3072).fill(0) : await context.adapters.voyage.embedding.createEmbedding(cleanedMarkdown);
           commentMap.set(commentData.id, {
             id: commentData.id,
             author_id: commentData.author_id,
