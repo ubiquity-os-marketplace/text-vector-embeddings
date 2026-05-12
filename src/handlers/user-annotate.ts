@@ -45,6 +45,20 @@ async function postCommandResponse(context: Context<"issue_comment.created">, bo
   await context.commentHandler.postComment(context, context.logger.info(body), options);
 }
 
+function parseGitHubCommentUrl(commentUrl: string): { owner: string; repo: string; commentId: string } | null {
+  const match = commentUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/\d+#issuecomment-(\d+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    owner: match[1],
+    repo: match[2],
+    commentId: match[3],
+  };
+}
+
 export async function commandHandler(context: Context<"issue_comment.created">) {
   const { logger } = context;
 
@@ -56,15 +70,16 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
     const commentUrl = context.command.parameters.commentUrl ?? null;
     const scope = context.command.parameters.scope ?? "org";
     let commentId = null;
+    let commentRepo;
     if (commentUrl) {
-      const commentRegex = /#issuecomment-(\d+)$/;
-      const match = commentUrl.match(commentRegex);
-      if (!match) {
+      const parsedComment = parseGitHubCommentUrl(commentUrl);
+      if (!parsedComment) {
         throw logger.error("Invalid comment URL");
       }
-      commentId = match[1];
+      commentId = parsedComment.commentId;
+      commentRepo = { owner: parsedComment.owner, repo: parsedComment.repo };
     }
-    await annotate(context, commentId, scope);
+    await annotate(context, commentId, scope, commentRepo);
   }
 }
 
@@ -76,6 +91,7 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
 
   let commentId = null;
   let scope = "org";
+  let commentRepo;
 
   if (commandName === "annotate") {
     if (splitComment.length > 1) {
@@ -87,17 +103,17 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
           throw logger.error("Invalid scope");
         }
 
-        const commentRegex = /#issuecomment-(\d+)$/;
-        const match = commentUrl.match(commentRegex);
-        if (!match) {
+        const parsedComment = parseGitHubCommentUrl(commentUrl);
+        if (!parsedComment) {
           throw logger.error("Invalid comment URL");
         }
-        commentId = match[1];
+        commentId = parsedComment.commentId;
+        commentRepo = { owner: parsedComment.owner, repo: parsedComment.repo };
       } else {
         throw logger.error("Invalid parameters");
       }
     }
-    await annotate(context, commentId, scope);
+    await annotate(context, commentId, scope, commentRepo);
   }
 
   if (commandName === "recommendation") {

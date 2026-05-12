@@ -23,7 +23,12 @@ interface CommentGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
-export async function annotate(context: Context<"issue_comment.created">, commentId: string | null, scope: string) {
+export async function annotate(
+  context: Context<"issue_comment.created">,
+  commentId: string | null,
+  scope: string,
+  commentRepo?: { owner: string; repo: string }
+) {
   const { logger, octokit, payload } = context;
 
   const repository = payload.repository;
@@ -43,9 +48,18 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
+    const commentOwner = commentRepo?.owner ?? repository.owner.login;
+    const commentRepository = commentRepo?.repo ?? repository.name;
+
+    if (scope !== "global" && commentOwner !== repository.owner.login) {
+      throw logger.error(
+        `Cannot annotate comment from ${commentOwner}/${commentRepository} with ${scope} scope. Use a comment from ${repository.owner.login} or run /annotate with global scope.`
+      );
+    }
+
     const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
+      owner: commentOwner,
+      repo: commentRepository,
       comment_id: parseInt(commentId, 10),
     });
     await commentChecker(context, data, scope);

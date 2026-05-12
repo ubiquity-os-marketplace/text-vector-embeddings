@@ -528,6 +528,47 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When annotate targets a comment outside the current org with org scope, it should throw a clear permission error before fetching the comment", async () => {
+    const { context } = createContext(
+      "/annotate https://github.com/outside-org/outside-repo/issues/1#issuecomment-123 org",
+      1,
+      1,
+      2,
+      "createAnnotateOutsideOrg",
+      DEFAULT_ISSUE_ID
+    );
+
+    context.octokit.rest.issues.getComment = mock(async () => {
+      throw new Error("getComment should not be called for outside-org comments with org scope");
+    }) as unknown as typeof octokit.rest.issues.getComment;
+
+    await expect(runPlugin(context)).rejects.toMatchObject({
+      logMessage: {
+        raw: `Cannot annotate comment from outside-org/outside-repo with org scope. Use a comment from ${STRINGS.USER_1} or run /annotate with global scope.`,
+      },
+    });
+  });
+
+  it("When annotate targets a comment outside the current org with global scope, it should fetch from the parsed comment repository", async () => {
+    const { context } = createContext(
+      "/annotate https://github.com/outside-org/outside-repo/issues/1#issuecomment-123 global",
+      1,
+      1,
+      2,
+      "createAnnotateOutsideOrgGlobal",
+      DEFAULT_ISSUE_ID
+    );
+
+    context.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = mock().mockResolvedValue([]);
+    context.octokit.rest.issues.getComment = mock(async (params: { owner: string; repo: string; comment_id: number }) => {
+      expect(params).toMatchObject({ owner: "outside-org", repo: "outside-repo", comment_id: 123 });
+      return { data: annotateComment };
+    }) as unknown as typeof octokit.rest.issues.getComment;
+
+    await runPlugin(context);
+  });
+
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
 
@@ -592,7 +633,14 @@ describe("Plugin tests", () => {
 
     createComment(annotateComment.body, annotateComment.id, "annotate", 9);
 
-    const { context: context2 } = createContext("/annotate /#issuecomment-1 repo", 1, 1, 2, "createAnnotate", "annotate");
+    const { context: context2 } = createContext(
+      `/annotate https://github.com/${STRINGS.USER_1}/${STRINGS.TEST_REPO}/issues/9#issuecomment-1 repo`,
+      1,
+      1,
+      2,
+      "createAnnotate",
+      "annotate"
+    );
 
     context2.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([
       { issue_id: "annotate", similarity: 0.88 },
