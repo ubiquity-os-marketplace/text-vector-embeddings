@@ -64,6 +64,7 @@ export class Issue extends SuperSupabase {
   async createIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
+    const safeIssueData = shouldRedactPrivateContent ? { ...issueData, markdown: null, payload: null } : issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
@@ -78,13 +79,13 @@ export class Issue extends SuperSupabase {
     if (existingError) {
       this.context.logger.error("Error creating issue", {
         Error: existingError,
-        issueData,
+        issueData: safeIssueData,
       });
       return;
     }
     if (existingData && existingData.length > 0) {
       this.context.logger.warn("Issue already exists", {
-        issueData: issueData,
+        issueData: safeIssueData,
       });
       return;
     }
@@ -116,7 +117,7 @@ export class Issue extends SuperSupabase {
     if (error) {
       this.context.logger.error("Failed to create issue in database", {
         Error: error,
-        issueData,
+        issueData: safeIssueData,
       });
       return;
     }
@@ -126,6 +127,7 @@ export class Issue extends SuperSupabase {
   async updateIssue(issueData: IssueData, options: IssueWriteOptions = {}) {
     const { isPrivate } = issueData;
     const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
+    const safeIssueData = shouldRedactPrivateContent ? { ...issueData, markdown: null, payload: null } : issueData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = resolveIssueDocType(issueData.payload, issueData.docType);
     const cleanedMarkdown = cleanMarkdown(issueData.markdown);
@@ -147,7 +149,7 @@ export class Issue extends SuperSupabase {
     const issues = await this.getIssue(issueData.id);
     if (!issues || issues.length === 0) {
       this.context.logger.debug("Issue does not exist, creating a new one");
-      await this.createIssue({ ...issueData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
+      await this.createIssue({ ...safeIssueData, markdown: finalMarkdown, payload: finalPayload, isPrivate }, { deferEmbedding: shouldDeferEmbedding });
       return;
     }
 
@@ -167,7 +169,7 @@ export class Issue extends SuperSupabase {
       this.context.logger.error("Error updating issue", {
         Error: error,
         issueData: {
-          id: issueData.id,
+          id: safeIssueData.id,
           markdown: finalMarkdown,
           embedding,
           payload: finalPayload,
@@ -179,7 +181,7 @@ export class Issue extends SuperSupabase {
 
     this.context.logger.ok("Issue updated successfully with id: " + issueData.id, {
       issueData: {
-        id: issueData.id,
+        id: safeIssueData.id,
         markdown: finalMarkdown,
         embedding,
         payload: finalPayload,
