@@ -50,6 +50,7 @@ export class Comment extends SuperSupabase {
   async createComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
+    const safeCommentData = shouldRedactPrivateContent ? { ...commentData, markdown: null, payload: null } : commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = commentData.docType ?? "issue_comment";
     const cleanedMarkdown = cleanMarkdown(commentData.markdown);
@@ -66,13 +67,13 @@ export class Comment extends SuperSupabase {
     if (existingError) {
       this.context.logger.error("Error creating comment", {
         Error: existingError,
-        commentData,
+        commentData: safeCommentData,
       });
       return;
     }
     if (existingData && existingData.length > 0) {
       this.context.logger.warn("Comment already exists", {
-        commentData: commentData,
+        commentData: safeCommentData,
       });
       return;
     }
@@ -102,7 +103,7 @@ export class Comment extends SuperSupabase {
     if (error) {
       this.context.logger.error("Failed to create comment in database", {
         Error: error,
-        commentData,
+        commentData: safeCommentData,
       });
       return;
     }
@@ -112,6 +113,7 @@ export class Comment extends SuperSupabase {
   async updateComment(commentData: CommentData, options: CommentWriteOptions = {}) {
     const { isPrivate } = commentData;
     const shouldRedactPrivateContent = isPrivate && this.context.config.redactPrivateRepoComments;
+    const safeCommentData = shouldRedactPrivateContent ? { ...commentData, markdown: null, payload: null } : commentData;
     const { deferEmbedding: shouldDeferEmbedding = false } = options;
     const docType = commentData.docType ?? "issue_comment";
     const cleanedMarkdown = cleanMarkdown(commentData.markdown);
@@ -152,7 +154,7 @@ export class Comment extends SuperSupabase {
         this.context.logger.error("Error updating comment", {
           Error: error,
           commentData: {
-            commentData,
+            commentData: safeCommentData,
             markdown: finalMarkdown,
             embedding,
             payload: finalPayload,
@@ -163,7 +165,7 @@ export class Comment extends SuperSupabase {
       }
       this.context.logger.ok("Comment updated successfully with id: " + commentData.id, {
         commentData: {
-          commentData,
+          commentData: safeCommentData,
           markdown: finalMarkdown,
           embedding,
           payload: finalPayload,
