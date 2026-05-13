@@ -381,6 +381,145 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("50% Match");
   });
 
+  it("When issue matching is triggered, it should weight same repository matches above org and global matches", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "weighted_context", 12, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+    const otherRepo = "other-repo";
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "same-repo", similarity: 0.8 },
+      { issue_id: "same-org", similarity: 0.8 },
+      { issue_id: "global", similarity: 0.8 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+
+    const issuesById = {
+      "same-repo": {
+        node: {
+          title: "Same Repository Issue",
+          url: "https://github.com/ubiquity/test-repo/issues/10",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+          assignees: { nodes: [{ login: "sameRepoContributor", url: "https://github.com/sameRepoContributor" }] },
+        },
+      },
+      "same-org": {
+        node: {
+          title: "Same Organization Issue",
+          url: "https://github.com/ubiquity/other-repo/issues/11",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: STRINGS.USER_1 }, name: otherRepo },
+          assignees: { nodes: [{ login: "sameOrgContributor", url: "https://github.com/sameOrgContributor" }] },
+        },
+      },
+      global: {
+        node: {
+          title: "Global Issue",
+          url: "https://github.com/other-org/other-repo/issues/12",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: "other-org" }, name: otherRepo },
+          assignees: { nodes: [{ login: "globalContributor", url: "https://github.com/globalContributor" }] },
+        },
+      },
+    };
+
+    context.octokit.graphql = mock(async (query: string, variables: { issueNodeId: keyof typeof issuesById }) => {
+      void query;
+      return issuesById[variables.issueNodeId];
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 4, "weighted_context", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "weighted_context" } } });
+    expect(comments.length).toBe(1);
+    const body = comments[0].body;
+    expect(body).toContain("sameRepoContributor");
+    expect(body).toContain("80% Match");
+    expect(body).toContain("sameOrgContributor");
+    expect(body).toContain("60% Match");
+    expect(body).toContain("globalContributor");
+    expect(body).toContain("40% Match");
+    expect(body.indexOf("sameRepoContributor")).toBeLessThan(body.indexOf("sameOrgContributor"));
+    expect(body.indexOf("sameOrgContributor")).toBeLessThan(body.indexOf("globalContributor"));
+  });
+
+  it("When no similar issues are found, it should fall back to repository contributors ordered by commit count", async () => {
+    const { context } = createContextIssues(DEFAULT_BODY, "contributor_fallback", 13, "Contributor Fallback Test");
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([]);
+    context.octokit.rest.repos.listContributors = mock(async () => ({
+      data: [
+        { login: "test", type: "User", contributions: 500 },
+        { login: "renovate[bot]", type: "Bot", contributions: 400 },
+        { login: "topContributor", type: "User", contributions: 42 },
+        { login: "secondContributor", type: "User", contributions: 7 },
+      ],
+    })) as unknown as typeof octokit.rest.repos.listContributors;
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 5, "contributor_fallback", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "contributor_fallback" } } });
+    expect(comments.length).toBe(1);
+    const body = comments[0].body;
+    expect(body).toContain("topContributor");
+    expect(body).toContain("42 commits");
+    expect(body).toContain("secondContributor");
+    expect(body).toContain("7 commits");
+    expect(body).not.toContain("renovate[bot]");
+    expect(body).not.toContain(">### [test]");
+    expect(body.indexOf("topContributor")).toBeLessThan(body.indexOf("secondContributor"));
+  });
+
+  it("When no adjusted issue match exceeds 25%, it should fall back to repository contributors", async () => {
+    const { context } = createContextIssues(DEFAULT_BODY, "low_confidence_fallback", 14, "Low Confidence Fallback Test");
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "global", similarity: 0.5 },
+    ] as unknown as IssueSimilaritySearchResult[]);
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Global Issue",
+        url: "https://github.com/other-org/other-repo/issues/12",
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: "other-org" }, name: "other-repo" },
+        assignees: { nodes: [{ login: "lowConfidenceContributor", url: "https://github.com/lowConfidenceContributor" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+    context.octokit.rest.repos.listContributors = mock(async () => ({
+      data: [{ login: "topFallbackContributor", type: "User", contributions: 24 }],
+    })) as unknown as typeof octokit.rest.repos.listContributors;
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 6, "low_confidence_fallback", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "low_confidence_fallback" } } });
+    expect(comments.length).toBe(1);
+    const body = comments[0].body;
+    expect(body).toContain("topFallbackContributor");
+    expect(body).toContain("24 commits");
+    expect(body).not.toContain("lowConfidenceContributor");
+    expect(body).not.toContain("25% Match");
+  });
+
   it("When an issue contains markdown links, footnotes should be added after the entire line", async () => {
     const [markdownLinkIssue1] = fetchSimilarIssues("markdown_link");
     const { context } = createContextIssues(markdownLinkIssue1.issue_body, "markdown1", 7, markdownLinkIssue1.title);
@@ -685,7 +824,7 @@ describe("Plugin tests", () => {
     comment: Context<"issue_comment.created">["payload"]["comment"] | undefined,
     eventName: Context["eventName"] = DEFAULT_HOOK
   ): Context {
-    return {
+    const context = {
       eventName: eventName,
       payload: {
         action: "created",
@@ -708,7 +847,9 @@ describe("Plugin tests", () => {
       logger: new Logs("debug") as unknown as Context["logger"],
       env: { DATABASE_URL: "postgres://db.example/text-vector-embeddings", EMBEDDINGS_QUEUE_ENABLED: "false" } as Env,
       octokit: octokit,
-    };
+    } as Context;
+    octokit.rest.repos.listContributors = mock(async () => ({ data: [] })) as unknown as typeof octokit.rest.repos.listContributors;
+    return context;
   }
 
   function createContextIssues(

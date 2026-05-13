@@ -31,8 +31,85 @@ type IssueCommentSummary = {
   body?: string | null;
 };
 
+type RepositoryInfo = {
+  owner: string;
+  repo: string;
+};
+
+type SortedContributor = {
+  login: string;
+  matches: string[];
+  maxSimilarity: number;
+};
+
+type RepositoryContributor = {
+  login?: string | null;
+  type?: string | null;
+  html_url?: string | null;
+  contributions?: number;
+};
+
+const MINIMUM_CONFIDENT_MATCH_PERCENTAGE = 25;
+
 function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
   return response.node !== null;
+}
+
+function getCurrentRepository(context: Context<IssueMatchingEvents>): RepositoryInfo | null {
+  if (context.payload.repository) {
+    return {
+      owner: context.payload.repository.owner.login,
+      repo: context.payload.repository.name,
+    };
+  }
+
+  const repositoryUrl = (context.payload.issue as { repository_url?: string }).repository_url;
+  const match = repositoryUrl?.match(/\/repos\/([^/]+)\/([^/]+)$/);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    owner: match[1],
+    repo: match[2],
+  };
+}
+
+function getContextWeight(currentRepository: RepositoryInfo | null, issue: IssueGraphqlResponse) {
+  if (!currentRepository) {
+    return 0.5;
+  }
+  const matchedOwner = issue.node.repository.owner.login;
+  const matchedRepo = issue.node.repository.name;
+  if (matchedOwner === currentRepository.owner && matchedRepo === currentRepository.repo) {
+    return 1;
+  }
+  if (matchedOwner === currentRepository.owner) {
+    return 0.75;
+  }
+  return 0.5;
+}
+
+function sortContributors(matchResultArray: Map<string, Array<string>>, commitCounts: Map<string, number> = new Map()): SortedContributor[] {
+  return Array.from(matchResultArray.entries())
+    .map(([login, matches]) => ({
+      login,
+      matches,
+      maxSimilarity: matches.length ? Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))) : 0,
+    }))
+    .sort((a, b) => b.maxSimilarity - a.maxSimilarity || (commitCounts.get(b.login) || 0) - (commitCounts.get(a.login) || 0) || a.login.localeCompare(b.login));
+}
+
+function needsContributorFallback(sortedContributors: SortedContributor[]) {
+  return sortedContributors.length === 0 || sortedContributors[0].maxSimilarity <= MINIMUM_CONFIDENT_MATCH_PERCENTAGE;
+}
+
+function isUsableContributor(contributor: RepositoryContributor, issueAuthor?: string) {
+  const login = contributor.login;
+  if (!login || login === issueAuthor) {
+    return false;
+  }
+  return contributor.type !== "Bot" && !login.endsWith("[bot]");
 }
 
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
@@ -133,6 +210,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
     payload,
   } = context;
   const issue = payload.issue;
+  const currentRepository = getCurrentRepository(context);
   const authorType = issue.user?.type;
   const isHumanAuthor = authorType === "User";
   if (!isHumanAuthor) {
@@ -219,7 +297,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           if (options.allowedLogins && !options.allowedLogins.has(assignee.login)) {
             return;
           }
-          const similarityPercentage = Math.round(issue.similarity * 100);
+          const similarityPercentage = Math.round(issue.similarity * getContextWeight(currentRepository, issue) * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
           if (matchResultArray.has(assignee.login)) {
             matchResultArray
@@ -246,14 +324,15 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
 
     logger.debug("Matched issues", { matchResultArray, length: matchResultArray.size });
 
-    // Convert Map to array and sort by highest similarity
-    const sortedContributors = Array.from(matchResultArray.entries())
-      .map(([login, matches]) => ({
-        login,
-        matches,
-        maxSimilarity: matches.length ? Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))) : 0,
-      }))
-      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+    let sortedContributors = sortContributors(matchResultArray);
+    if (!options.ensureLogins && needsContributorFallback(sortedContributors)) {
+      const fallback = await getRepositoryContributorFallback(context, currentRepository);
+      if (fallback) {
+        sortedContributors = fallback.sortedContributors;
+        logger.debug("Using repository contributor fallback", { sortedContributors });
+        return { matchResultArray: fallback.matchResultArray, similarIssues, sortedContributors };
+      }
+    }
 
     logger.debug("Sorted contributors", { sortedContributors });
     return { matchResultArray, similarIssues, sortedContributors };
@@ -265,19 +344,61 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
         matchResultArray.set(login, []);
       }
     }
-    const sortedContributors = Array.from(matchResultArray.entries())
-      .map(([login, matches]) => ({
-        login,
-        matches,
-        maxSimilarity: 0,
-      }))
-      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+    const sortedContributors = sortContributors(matchResultArray);
     return { matchResultArray, similarIssues: [], sortedContributors };
+  }
+
+  const fallback = await getRepositoryContributorFallback(context, currentRepository);
+  if (fallback) {
+    logger.debug("Using repository contributor fallback after empty similarity search", { sortedContributors: fallback.sortedContributors });
+    return { matchResultArray: fallback.matchResultArray, similarIssues: similarIssues || [], sortedContributors: fallback.sortedContributors };
   }
 
   logger.info(`Exiting issueMatching handler!`, { similarIssues: similarIssues || "No similar issues found" });
 
   return null;
+}
+
+async function getRepositoryContributorFallback(context: Context<IssueMatchingEvents>, currentRepository: RepositoryInfo | null) {
+  if (!currentRepository) {
+    context.logger.debug("Skipping repository contributor fallback because repository context is unavailable.");
+    return null;
+  }
+
+  let contributors: RepositoryContributor[];
+  try {
+    const response = await context.octokit.rest.repos.listContributors({
+      owner: currentRepository.owner,
+      repo: currentRepository.repo,
+      per_page: 100,
+    });
+    contributors = response.data as RepositoryContributor[];
+  } catch (error) {
+    context.logger.error(`Failed to fetch repository contributors: ${error}`);
+    return null;
+  }
+
+  const commitCounts = new Map<string, number>();
+  const matchResultArray: Map<string, Array<string>> = new Map();
+
+  for (const contributor of contributors) {
+    if (!isUsableContributor(contributor, context.payload.issue.user?.login)) {
+      continue;
+    }
+    const login = contributor.login as string;
+    const contributions = contributor.contributions || 0;
+    commitCounts.set(login, contributions);
+    matchResultArray.set(login, [`> \`Repository contributor fallback\` ${contributions} commits in this repository`]);
+  }
+
+  if (matchResultArray.size === 0) {
+    return null;
+  }
+
+  return {
+    matchResultArray,
+    sortedContributors: sortContributors(matchResultArray, commitCounts),
+  };
 }
 
 /**
