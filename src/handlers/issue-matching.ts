@@ -1,6 +1,11 @@
 import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues";
 import { Context } from "../types/index";
 
+const LOW_CONFIDENCE_RECOMMENDATION_THRESHOLD = 25;
+const SAME_REPOSITORY_WEIGHT = 1;
+const SAME_ORGANIZATION_WEIGHT = 0.75;
+const GLOBAL_REPOSITORY_WEIGHT = 0.5;
+
 export interface IssueGraphqlResponse {
   node: {
     title: string;
@@ -22,6 +27,7 @@ export interface IssueGraphqlResponse {
     };
   };
   similarity: number;
+  adjustedSimilarity: number;
 }
 
 type IssueNodeResponse = IssueGraphqlResponse | { node: null };
@@ -31,8 +37,91 @@ type IssueCommentSummary = {
   body?: string | null;
 };
 
+type SortedContributor = {
+  login: string;
+  matches: string[];
+  maxSimilarity: number;
+};
+
+type CodeContributor = {
+  login?: string | null;
+  contributions?: number;
+};
+
 function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
   return response.node !== null;
+}
+
+function getRepositoryWeight(context: Context<IssueMatchingEvents>, issue: IssueGraphqlResponse) {
+  const currentOwner = context.payload.repository.owner.login;
+  const currentRepo = context.payload.repository.name;
+  const matchedOwner = issue.node.repository.owner.login;
+  const matchedRepo = issue.node.repository.name;
+
+  if (matchedOwner === currentOwner && matchedRepo === currentRepo) {
+    return SAME_REPOSITORY_WEIGHT;
+  }
+
+  if (matchedOwner === currentOwner) {
+    return SAME_ORGANIZATION_WEIGHT;
+  }
+
+  return GLOBAL_REPOSITORY_WEIGHT;
+}
+
+function getSortedContributors(matchResultArray: Map<string, string[]>): SortedContributor[] {
+  return Array.from(matchResultArray.entries())
+    .map(([login, matches]) => ({
+      login,
+      matches,
+      maxSimilarity: matches.length ? Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))) : 0,
+    }))
+    .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+}
+
+async function fetchRepositoryCodeContributors(context: Context<IssueMatchingEvents>, allowedLogins?: Set<string>): Promise<SortedContributor[]> {
+  try {
+    const { data: contributors } = await context.octokit.rest.repos.listContributors({
+      owner: context.payload.repository.owner.login,
+      repo: context.payload.repository.name,
+      per_page: 100,
+    });
+
+    return (contributors as CodeContributor[])
+      .filter((contributor) => contributor.login && (!allowedLogins || allowedLogins.has(contributor.login)))
+      .map((contributor) => {
+        const contributions = contributor.contributions ?? 0;
+        return {
+          login: contributor.login as string,
+          matches: [
+            `> Repository contributor fallback for [${context.payload.repository.owner.login}/${context.payload.repository.name}](https://www.github.com/${context.payload.repository.owner.login}/${context.payload.repository.name}) (${contributions} commits)`,
+          ],
+          maxSimilarity: 0,
+        };
+      });
+  } catch (error) {
+    context.logger.error(`Failed to fetch repository contributors: ${error}`);
+    return [];
+  }
+}
+
+function addContributorMatch(matchResultArray: Map<string, string[]>, login: string, match: string) {
+  if (matchResultArray.has(login)) {
+    matchResultArray.get(login)?.push(match);
+  } else {
+    matchResultArray.set(login, [match]);
+  }
+}
+
+function ensureContributors(matchResultArray: Map<string, string[]>, logins?: string[]) {
+  if (!logins) {
+    return;
+  }
+  for (const login of logins) {
+    if (!matchResultArray.has(login)) {
+      matchResultArray.set(login, []);
+    }
+  }
 }
 
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
@@ -195,6 +284,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           return null;
         }
         issueObject.similarity = issue.similarity;
+        issueObject.adjustedSimilarity = issue.similarity * getRepositoryWeight(context, issueObject);
         return issueObject;
       } catch (error) {
         context.logger.error(`Failed to fetch issue ${issue.issue_id}: ${error}`, { issue });
@@ -219,59 +309,40 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           if (options.allowedLogins && !options.allowedLogins.has(assignee.login)) {
             return;
           }
-          const similarityPercentage = Math.round(issue.similarity * 100);
+          const similarityPercentage = Math.round(issue.adjustedSimilarity * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
-          if (matchResultArray.has(assignee.login)) {
-            matchResultArray
-              .get(assignee.login)
-              ?.push(
-                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
-              );
-          } else {
-            matchResultArray.set(assignee.login, [
-              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`,
-            ]);
-          }
+          addContributorMatch(
+            matchResultArray,
+            assignee.login,
+            `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
+          );
         });
       }
     });
 
-    if (options.ensureLogins) {
-      for (const login of options.ensureLogins) {
-        if (!matchResultArray.has(login)) {
-          matchResultArray.set(login, []);
-        }
+    ensureContributors(matchResultArray, options.ensureLogins);
+
+    let sortedContributors = getSortedContributors(matchResultArray);
+    const hasConfidentIssueMatch = sortedContributors.some((contributor) => contributor.maxSimilarity >= LOW_CONFIDENCE_RECOMMENDATION_THRESHOLD);
+    if (!hasConfidentIssueMatch) {
+      const codeContributors = await fetchRepositoryCodeContributors(context, options.allowedLogins);
+      matchResultArray.clear();
+      for (const contributor of codeContributors) {
+        matchResultArray.set(contributor.login, contributor.matches);
       }
+      ensureContributors(matchResultArray, options.ensureLogins);
+      sortedContributors = getSortedContributors(matchResultArray);
     }
 
     logger.debug("Matched issues", { matchResultArray, length: matchResultArray.size });
-
-    // Convert Map to array and sort by highest similarity
-    const sortedContributors = Array.from(matchResultArray.entries())
-      .map(([login, matches]) => ({
-        login,
-        matches,
-        maxSimilarity: matches.length ? Math.max(...matches.map((match) => parseInt(match.match(/`(\d+)% Match`/)?.[1] || "0"))) : 0,
-      }))
-      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
 
     logger.debug("Sorted contributors", { sortedContributors });
     return { matchResultArray, similarIssues, sortedContributors };
   }
 
   if (options.ensureLogins && options.ensureLogins.length > 0) {
-    for (const login of options.ensureLogins) {
-      if (!matchResultArray.has(login)) {
-        matchResultArray.set(login, []);
-      }
-    }
-    const sortedContributors = Array.from(matchResultArray.entries())
-      .map(([login, matches]) => ({
-        login,
-        matches,
-        maxSimilarity: 0,
-      }))
-      .sort((a, b) => b.maxSimilarity - a.maxSimilarity);
+    ensureContributors(matchResultArray, options.ensureLogins);
+    const sortedContributors = getSortedContributors(matchResultArray);
     return { matchResultArray, similarIssues: [], sortedContributors };
   }
 

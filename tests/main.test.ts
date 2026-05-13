@@ -6,6 +6,7 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import dotenv from "dotenv";
 import { IssueSimilaritySearchResult } from "../src/adapters/supabase/helpers/issues";
+import { IssueGraphqlResponse } from "../src/handlers/issue-matching";
 import { Context } from "../src/types/context";
 import { Env } from "../src/types/index";
 import { CommentMock, createMockAdapters, IssueMock } from "./__mocks__/adapter";
@@ -379,6 +380,111 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
     expect(comments[0].body).toContain("contributor3");
     expect(comments[0].body).toContain("50% Match");
+  });
+
+  it("When issue matching spans repo, org, and global contexts, it should rank by adjusted similarity", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "weighted_match", 12, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "same-repo", similarity: 0.6 },
+      { issue_id: "same-org", similarity: 0.7 },
+      { issue_id: "global", similarity: 0.9 },
+    ] as IssueSimilaritySearchResult[]);
+    const globalContributor = "global-contributor";
+    const sameOrgContributor = "same-org-contributor";
+
+    context.octokit.graphql = mock(async (query: string, variables: { issueNodeId: string }) => {
+      expect(query).toContain("query ($issueNodeId: ID!)");
+      const issues = {
+        "same-repo": {
+          title: "Same repo issue",
+          url: "https://github.com/ubiquity/test-repo/issues/10",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+          assignees: { nodes: [{ login: "same-repo-contributor", url: "https://github.com/same-repo-contributor" }] },
+        },
+        "same-org": {
+          title: "Same org issue",
+          url: "https://github.com/ubiquity/another-repo/issues/20",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: STRINGS.USER_1 }, name: "another-repo" },
+          assignees: { nodes: [{ login: sameOrgContributor, url: `https://github.com/${sameOrgContributor}` }] },
+        },
+        global: {
+          title: "Global issue",
+          url: "https://github.com/other-org/other-repo/issues/30",
+          state: "closed",
+          stateReason: "COMPLETED",
+          closed: true,
+          repository: { owner: { login: "other-org" }, name: "other-repo" },
+          assignees: { nodes: [{ login: globalContributor, url: `https://github.com/${globalContributor}` }] },
+        },
+      } satisfies Record<string, IssueGraphqlResponse["node"]>;
+
+      return { node: issues[variables.issueNodeId] };
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 4, "weighted_match", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "weighted_match" } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].body).toContain("60% Match");
+    expect(comments[0].body).toContain("52% Match");
+    expect(comments[0].body).toContain("45% Match");
+    expect(comments[0].body.indexOf("same-repo-contributor")).toBeLessThan(comments[0].body.indexOf(sameOrgContributor));
+    expect(comments[0].body.indexOf(sameOrgContributor)).toBeLessThan(comments[0].body.indexOf(globalContributor));
+  });
+
+  it("When all issue matches are below the low confidence threshold, it should recommend repository code contributors", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "low_confidence_match", 13, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { issue_id: "low-score", similarity: 0.2 },
+    ] as IssueSimilaritySearchResult[]);
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Low score issue",
+        url: "https://github.com/other-org/other-repo/issues/40",
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: "other-org" }, name: "other-repo" },
+        assignees: { nodes: [{ login: "low-score-contributor", url: "https://github.com/low-score-contributor" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.rest.repos.listContributors = mock(async () => ({
+      data: [
+        { login: "top-code-contributor", contributions: 42 },
+        { login: "second-code-contributor", contributions: 15 },
+      ],
+    })) as unknown as typeof context.octokit.rest.repos.listContributors;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 5, "low_confidence_match", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "low_confidence_match" } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].body).toContain("top-code-contributor");
+    expect(comments[0].body).toContain("Repository contributor fallback");
+    expect(comments[0].body).toContain("42 commits");
+    expect(comments[0].body).not.toContain("low-score-contributor");
   });
 
   it("When an issue contains markdown links, footnotes should be added after the entire line", async () => {
