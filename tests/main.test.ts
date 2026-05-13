@@ -329,6 +329,48 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("98% Match");
   });
 
+  it("When issue matching runs on issue open, it creates a placeholder and updates it with matches", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_open", 5, taskCompleteIssue.title);
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([{ issue_id: "similar-open", similarity: 0.98 }]);
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 1, "task_complete_open", params.issue_number);
+      return { data: { id: 1, body: params.body } };
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    context.octokit.rest.issues.updateComment = mock(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
+      const comment = db.issueComments.findFirst({ where: { id: { equals: params.comment_id } } });
+      if (comment) {
+        comment.body = params.body;
+      }
+      return { data: comment };
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "task_complete_open" } } });
+    expect(context.octokit.rest.issues.createComment).toHaveBeenCalledTimes(1);
+    expect(context.octokit.rest.issues.updateComment).toHaveBeenCalledTimes(1);
+    expect(comments.length).toBe(1);
+    expect(comments[0].body).toContain(STRINGS.CONTRIBUTOR_SUGGESTION_TEXT);
+    expect(comments[0].body).toContain("contributor1");
+    expect(comments[0].body).toContain("98% Match");
+  });
+
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);

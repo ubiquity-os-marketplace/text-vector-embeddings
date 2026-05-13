@@ -31,6 +31,9 @@ type IssueCommentSummary = {
   body?: string | null;
 };
 
+const COMMENT_START = ">The following contributors may be suitable for this task:";
+const PLACEHOLDER_COMMENT = `>[!NOTE]\n${COMMENT_START}\n>_Searching for matches..._`;
+
 function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResponse {
   return response.node !== null;
 }
@@ -38,15 +41,6 @@ function hasIssueNode(response: IssueNodeResponse): response is IssueGraphqlResp
 export async function issueMatchingWithComment(context: Context<"issues.opened" | "issues.edited" | "issues.labeled">) {
   const { logger, octokit, payload } = context;
   const issue = payload.issue;
-  const commentStart = ">The following contributors may be suitable for this task:";
-
-  const result = await issueMatching(context);
-
-  if (!result) {
-    return;
-  }
-
-  const { matchResultArray, sortedContributors } = result;
 
   // Fetch if any previous comment exists
   const listIssues = (await octokit.paginate(octokit.rest.issues.listComments, {
@@ -56,7 +50,32 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
   })) as IssueCommentSummary[];
 
   //Check if the comment already exists
-  const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
+  let existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + COMMENT_START));
+
+  if (!existingComment && context.eventName === "issues.opened") {
+    const createdComment = await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: payload.issue.number,
+      body: PLACEHOLDER_COMMENT,
+    });
+    existingComment = createdComment.data;
+  }
+
+  const result = await issueMatching(context);
+
+  if (!result) {
+    if (existingComment && context.eventName === "issues.opened") {
+      await octokit.rest.issues.deleteComment({
+        owner: payload.repository.owner.login,
+        repo: payload.repository.name,
+        comment_id: existingComment.id,
+      });
+    }
+    return;
+  }
+
+  const { matchResultArray, sortedContributors } = result;
 
   if (matchResultArray.size === 0) {
     if (existingComment) {
