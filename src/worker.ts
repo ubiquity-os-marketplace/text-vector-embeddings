@@ -24,6 +24,7 @@ import { PluginSettings, pluginSettingsSchema } from "./types/plugin-input";
 import { querySchema, responseSchema } from "./validators";
 
 const pluginManifest = manifest as Manifest & { homepage_url?: string };
+const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function buildRuntimeManifest(request: Request) {
   return {
@@ -66,7 +67,7 @@ export default {
     honoApp.use(cors());
     honoApp.use(
       rateLimiter({
-        windowMs: 60 * 1000,
+        windowMs: RATE_LIMIT_WINDOW_MS,
         limit: 100,
         standardHeaders: "draft-7",
         keyGenerator: (c) => {

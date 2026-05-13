@@ -10,7 +10,7 @@ export type EmbeddingQueueSettings = {
 
 const isQueueEnabledByDefault = true;
 const DEFAULT_BATCH_SIZE = 50;
-const DEFAULT_DELAY_MS = 1000;
+const DEFAULT_DELAY_MS = 1_000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_CONCURRENCY = 1;
 

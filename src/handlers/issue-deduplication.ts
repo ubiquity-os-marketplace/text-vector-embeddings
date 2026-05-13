@@ -5,6 +5,7 @@ import { IssueSimilaritySearchResult } from "../adapters/supabase/helpers/issues
 import { Context } from "../types/index";
 import { appendPluginUpdateComment, normalizeWhitespace, stripHtmlComments, stripPluginUpdateComments } from "../utils/markdown-comments";
 import { appendFootnoteRefsToFirstLine, insertFootnoteRefNearSentence } from "../utils/footnote-placement";
+import { createFootnoteRef, getHighestFootnoteIndex } from "../utils/footnote-id";
 import { stripDuplicateFootnotes } from "../utils/footnotes";
 import { findEditDistance } from "../utils/string-similarity";
 
@@ -194,9 +195,7 @@ async function handleSimilarIssuesComment(
     return;
   }
   // Find existing footnotes in the body
-  const footnoteRegex = /\[\^(\d+)\^\]/g;
-  const existingFootnotes = issueBody.match(footnoteRegex) || [];
-  const highestFootnoteIndex = existingFootnotes.length > 0 ? Math.max(...existingFootnotes.map((fn) => parseInt(fn.match(/\d+/)?.[0] ?? "0"))) : 0;
+  const highestFootnoteIndex = getHighestFootnoteIndex(issueBody, "deduplication");
   let updatedBody = issueBody;
   const footnotes: string[] = [];
   const orphanRefs: string[] = [];
@@ -204,7 +203,7 @@ async function handleSimilarIssuesComment(
   relevantIssues.sort((a, b) => parseFloat(a.similarity) - parseFloat(b.similarity));
   relevantIssues.forEach((issue, index) => {
     const footnoteIndex = highestFootnoteIndex + index + 1; // Continue numbering from the highest existing footnote number
-    const footnoteRef = `[^0${footnoteIndex}^]`;
+    const footnoteRef = createFootnoteRef("deduplication", footnoteIndex);
     const modifiedUrl = issue.node.url.replace("https://github.com", "https://www.github.com");
     const { sentence } = issue.mostSimilarSentence;
     // Insert footnote reference in the body
@@ -401,7 +400,7 @@ export async function cleanContent(context: Context, content: string): Promise<s
  * @returns True if a duplicate footnote exists, false otherwise
  */
 export function checkIfDuplicateFootNoteExists(content: string): boolean {
-  const footnoteDefRegex = /\[\^(\d+)\^\]: ⚠ \d+% possible duplicate - [^\n]+(\n|$)/g;
+  const footnoteDefRegex = /\[\^(?:deduplication-)?(\d+)\^\]: .*?\d+% possible duplicate - [^\n]+(\n|$)/g;
   const footnotes = content.match(footnoteDefRegex);
   return !!footnotes;
 }

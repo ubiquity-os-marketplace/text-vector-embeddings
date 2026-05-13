@@ -1,6 +1,12 @@
 import * as v from "valibot";
 
-export const urlSchema = v.pipe(v.string(), v.url(), v.regex(/https:\/\/github\.com\/[^/]+\/[^/]+\/(issues|pull)\/\d+$/));
+const GITHUB_ISSUE_OR_PULL_URL_REGEX = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/(issues|pull)\/\d+\/?$/;
+
+export const urlSchema = v.pipe(
+  v.string(),
+  v.url("Expected a valid URL."),
+  v.regex(GITHUB_ISSUE_OR_PULL_URL_REGEX, "Expected a GitHub issue or pull request URL, e.g. https://github.com/owner/repo/issues/123.")
+);
 
 export const querySchema = v.object({
   issueUrls: v.union([v.array(urlSchema), urlSchema]),
