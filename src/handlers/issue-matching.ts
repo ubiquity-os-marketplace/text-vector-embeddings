@@ -221,16 +221,14 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           }
           const similarityPercentage = Math.round(issue.similarity * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
-          if (matchResultArray.has(assignee.login)) {
-            matchResultArray
-              .get(assignee.login)
-              ?.push(
-                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
-              );
+          const matchLine = `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`;
+          const existingMatches = matchResultArray.get(assignee.login);
+          if (existingMatches) {
+            if (!existingMatches.includes(matchLine)) {
+              existingMatches.push(matchLine);
+            }
           } else {
-            matchResultArray.set(assignee.login, [
-              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`,
-            ]);
+            matchResultArray.set(assignee.login, [matchLine]);
           }
         });
       }
