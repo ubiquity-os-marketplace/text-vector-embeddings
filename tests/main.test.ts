@@ -528,6 +528,46 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When a user uses default annotate command and no matches are found, it should post a note comment", async () => {
+    const targetCommentId = 21;
+    const noteCommentId = 22;
+    createComment("A unique comment that should not match anything", targetCommentId, DEFAULT_ISSUE_ID);
+    const targetComment = db.issueComments.findFirst({
+      where: {
+        id: {
+          equals: targetCommentId,
+        },
+      },
+    }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+
+    const { context, comment } = createContext("/annotate", 1, 1, 2, "createAnnotateNoMatches", DEFAULT_ISSUE_ID);
+
+    context.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = mock().mockResolvedValue([]);
+    context.octokit.rest.issues.listComments = mock(async () => {
+      return { data: [targetComment, comment] };
+    }) as unknown as typeof octokit.rest.issues.listComments;
+    context.octokit.rest.issues.updateComment = mock() as unknown as typeof octokit.rest.issues.updateComment;
+    context.octokit.rest.issues.createComment = mock(async (params: { issue_number: number; body: string }) => {
+      createComment(params.body, noteCommentId, DEFAULT_ISSUE_ID, params.issue_number);
+      return { data: {} };
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const noteComment = db.issueComments.findFirst({
+      where: {
+        id: {
+          equals: noteCommentId,
+        },
+      },
+    }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+    expect(context.octokit.rest.issues.updateComment).toHaveBeenCalledTimes(0);
+    expect(context.octokit.rest.issues.createComment).toHaveBeenCalledTimes(1);
+    expect(noteComment.body).toContain("Annotation completed successfully");
+    expect(noteComment.body).toContain("no similar issues or comments were found");
+  });
+
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
 
