@@ -528,6 +528,51 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When annotate finds no similar issues or comments, it should update the comment and leave an info comment", async () => {
+    const [annotateIssue] = fetchSimilarIssues("annotate");
+    const { context } = createContextIssues(annotateIssue.issue_body, "annotate", 9, annotateIssue.title);
+    context.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = mock().mockResolvedValue([]);
+    context.adapters.supabase.issue.createIssue = mock(async () => {
+      createIssue(annotateIssue.issue_body, "annotate", annotateIssue.title, 9, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO, STRINGS.USER_1);
+    });
+
+    await runPlugin(context);
+
+    const staleBody = `${annotateComment.body} [^01^]\n\n` + `[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
+    const staleComment = { ...annotateComment, body: staleBody };
+    createComment(staleBody, annotateComment.id, "annotate", 9);
+
+    const { context: context2 } = createContext("/annotate /#issuecomment-1 repo", 1, 1, 2, "createAnnotate", "annotate");
+    context2.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
+    context2.adapters.supabase.comment.findSimilarComments = mock().mockResolvedValue([]);
+    context2.octokit.rest.issues.getComment = mock(async () => {
+      return { data: staleComment };
+    }) as unknown as typeof octokit.rest.issues.getComment;
+    context2.octokit.rest.issues.updateComment = mock(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
+      db.issueComments.update({
+        where: {
+          id: { equals: params.comment_id },
+        },
+        data: {
+          body: params.body,
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.updateComment;
+    context2.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 3, "annotateNoMatches", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context2);
+
+    const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+    const infoComment = db.issueComments.findFirst({ where: { id: { equals: 3 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
+    expect(updatedComment.body).not.toContain("[^01^]");
+    expect(updatedComment.body).not.toContain("similar to issue");
+    expect(infoComment.body).toContain("similarity analysis successfully");
+    expect(infoComment.body).toContain("couldn't find any issues or comments");
+  });
+
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
 
@@ -619,20 +664,18 @@ describe("Plugin tests", () => {
     }) as unknown as typeof octokit.rest.issues.getComment;
 
     context2.octokit.rest.issues.updateComment = mock(async (params: { owner: string; repo: string; comment_id: number; body: string }) => {
-      // Find the most similar sentence (first sentence in this case)
-      const updatedBody =
-        annotateComment.body.replace(STRINGS.SIMILAR_COMMENT, `${STRINGS.SIMILAR_COMMENT}[^01^]`) +
-        `\n\n[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n\n`;
-
       db.issueComments.update({
         where: {
           id: { equals: params.comment_id },
         },
         data: {
-          body: updatedBody,
+          body: params.body,
         },
       });
     }) as unknown as typeof octokit.rest.issues.updateComment;
+    context2.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 3, "annotateNoScopeMatches", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
 
     await runPlugin(context2);
 
