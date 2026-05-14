@@ -145,6 +145,7 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
   }
   const issueContent = issue.body + issue.title;
   const matchResultArray: Map<string, Array<string>> = new Map();
+  const contributorIssueMatches: Map<string, Set<string>> = new Map();
 
   // If alwaysRecommend is enabled, use a lower threshold to ensure we get enough recommendations
   const threshold =
@@ -221,16 +222,21 @@ async function issueMatchingInternal(context: Context<IssueMatchingEvents>, opti
           }
           const similarityPercentage = Math.round(issue.similarity * 100);
           const issueLink = issue.node.url.replace(/https?:\/\/github.com/, "https://www.github.com");
+          const issueKey = `${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}`;
+          const seenIssueMatches = contributorIssueMatches.get(assignee.login) ?? new Set<string>();
+
+          if (seenIssueMatches.has(issueKey)) {
+            return;
+          }
+
+          seenIssueMatches.add(issueKey);
+          contributorIssueMatches.set(assignee.login, seenIssueMatches);
+
+          const issueMatch = `> \`${similarityPercentage}% Match\` [${issueKey}](${issueLink})`;
           if (matchResultArray.has(assignee.login)) {
-            matchResultArray
-              .get(assignee.login)
-              ?.push(
-                `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`
-              );
+            matchResultArray.get(assignee.login)?.push(issueMatch);
           } else {
-            matchResultArray.set(assignee.login, [
-              `> \`${similarityPercentage}% Match\` [${issue.node.repository.owner.login}/${issue.node.repository.name}#${issue.node.url.split("/").pop()}](${issueLink})`,
-            ]);
+            matchResultArray.set(assignee.login, [issueMatch]);
           }
         });
       }

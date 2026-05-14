@@ -329,6 +329,42 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("98% Match");
   });
 
+
+
+  it("When issue matching returns duplicate similar issues, it should suggest each contributor once per issue", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete", 3, taskCompleteIssue.title);
+    context.eventName = ISSUES_EDITED_EVENT_NAME;
+
+    context.adapters.supabase.issue.findSimilarIssuesToMatch = mock().mockResolvedValue([
+      { id: "similar3", issue_id: "same-node", similarity: 0.98 },
+      { id: "similar3-duplicate", issue_id: "same-node", similarity: 0.97 },
+    ]);
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    context.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 1, "task_complete", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "task_complete" } } });
+    expect(comments.length).toBe(1);
+    expect(comments[0].body.match(/>### \[contributor1\]/g)).toHaveLength(1);
+    expect(comments[0].body.match(new RegExp(`${STRINGS.USER_1}/${STRINGS.TEST_REPO}#1`, "g"))).toHaveLength(1);
+  });
+
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);
