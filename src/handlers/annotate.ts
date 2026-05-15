@@ -141,6 +141,12 @@ async function handleSimilarIssuesAndComments(
   commentList: CommentGraphqlResponse[]
 ) {
   if (!issueList.length && !commentList.length) {
+    await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: payload.issue.number,
+      body: ">[!NOTE]\n>No similar issues or comments found.",
+    });
     return;
   }
   // Find existing footnotes in the body

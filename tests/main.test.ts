@@ -634,6 +634,10 @@ describe("Plugin tests", () => {
       });
     }) as unknown as typeof octokit.rest.issues.updateComment;
 
+    context2.octokit.rest.issues.createComment = mock(async (params: { owner: string; repo: string; issue_number: number; body: string }) => {
+      createComment(params.body, 2, "no_matches", params.issue_number);
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
     await runPlugin(context2);
 
     const updatedComment = db.issueComments.findFirst({ where: { id: { equals: 1 } } }) as unknown as Context<"issue_comment.created">["payload"]["comment"];
