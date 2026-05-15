@@ -329,6 +329,35 @@ describe("Plugin tests", () => {
     expect(comments[0].body).toContain("98% Match");
   });
 
+  it("When issue matching is triggered by a label event without an existing recommendation, it should not create a matchmaking comment", async () => {
+    const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
+    const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete", 8, taskCompleteIssue.title);
+    context.eventName = "issues.labeled";
+
+    context.octokit.graphql = mock().mockResolvedValue({
+      node: {
+        title: "Similar Issue: Suggest based on Similarity",
+        url: STRINGS.ISSUE_URL_TEMPLATE,
+        state: "closed",
+        stateReason: "COMPLETED",
+        closed: true,
+        repository: { owner: { login: STRINGS.USER_1 }, name: STRINGS.TEST_REPO },
+        assignees: { nodes: [{ login: "contributor1", url: "https://github.com/contributor1" }] },
+      },
+    }) as unknown as typeof context.octokit.graphql;
+
+    let createdComments = 0;
+    context.octokit.rest.issues.createComment = mock(async () => {
+      createdComments += 1;
+    }) as unknown as typeof octokit.rest.issues.createComment;
+
+    await runPlugin(context);
+
+    const comments = db.issueComments.findMany({ where: { node_id: { equals: "task_complete" } } });
+    expect(createdComments).toBe(0);
+    expect(comments.length).toBe(0);
+  });
+
   it("When issue matching is triggered with alwaysRecommend enabled, it should suggest contributors regardless of similarity", async () => {
     const [taskCompleteIssue] = fetchSimilarIssues("task_complete");
     const { context } = createContextIssues(taskCompleteIssue.issue_body, "task_complete_always", 6, taskCompleteIssue.title);

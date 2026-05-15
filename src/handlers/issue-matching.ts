@@ -57,6 +57,7 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
 
   //Check if the comment already exists
   const existingComment = listIssues.find((comment) => comment.body && comment.body.includes(">[!NOTE]" + "\n" + commentStart));
+  const shouldCreateComment = context.eventName !== "issues.labeled";
 
   if (matchResultArray.size === 0) {
     if (existingComment) {
@@ -86,13 +87,15 @@ export async function issueMatchingWithComment(context: Context<"issues.opened" 
       comment_id: existingComment.id,
       body: comment,
     });
-  } else {
+  } else if (shouldCreateComment) {
     await context.octokit.rest.issues.createComment({
       owner: payload.repository.owner.login,
       repo: payload.repository.name,
       issue_number: payload.issue.number,
       body: comment,
     });
+  } else {
+    logger.debug("Skipping matchmaking comment creation for label event without an existing recommendation comment.");
   }
 }
 
