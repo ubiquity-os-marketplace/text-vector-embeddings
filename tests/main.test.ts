@@ -229,21 +229,46 @@ describe("Plugin tests", () => {
     context2.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([
       { issue_id: "match1", similarity: 0.96 },
     ] as unknown as IssueSimilaritySearchResult[]);
-    context2.octokit.graphql = mock().mockResolvedValue({
-      node: {
-        title: STRINGS.SIMILAR_ISSUE,
-        url: STRINGS.ISSUE_URL,
-        number: 3,
-        lastEditedAt: "2020-01-12T17:52:02Z",
-        body: matchThresholdIssue1.issue_body,
-        repository: {
-          name: STRINGS.TEST_REPO,
-          owner: {
-            login: STRINGS.USER_1,
+    const graphqlMock = mock(async (query: string, variables: { issueNodeId?: string; issueId?: string; duplicateIssueId?: string }) => {
+      if (query.includes("closeIssue")) {
+        db.issue.update({
+          where: {
+            node_id: { equals: variables.issueId ?? "" },
+          },
+          data: {
+            state: "closed",
+            state_reason: "duplicate",
+          },
+        });
+
+        return {
+          closeIssue: {
+            issue: {
+              id: variables.issueId,
+              state: "CLOSED",
+            },
+          },
+        };
+      }
+
+      return {
+        node: {
+          id: variables.issueNodeId,
+          title: STRINGS.SIMILAR_ISSUE,
+          url: STRINGS.ISSUE_URL,
+          number: 3,
+          lastEditedAt: "2020-01-12T17:52:02Z",
+          body: matchThresholdIssue1.issue_body,
+          repository: {
+            name: STRINGS.TEST_REPO,
+            owner: {
+              login: STRINGS.USER_1,
+            },
           },
         },
-      },
-    }) as unknown as typeof context2.octokit.graphql;
+      };
+    });
+    context2.octokit.graphql = graphqlMock as unknown as typeof context2.octokit.graphql;
 
     context2.adapters.supabase.issue.createIssue = mock(async () => {
       createIssue(
@@ -259,29 +284,27 @@ describe("Plugin tests", () => {
       );
     });
 
-    context2.octokit.rest.issues.update = mock(
-      async (params: { owner: string; repo: string; issue_number: number; body?: string; state?: string; state_reason?: string }) => {
-        const updatedBody = `${matchThresholdIssue2.issue_body}\n\n>[!CAUTION]\n> This issue may be a duplicate of the following issues:\n> - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n`;
-        db.issue.update({
-          where: {
-            number: { equals: params.issue_number },
-          },
-          data: {
-            ...(params.body && { body: updatedBody }),
-            ...(params.state && { state: params.state }),
-            ...(params.state_reason && { state_reason: params.state_reason }),
-          },
-        });
-      }
-    ) as unknown as typeof octokit.rest.issues.update;
+    context2.octokit.rest.issues.update = mock(async (params: { owner: string; repo: string; issue_number: number; body?: string }) => {
+      const updatedBody = `${matchThresholdIssue2.issue_body}\n\n>[!CAUTION]\n> This issue may be a duplicate of the following issues:\n> - [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})\n`;
+      db.issue.update({
+        where: {
+          number: { equals: params.issue_number },
+        },
+        data: {
+          ...(params.body && { body: updatedBody }),
+        },
+      });
+    }) as unknown as typeof octokit.rest.issues.update;
 
     await runPlugin(context2);
     const issue = db.issue.findFirst({ where: { number: { equals: 4 } } }) as unknown as Context["payload"]["issue"];
     expect(issue.state).toBe("closed");
-    expect(issue.state_reason).toBe("not_planned");
+    expect(issue.state_reason).toBe("duplicate");
     expect(issue.body).toContain(">[!CAUTION]");
     expect(issue.body).toContain("This issue may be a duplicate of the following issues:");
     expect(issue.body).toContain(`- [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
+    const closeIssueCall = graphqlMock.mock.calls.find(([query]) => `${query}`.includes("closeIssue"));
+    expect(closeIssueCall?.[1]).toEqual({ issueId: "match2", duplicateIssueId: "match1" });
   });
 
   it("When issue matching is triggered, it should suggest contributors based on similarity", async () => {
