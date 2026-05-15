@@ -132,21 +132,35 @@ function findMostSimilarIssue(issues: IssueGraphqlResponse[]): IssueGraphqlRespo
   return [...issues].sort((a, b) => parseFloat(b.similarity) - parseFloat(a.similarity))[0];
 }
 
+/**
+ * Closes an issue using GitHub's formal duplicate relationship so the target issue
+ * is marked as a duplicate of the most similar canonical issue.
+ *
+ * @param context The plugin context containing Octokit and logger instances.
+ * @param issueId The GraphQL node ID for the issue being closed as a duplicate.
+ * @param duplicateIssueId The GraphQL node ID for the canonical duplicate target.
+ */
 async function closeIssueAsDuplicate(context: Context<"issues.opened" | "issues.edited">, issueId: string, duplicateIssueId: string) {
-  await context.octokit.graphql(
-    /* GraphQL */
-    `
-      mutation CloseIssueAsDuplicate($issueId: ID!, $duplicateIssueId: ID!) {
-        closeIssue(input: { issueId: $issueId, stateReason: DUPLICATE, duplicateIssueId: $duplicateIssueId }) {
-          issue {
-            id
-            state
+  try {
+    await context.octokit.graphql(
+      /* GraphQL */
+      `
+        mutation CloseIssueAsDuplicate($issueId: ID!, $duplicateIssueId: ID!) {
+          closeIssue(input: { issueId: $issueId, stateReason: DUPLICATE, duplicateIssueId: $duplicateIssueId }) {
+            issue {
+              id
+              state
+            }
           }
         }
-      }
-    `,
-    { issueId, duplicateIssueId }
-  );
+      `,
+      { issueId, duplicateIssueId }
+    );
+  } catch (error) {
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
+    context.logger.error("Failed to close issue as a formal duplicate", { issueId, duplicateIssueId, error: normalizedError });
+    throw normalizedError;
+  }
 }
 
 function splitIntoSentences(text: string): string[] {
