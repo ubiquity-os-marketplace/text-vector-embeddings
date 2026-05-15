@@ -640,6 +640,25 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).not.toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When a user annotates a comment outside the current organization, it should throw a clear permission error", async () => {
+    const { context } = createContext("/annotate /#issuecomment-999 org", 1, 1, 2, "createAnnotateOutsideOrg", DEFAULT_ISSUE_ID);
+
+    context.octokit.rest.issues.getComment = mock(async () => {
+      throw { status: 404 };
+    }) as unknown as typeof octokit.rest.issues.getComment;
+
+    try {
+      await runPlugin(context);
+      throw new Error("Expected annotate to reject for an inaccessible comment");
+    } catch (error) {
+      expect(error).toMatchObject({
+        logMessage: {
+          raw: "Unable to annotate this comment because it is outside the current organization or the app does not have permission to access it.",
+        },
+      });
+    }
+  });
+
   function createContext(
     commentBody: string = "Hello, world!",
     repoId: number = 1,

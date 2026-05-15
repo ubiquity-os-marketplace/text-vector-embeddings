@@ -43,13 +43,25 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
-    const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
-    });
+    let data: Comment;
+    try {
+      ({ data } = await octokit.rest.issues.getComment({
+        owner: repository.owner.login,
+        repo: repository.name,
+        comment_id: parseInt(commentId, 10),
+      }));
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        throw logger.error("Unable to annotate this comment because it is outside the current organization or the app does not have permission to access it.");
+      }
+      throw error;
+    }
     await commentChecker(context, data, scope);
   }
+}
+
+function isNotFoundError(error: unknown): error is { status: number } {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 404;
 }
 
 /**
