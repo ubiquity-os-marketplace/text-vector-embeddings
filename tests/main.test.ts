@@ -545,8 +545,11 @@ describe("Plugin tests", () => {
       error = caughtError;
     }
 
-    expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toContain("outside the current organization ubiquity");
+    const errorMessage =
+      typeof error === "object" && error && "logMessage" in error
+        ? (error.logMessage as { raw?: string }).raw
+        : (error as Error | undefined)?.message;
+    expect(errorMessage).toContain("outside the current organization ubiquity");
   });
 
   it("When annotate command points to another repository in the current organization, it should fetch the comment from that repository", async () => {
