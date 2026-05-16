@@ -1,5 +1,5 @@
 import { Context } from "../types/index";
-import { annotate } from "./annotate";
+import { annotate, type AnnotationSourceRepository } from "./annotate";
 import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
 // GitHub usernames are 1-39 chars, alphanumeric or hyphen, no leading/trailing hyphen.
@@ -40,14 +40,53 @@ function buildRecommendationComment(result: NonNullable<Awaited<ReturnType<typeo
   return lines.join("\n");
 }
 
+function parseCommentUrl(commentUrl: string) {
+  const match = commentUrl.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:issues|pull)\/\d+#issuecomment-(\d+)$/);
+  if (!match) {
+    return null;
+  }
+  const [, owner, repo, commentId] = match;
+  return { owner, repo, commentId };
+}
+
+function getAnnotationSource(
+  context: Context<"issue_comment.created">,
+  commentUrl: string | null,
+  scope: string
+): { commentId: string | null; sourceRepository?: AnnotationSourceRepository } {
+  if (!commentUrl) {
+    return { commentId: null };
+  }
+  const parsedComment = parseCommentUrl(commentUrl);
+  if (!parsedComment) {
+    throw context.logger.error("Invalid comment URL");
+  }
+
+  const currentOwner = context.payload.repository.owner.login;
+  const currentRepo = context.payload.repository.name;
+  const sourceRepository = { owner: parsedComment.owner, repo: parsedComment.repo };
+
+  if (scope === "repo" && (sourceRepository.owner !== currentOwner || sourceRepository.repo !== currentRepo)) {
+    throw context.logger.error(
+      `Cannot annotate comment ${parsedComment.commentId} with repo scope because it belongs to ${sourceRepository.owner}/${sourceRepository.repo}, outside the current repository ${currentOwner}/${currentRepo}.`
+    );
+  }
+
+  if (scope === "org" && sourceRepository.owner !== currentOwner) {
+    throw context.logger.error(
+      `Cannot annotate comment ${parsedComment.commentId} with org scope because it belongs to ${sourceRepository.owner}/${sourceRepository.repo}, outside the current organization ${currentOwner}. Use global scope only when the plugin has access to that repository.`
+    );
+  }
+
+  return { commentId: parsedComment.commentId, sourceRepository };
+}
+
 async function postCommandResponse(context: Context<"issue_comment.created">, body: string, forceTag = false) {
   const options = forceTag ? { raw: true, commentKind: "command-response" } : { raw: true };
   await context.commentHandler.postComment(context, context.logger.info(body), options);
 }
 
 export async function commandHandler(context: Context<"issue_comment.created">) {
-  const { logger } = context;
-
   if (!context.command) {
     return;
   }
@@ -55,16 +94,8 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
   if (context.command.name === "annotate") {
     const commentUrl = context.command.parameters.commentUrl ?? null;
     const scope = context.command.parameters.scope ?? "org";
-    let commentId = null;
-    if (commentUrl) {
-      const commentRegex = /#issuecomment-(\d+)$/;
-      const match = commentUrl.match(commentRegex);
-      if (!match) {
-        throw logger.error("Invalid comment URL");
-      }
-      commentId = match[1];
-    }
-    await annotate(context, commentId, scope);
+    const { commentId, sourceRepository } = getAnnotationSource(context, commentUrl, scope);
+    await annotate(context, commentId, scope, sourceRepository);
   }
 }
 
@@ -86,13 +117,10 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
         if (scope !== "global" && scope !== "org" && scope !== "repo") {
           throw logger.error("Invalid scope");
         }
-
-        const commentRegex = /#issuecomment-(\d+)$/;
-        const match = commentUrl.match(commentRegex);
-        if (!match) {
-          throw logger.error("Invalid comment URL");
-        }
-        commentId = match[1];
+        const annotationSource = getAnnotationSource(context, commentUrl, scope);
+        commentId = annotationSource.commentId;
+        await annotate(context, commentId, scope, annotationSource.sourceRepository);
+        return;
       } else {
         throw logger.error("Invalid parameters");
       }

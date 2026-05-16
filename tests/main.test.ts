@@ -528,6 +528,51 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When annotate command points outside the current organization, it should explain the scope mismatch", async () => {
+    const { context } = createContext("/annotate", 1, 1, 2, "outsideOrgAnnotate", "annotate");
+    context.command = {
+      name: "annotate",
+      parameters: {
+        commentUrl: "https://github.com/outside-org/external-repo/issues/1#issuecomment-123",
+        scope: "org",
+      },
+    };
+
+    let error: unknown;
+    try {
+      await runPlugin(context);
+    } catch (caughtError) {
+      error = caughtError;
+    }
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("outside the current organization ubiquity");
+  });
+
+  it("When annotate command points to another repository in the current organization, it should fetch the comment from that repository", async () => {
+    const { context } = createContext("/annotate", 1, 1, 2, "sameOrgAnnotate", "annotate");
+    context.command = {
+      name: "annotate",
+      parameters: {
+        commentUrl: `https://github.com/${STRINGS.USER_1}/${STRINGS.TEST_REPO_2}/issues/1#issuecomment-${annotateComment.id}`,
+        scope: "org",
+      },
+    };
+    context.adapters.supabase.issue.findSimilarIssues = mock().mockResolvedValue([]);
+    context.adapters.supabase.comment.findSimilarComments = mock().mockResolvedValue([]);
+    const getComment = mock(async (params: { owner: string; repo: string; comment_id: number }) => {
+      expect(params.owner).toBe(STRINGS.USER_1);
+      expect(params.repo).toBe(STRINGS.TEST_REPO_2);
+      expect(params.comment_id).toBe(annotateComment.id);
+      return { data: annotateComment };
+    });
+    context.octokit.rest.issues.getComment = getComment as unknown as typeof octokit.rest.issues.getComment;
+
+    await runPlugin(context);
+
+    expect(getComment).toHaveBeenCalledTimes(1);
+  });
+
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
 
