@@ -640,6 +640,33 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).not.toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When a user annotates a comment URL outside the current repository, it should explain the permission boundary", async () => {
+    createIssue("Annotate target", "annotate", "Annotate Target", 22, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO, STRINGS.USER_1);
+    const { context, errorSpy } = createContext(
+      "/annotate https://github.com/koya0/.ubiquity-os/issues/22#issuecomment-2535532258 repo",
+      1,
+      1,
+      2,
+      "outsideRepoAnnotate",
+      "annotate"
+    );
+    const getCommentMock = mock(async () => ({ data: annotateComment })) as unknown as typeof octokit.rest.issues.getComment;
+    context.octokit.rest.issues.getComment = getCommentMock;
+
+    let thrown: unknown;
+    try {
+      await runPlugin(context);
+    } catch (error) {
+      thrown = error;
+    }
+
+    const errorMessages = errorSpy.mock.calls.map(([message]) => String(message));
+    const errorText = [String(thrown), ...errorMessages].join("\n");
+    expect(errorText.includes("Cannot annotate comment from koya0/.ubiquity-os")).toBe(true);
+    expect(errorText.includes("outside the current organization")).toBe(true);
+    expect(getCommentMock).not.toHaveBeenCalled();
+  });
+
   function createContext(
     commentBody: string = "Hello, world!",
     repoId: number = 1,

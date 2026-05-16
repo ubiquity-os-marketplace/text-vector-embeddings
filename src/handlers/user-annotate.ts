@@ -45,9 +45,44 @@ async function postCommandResponse(context: Context<"issue_comment.created">, bo
   await context.commentHandler.postComment(context, context.logger.info(body), options);
 }
 
-export async function commandHandler(context: Context<"issue_comment.created">) {
-  const { logger } = context;
+function parseCommentIdFromUrl(context: Context<"issue_comment.created">, commentUrl: string): string {
+  const match = commentUrl.match(/#issuecomment-(\d+)$/);
+  if (!match) {
+    throw context.logger.error("Invalid comment URL");
+  }
 
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(commentUrl);
+  } catch {
+    return match[1];
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  if (hostname !== "github.com" && hostname !== "www.github.com") {
+    throw context.logger.error("Invalid comment URL");
+  }
+
+  const [owner, repo, resource, resourceId] = parsedUrl.pathname.split("/").filter(Boolean);
+  if (!owner || !repo || (resource !== "issues" && resource !== "pull") || !resourceId) {
+    throw context.logger.error("Invalid comment URL");
+  }
+
+  const currentOwner = context.payload.repository.owner.login;
+  const currentRepo = context.payload.repository.name;
+  const isCurrentRepository = owner.toLowerCase() === currentOwner.toLowerCase() && repo.toLowerCase() === currentRepo.toLowerCase();
+  if (!isCurrentRepository) {
+    const message =
+      `Cannot annotate comment from ${owner}/${repo}. ` +
+      `The comment URL must belong to the current repository ${currentOwner}/${currentRepo}; ` +
+      "comments outside the current organization or without installation access cannot be annotated.";
+    throw context.logger.error(message);
+  }
+
+  return match[1];
+}
+
+export async function commandHandler(context: Context<"issue_comment.created">) {
   if (!context.command) {
     return;
   }
@@ -57,12 +92,7 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
     const scope = context.command.parameters.scope ?? "org";
     let commentId = null;
     if (commentUrl) {
-      const commentRegex = /#issuecomment-(\d+)$/;
-      const match = commentUrl.match(commentRegex);
-      if (!match) {
-        throw logger.error("Invalid comment URL");
-      }
-      commentId = match[1];
+      commentId = parseCommentIdFromUrl(context, commentUrl);
     }
     await annotate(context, commentId, scope);
   }
@@ -87,12 +117,7 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
           throw logger.error("Invalid scope");
         }
 
-        const commentRegex = /#issuecomment-(\d+)$/;
-        const match = commentUrl.match(commentRegex);
-        if (!match) {
-          throw logger.error("Invalid comment URL");
-        }
-        commentId = match[1];
+        commentId = parseCommentIdFromUrl(context, commentUrl);
       } else {
         throw logger.error("Invalid parameters");
       }
