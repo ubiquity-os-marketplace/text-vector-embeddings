@@ -528,6 +528,32 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When a user annotates an inaccessible comment, it should return a clear error", async () => {
+    const inaccessibleCommentId = 999;
+    const expectedMessage = `Unable to fetch issue comment ${inaccessibleCommentId} from ${STRINGS.USER_1}/${STRINGS.TEST_REPO}. The comment may be outside the current organization or repository, or the app may not have permission to read it.`;
+    const { context, errorSpy } = createContext(
+      `/annotate https://github.com/external-org/external-repo/issues/1#issuecomment-${inaccessibleCommentId} repo`,
+      1,
+      1,
+      2,
+      "createAnnotateExternal"
+    );
+
+    Object.assign(context.octokit.rest.issues, {
+      getComment: mock(async () => {
+        throw { status: 404, message: "Not Found" };
+      }),
+    });
+
+    const rejection = await runPlugin(context).then(
+      () => null,
+      (error: object) => error
+    );
+
+    expect(rejection).toMatchObject({ logMessage: { raw: expectedMessage } });
+    expect(errorSpy).toHaveBeenCalledWith(expectedMessage);
+  });
+
   it("When demoFlag is true, it should skip storing issues in the database", async () => {
     const { context } = createContextIssues(DEFAULT_BODY, "demoIssue", 10, "Demo Test Issue");
 

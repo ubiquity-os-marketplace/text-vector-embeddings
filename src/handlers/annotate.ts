@@ -23,6 +23,34 @@ interface CommentGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
+interface RequestErrorWithStatus {
+  status: number;
+}
+
+function hasRequestStatus(error: object): error is RequestErrorWithStatus {
+  return "status" in error && typeof error.status === "number";
+}
+
+async function fetchCommentForAnnotation(context: Context<"issue_comment.created">, commentId: number): Promise<Comment> {
+  const { logger, octokit, payload } = context;
+  const repository = payload.repository;
+  try {
+    const { data } = await octokit.rest.issues.getComment({
+      owner: repository.owner.login,
+      repo: repository.name,
+      comment_id: commentId,
+    });
+    return data;
+  } catch (error) {
+    if (typeof error === "object" && error !== null && hasRequestStatus(error) && error.status === 404) {
+      throw logger.error(
+        `Unable to fetch issue comment ${commentId} from ${repository.owner.login}/${repository.name}. The comment may be outside the current organization or repository, or the app may not have permission to read it.`
+      );
+    }
+    throw error;
+  }
+}
+
 export async function annotate(context: Context<"issue_comment.created">, commentId: string | null, scope: string) {
   const { logger, octokit, payload } = context;
 
@@ -43,12 +71,8 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
-    const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
-    });
-    await commentChecker(context, data, scope);
+    const comment = await fetchCommentForAnnotation(context, parseInt(commentId, 10));
+    await commentChecker(context, comment, scope);
   }
 }
 
