@@ -546,9 +546,7 @@ describe("Plugin tests", () => {
     }
 
     const errorMessage =
-      typeof error === "object" && error && "logMessage" in error
-        ? (error.logMessage as { raw?: string }).raw
-        : (error as Error | undefined)?.message;
+      typeof error === "object" && error && "logMessage" in error ? (error.logMessage as { raw?: string }).raw : (error as Error | undefined)?.message;
     expect(errorMessage).toContain("outside the current organization ubiquity");
   });
 
