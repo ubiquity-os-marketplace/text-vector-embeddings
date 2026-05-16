@@ -640,6 +640,32 @@ describe("Plugin tests", () => {
     expect(updatedComment.body).not.toContain(`[^01^]: 88% similar to issue: [${STRINGS.SIMILAR_ISSUE}](${STRINGS.ISSUE_URL})`);
   });
 
+  it("When a user annotates a comment outside the current organization with org scope, it should throw a clear error before fetching the comment", async () => {
+    createContextIssues("Target issue", "annotate", 9, "Annotate target");
+    const { context: context2 } = createContext(
+      "/annotate https://github.com/external-org/external-repo/issues/1#issuecomment-1 org",
+      1,
+      1,
+      2,
+      "createAnnotate",
+      "annotate"
+    );
+    const getCommentMock = mock(async () => {
+      throw new Error("The comment should not be fetched when it is outside the current organization");
+    });
+    context2.octokit.rest.issues.getComment = getCommentMock as unknown as typeof octokit.rest.issues.getComment;
+
+    let thrown: unknown;
+    try {
+      await runPlugin(context2);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as { logMessage?: { raw?: string } })?.logMessage?.raw).toContain("Cannot annotate a comment outside the current organization");
+    expect(getCommentMock).not.toHaveBeenCalled();
+  });
+
   function createContext(
     commentBody: string = "Hello, world!",
     repoId: number = 1,

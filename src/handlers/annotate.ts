@@ -23,12 +23,25 @@ interface CommentGraphqlResponse {
   mostSimilarSentence: { sentence: string; similarity: number; index: number };
 }
 
-export async function annotate(context: Context<"issue_comment.created">, commentId: string | null, scope: string) {
+interface CommentTargetRepository {
+  owner: {
+    login: string;
+  };
+  name: string;
+}
+
+export interface AnnotateCommentReference {
+  id: string;
+  owner?: string;
+  repo?: string;
+}
+
+export async function annotate(context: Context<"issue_comment.created">, commentReference: AnnotateCommentReference | null, scope: string) {
   const { logger, octokit, payload } = context;
 
   const repository = payload.repository;
 
-  if (!commentId) {
+  if (!commentReference) {
     const response = await octokit.rest.issues.listComments({
       owner: repository.owner.login,
       repo: repository.name,
@@ -43,12 +56,41 @@ export async function annotate(context: Context<"issue_comment.created">, commen
       logger.error("No comments before the annotate command");
     }
   } else {
+    validateCommentReferenceScope(context, commentReference, scope);
+    const targetRepository = {
+      owner: { login: commentReference.owner ?? repository.owner.login },
+      name: commentReference.repo ?? repository.name,
+    };
     const { data } = await octokit.rest.issues.getComment({
-      owner: repository.owner.login,
-      repo: repository.name,
-      comment_id: parseInt(commentId, 10),
+      owner: targetRepository.owner.login,
+      repo: targetRepository.name,
+      comment_id: parseInt(commentReference.id, 10),
     });
-    await commentChecker(context, data, scope);
+    await commentChecker(context, data, scope, targetRepository);
+  }
+}
+
+function validateCommentReferenceScope(context: Context<"issue_comment.created">, commentReference: AnnotateCommentReference, scope: string) {
+  if (!commentReference.owner || !commentReference.repo) {
+    return;
+  }
+
+  const { logger, payload } = context;
+  const currentOwner = payload.repository.owner.login;
+  const currentRepo = payload.repository.name;
+  const isSameOwner = commentReference.owner.toLowerCase() === currentOwner.toLowerCase();
+  const isSameRepo = isSameOwner && commentReference.repo.toLowerCase() === currentRepo.toLowerCase();
+
+  if (scope === "org" && !isSameOwner) {
+    throw logger.error(
+      `Cannot annotate a comment outside the current organization. ${commentReference.owner}/${commentReference.repo} is outside ${currentOwner}.`
+    );
+  }
+
+  if (scope === "repo" && !isSameRepo) {
+    throw logger.error(
+      `Cannot annotate a comment outside the current repository. ${commentReference.owner}/${commentReference.repo} is outside ${currentOwner}/${currentRepo}.`
+    );
   }
 }
 
@@ -59,7 +101,12 @@ export async function annotate(context: Context<"issue_comment.created">, commen
  * @param comment The comment object
  * @param scope The scope of the annotation
  **/
-export async function commentChecker(context: Context<"issue_comment.created">, comment: Comment, scope: string) {
+export async function commentChecker(
+  context: Context<"issue_comment.created">,
+  comment: Comment,
+  scope: string,
+  targetRepository: CommentTargetRepository = context.payload.repository
+) {
   const {
     logger,
     adapters: { supabase },
@@ -116,7 +163,7 @@ export async function commentChecker(context: Context<"issue_comment.created">, 
   } else {
     context.logger.info("No similar comments found for comment", { commentBody });
   }
-  await handleSimilarIssuesAndComments(context, payload, commentBody, comment.id, processedIssues, processedComments);
+  await handleSimilarIssuesAndComments(context, commentBody, comment.id, processedIssues, processedComments, targetRepository);
 }
 
 function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: string, repoName: string, similarIssueRepoName: string): boolean {
@@ -134,11 +181,11 @@ function filterByScope(scope: string, repoOrg: string, similarIssueRepoOrg: stri
 
 async function handleSimilarIssuesAndComments(
   context: Context,
-  payload: Context["payload"],
   commentBody: string,
   commentId: number,
   issueList: IssueGraphqlResponse[],
-  commentList: CommentGraphqlResponse[]
+  commentList: CommentGraphqlResponse[],
+  targetRepository: CommentTargetRepository
 ) {
   if (!issueList.length && !commentList.length) {
     return;
@@ -219,8 +266,8 @@ async function handleSimilarIssuesAndComments(
   }
   // Update the comment with the modified body
   await context.octokit.rest.issues.updateComment({
-    owner: payload.repository.owner.login,
-    repo: payload.repository.name,
+    owner: targetRepository.owner.login,
+    repo: targetRepository.name,
     comment_id: commentId,
     body: updatedBody,
   });
