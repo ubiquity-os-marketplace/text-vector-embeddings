@@ -55,7 +55,11 @@ function parseCommentIdFromUrl(context: Context<"issue_comment.created">, commen
   try {
     parsedUrl = new URL(commentUrl);
   } catch {
-    return match[1];
+    // Preserve legacy fragment-only support for current-repository comments.
+    if (commentUrl.startsWith("/#issuecomment-")) {
+      return match[1];
+    }
+    throw context.logger.error("Invalid comment URL");
   }
 
   const hostname = parsedUrl.hostname.toLowerCase();

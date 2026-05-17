@@ -667,6 +667,32 @@ describe("Plugin tests", () => {
     expect(getCommentMock).not.toHaveBeenCalled();
   });
 
+  it("When a user annotates a scheme-less GitHub URL, it should reject it as invalid", async () => {
+    createIssue("Annotate target", "annotate", "Annotate Target", 23, { login: "test", id: 1 }, "open", null, STRINGS.TEST_REPO, STRINGS.USER_1);
+    const { context, errorSpy } = createContext(
+      "/annotate github.com/ubiquity-os-marketplace/text-vector-embeddings/issues/23#issuecomment-2535532258 repo",
+      1,
+      1,
+      2,
+      "schemeLessAnnotate",
+      "annotate"
+    );
+    const getCommentMock = mock(async () => ({ data: annotateComment })) as unknown as typeof octokit.rest.issues.getComment;
+    context.octokit.rest.issues.getComment = getCommentMock;
+
+    let thrown: unknown;
+    try {
+      await runPlugin(context);
+    } catch (error) {
+      thrown = error;
+    }
+
+    const errorMessages = errorSpy.mock.calls.map(([message]) => String(message));
+    const errorText = [String(thrown), ...errorMessages].join("\n");
+    expect(errorText.includes("Invalid comment URL")).toBe(true);
+    expect(getCommentMock).not.toHaveBeenCalled();
+  });
+
   function createContext(
     commentBody: string = "Hello, world!",
     repoId: number = 1,
