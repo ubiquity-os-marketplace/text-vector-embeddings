@@ -141,6 +141,12 @@ async function handleSimilarIssuesAndComments(
   commentList: CommentGraphqlResponse[]
 ) {
   if (!issueList.length && !commentList.length) {
+    await context.octokit.rest.issues.createComment({
+      owner: payload.repository.owner.login,
+      repo: payload.repository.name,
+      issue_number: payload.issue.number,
+      body: "> [!NOTE]\n> Annotation completed, but no similar issues or comments were found.",
+    });
     return;
   }
   // Find existing footnotes in the body
@@ -295,7 +301,7 @@ export function removeAnnotateFootnotes(content: string): string {
   if (footnotes) {
     footnotes.forEach((footnote) => {
       const footnoteNumber = footnote.match(/\d+/)?.[0];
-      contentWithoutFootnotes = contentWithoutFootnotes.replace(new RegExp(`\\[\\^${footnoteNumber}\\^\\]`, "g"), "");
+      contentWithoutFootnotes = contentWithoutFootnotes.replace(new RegExp(`\\[\^${footnoteNumber}\^\]`, "g"), "");
     });
   }
   return contentWithoutFootnotes;
