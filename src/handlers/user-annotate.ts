@@ -4,6 +4,12 @@ import { issueMatching, issueMatchingForUsers } from "./issue-matching";
 
 // GitHub usernames are 1-39 chars, alphanumeric or hyphen, no leading/trailing hyphen.
 const GITHUB_LOGIN_REGEX = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const GITHUB_COMMENT_URL_REGEX = /^(?:https?:\/\/(?:www\.)?github\.com)?\/([^\s/]+)\/([^\s/]+)\/issues\/\d+#issuecomment-(\d+)$/i;
+
+function parseGitHubCommentUrl(url: string): string | null {
+  const match = url.match(GITHUB_COMMENT_URL_REGEX);
+  return match?.[3] ?? null;
+}
 
 function normalizeUserLogins(segments: string[]): string[] {
   return segments
@@ -57,12 +63,11 @@ export async function commandHandler(context: Context<"issue_comment.created">) 
     const scope = context.command.parameters.scope ?? "org";
     let commentId = null;
     if (commentUrl) {
-      const commentRegex = /#issuecomment-(\d+)$/;
-      const match = commentUrl.match(commentRegex);
-      if (!match) {
-        throw logger.error("Invalid comment URL");
+      const parsedCommentId = parseGitHubCommentUrl(commentUrl);
+      if (!parsedCommentId) {
+        throw logger.info("Invalid comment URL");
       }
-      commentId = match[1];
+      commentId = parsedCommentId;
     }
     await annotate(context, commentId, scope);
   }
@@ -87,12 +92,11 @@ export async function userAnnotate(context: Context<"issue_comment.created">) {
           throw logger.error("Invalid scope");
         }
 
-        const commentRegex = /#issuecomment-(\d+)$/;
-        const match = commentUrl.match(commentRegex);
-        if (!match) {
-          throw logger.error("Invalid comment URL");
+        const parsedCommentId = parseGitHubCommentUrl(commentUrl);
+        if (!parsedCommentId) {
+          throw logger.info("Invalid comment URL");
         }
-        commentId = match[1];
+        commentId = parsedCommentId;
       } else {
         throw logger.error("Invalid parameters");
       }
