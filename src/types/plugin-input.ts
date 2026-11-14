@@ -17,8 +17,9 @@ export const pluginSettingsSchema = T.Object(
     }),
     jobMatchingThreshold: T.Number({ default: 0.75, description: "The minimum similarity score when considering users to be suitable for a job." }),
     alwaysRecommend: T.Optional(
-      T.Number({ default: 0, description: "If set to a value greater than 0, the bot will always recommend contributors, regardless of the similarity score." })
+      T.Number({ default: 0, description: "If set, this number of contributors will always be recommended regardless of the similarity score." })
     ),
+    editTimeout: T.String({ default: "30m", description: "The delay before deduplication runs after an issue edit. Accepts durations supported by the `ms` package, such as `30m`." }),
     demoFlag: T.Boolean({ default: false, description: "When true, disables storing issues and comments in the database." }),
   },
   { default: {} }
