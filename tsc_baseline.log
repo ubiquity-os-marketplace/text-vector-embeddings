@@ -1,0 +1,2 @@
+src/cron/index.ts(6,22): error TS2307: Cannot find module '../../manifest.json' or its corresponding type declarations.
+src/worker.ts(13,22): error TS2307: Cannot find module '../manifest.json' or its corresponding type declarations.

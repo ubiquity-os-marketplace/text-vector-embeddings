@@ -140,7 +140,7 @@ function getAuthorType(payload: unknown, docType: DocumentType): string | null {
 }
 
 async function createEmbeddingsWithRetry(
-  embedder: VoyageEmbedding,
+  embedder: { createEmbeddings: (texts: string[]) => Promise<number[][]> },
   texts: string[],
   maxRetries: number,
   delayMs: number,
@@ -223,7 +223,7 @@ async function processPendingRows(params: {
   docTypes: DocumentType[];
   label: QueueLabel;
   supabase: SupabaseClient<Database>;
-  embedder: VoyageEmbedding;
+  embedder: { createEmbeddings: (texts: string[]) => Promise<number[][]> };
   settings: ReturnType<typeof getEmbeddingQueueSettings>;
   logger: QueueLogger;
 }): Promise<{ processed: number; stoppedEarly: boolean; processedByType: Record<DocumentType, number> }> {
@@ -313,7 +313,7 @@ async function processPendingRows(params: {
       }
       const { error: updateError } = await supabase
         .from("documents")
-        .update({ embedding: serializeEmbeddingForDatabase(update.embedding), modified_at: new Date().toISOString() })
+        .update({ embedding: update.embedding.length === 768 ? null : serializeEmbeddingForDatabase(update.embedding), embedding_nomic: update.embedding.length === 768 ? serializeEmbeddingForDatabase(update.embedding) : null, embedding_model: update.embedding.length === 768 ? "nomic-embed-text-v1.5" : "voyage-4-large", embedding_dim: update.embedding.length, modified_at: new Date().toISOString() })
         .eq("id", update.row.id);
 
       if (updateError) {

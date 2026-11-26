@@ -52,6 +52,7 @@
     "jsdom": "^26.1.0",
     "marked": "^16.2.0",
     "quansync": "^0.2.11",
+    "tiktoken": "^1.0.22",
     "valibot": "1.2.0",
     "voyageai": "^0.0.4"
   },
