@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-duplicate-string */
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
@@ -42,6 +43,9 @@ interface FindSimilarCommentsParams {
   threshold: number;
 }
 
+const NOMIC_MODEL = "nomic-embed-text-v1.5";
+const VOYAGE_MODEL = "voyage-4-large";
+
 export class Comment extends SuperSupabase {
   constructor(supabase: SupabaseClient, context: Context) {
     super(supabase, context);
@@ -78,7 +82,13 @@ export class Comment extends SuperSupabase {
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+      embedding = await (
+        this.context.adapters.nomic?.embedding ||
+        this.context.adapters.voyage?.embedding ||
+        (() => {
+          throw new Error("No embedder");
+        })()
+      ).createEmbedding(embeddingSource);
     }
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
@@ -94,7 +104,10 @@ export class Comment extends SuperSupabase {
         parent_id: commentData.issue_id,
         markdown: finalMarkdown,
         author_id: commentData.author_id,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+        embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+        embedding_model: embedding?.length === 768 ? NOMIC_MODEL : VOYAGE_MODEL,
+        embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
       },
     ]);
@@ -120,7 +133,15 @@ export class Comment extends SuperSupabase {
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+      embedding = Array.from(
+        await (
+          this.context.adapters.nomic?.embedding ||
+          this.context.adapters.voyage?.embedding ||
+          (() => {
+            throw new Error("No embedder");
+          })()
+        ).createEmbedding(embeddingSource)
+      );
     }
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
@@ -140,7 +161,10 @@ export class Comment extends SuperSupabase {
           doc_type: docType,
           parent_id: commentData.issue_id,
           markdown: finalMarkdown,
-          embedding: serializeEmbeddingForDatabase(embedding),
+          embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+          embedding_model: embedding?.length === 768 ? NOMIC_MODEL : VOYAGE_MODEL,
+          embedding_dim: embedding?.length ?? null,
           payload: finalPayload,
           modified_at: new Date(),
         })
@@ -224,13 +248,24 @@ export class Comment extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
-        query_embedding: embedding,
-        current_id: currentId,
-        threshold,
-        top_k: 5,
-      });
+      const embedding = await (
+        this.context.adapters.nomic?.embedding ||
+        this.context.adapters.voyage?.embedding ||
+        (() => {
+          throw new Error("No embedder");
+        })()
+      ).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(
+        ("find_similar_comments_annotate" + (embedding.length === 768 ? "_nomic" : "")) as
+          | "find_similar_comments_annotate"
+          | "find_similar_comments_annotate_nomic",
+        {
+          query_embedding: embedding,
+          current_id: currentId,
+          threshold,
+          top_k: 5,
+        }
+      );
       if (error) {
         this.context.logger.error("Unable to find similar comments", {
           Error: error,

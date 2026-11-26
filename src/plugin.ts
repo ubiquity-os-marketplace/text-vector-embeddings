@@ -30,9 +30,7 @@ export async function initAdapters(context: Context) {
   const { env } = context;
 
   const supabase = createClient<Database>(env.SUPABASE_URL, env.SUPABASE_KEY);
-  const voyageClient = new VoyageAIClient({
-    apiKey: env.VOYAGEAI_API_KEY,
-  });
+  const voyageClient = env.VOYAGEAI_API_KEY ? new VoyageAIClient({ apiKey: env.VOYAGEAI_API_KEY }) : null;
   const adapters = await createAdapters(supabase, voyageClient, context);
   //Check the supabase adapter
   const isConnectionValid = await adapters.supabase.super.checkConnection();

@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/no-duplicate-string */
 import { SupabaseClient } from "@supabase/supabase-js";
 import { SuperSupabase } from "./supabase";
 import { Context } from "../../../types/context";
@@ -56,6 +57,9 @@ function resolveIssueDocType(payload: IssueData["payload"], explicitType?: Issue
   return "issue";
 }
 
+const NOMIC_MODEL = "nomic-embed-text-v1.5";
+const VOYAGE_MODEL = "voyage-4-large";
+
 export class Issue extends SuperSupabase {
   constructor(supabase: SupabaseClient, context: Context) {
     super(supabase, context);
@@ -91,7 +95,13 @@ export class Issue extends SuperSupabase {
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+      embedding = await (
+        this.context.adapters.nomic?.embedding ||
+        this.context.adapters.voyage?.embedding ||
+        (() => {
+          throw new Error("No embedder");
+        })()
+      ).createEmbedding(embeddingSource);
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
@@ -106,7 +116,10 @@ export class Issue extends SuperSupabase {
         id: issueData.id,
         doc_type: docType,
         parent_id: null,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+        embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+        embedding_model: embedding?.length === 768 ? NOMIC_MODEL : VOYAGE_MODEL,
+        embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
         author_id: issueData.author_id,
         markdown: finalMarkdown,
@@ -132,7 +145,15 @@ export class Issue extends SuperSupabase {
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+      embedding = Array.from(
+        await (
+          this.context.adapters.nomic?.embedding ||
+          this.context.adapters.voyage?.embedding ||
+          (() => {
+            throw new Error("No embedder");
+          })()
+        ).createEmbedding(embeddingSource)
+      );
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
@@ -154,7 +175,10 @@ export class Issue extends SuperSupabase {
       .update({
         doc_type: docType,
         markdown: finalMarkdown,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+        embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+        embedding_model: embedding?.length === 768 ? NOMIC_MODEL : VOYAGE_MODEL,
+        embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
         modified_at: new Date(),
       })
@@ -229,13 +253,22 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
-        query_embedding: embedding,
-        current_id: currentId,
-        threshold,
-        top_k: 5,
-      });
+      const embedding = await (
+        this.context.adapters.nomic?.embedding ||
+        this.context.adapters.voyage?.embedding ||
+        (() => {
+          throw new Error("No embedder");
+        })()
+      ).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(
+        ("find_similar_issues_annotate" + (embedding.length === 768 ? "_nomic" : "")) as "find_similar_issues_annotate" | "find_similar_issues_annotate_nomic",
+        {
+          query_embedding: embedding,
+          current_id: currentId,
+          threshold,
+          top_k: 5,
+        }
+      );
       if (error) {
         this.context.logger.error("Unable to find similar issues", {
           Error: error,
@@ -274,13 +307,22 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
-        current_id: currentId,
-        query_embedding: embedding,
-        threshold,
-        top_k: topK ?? 5,
-      });
+      const embedding = await (
+        this.context.adapters.nomic?.embedding ||
+        this.context.adapters.voyage?.embedding ||
+        (() => {
+          throw new Error("No embedder");
+        })()
+      ).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(
+        ("find_similar_issues_to_match" + (embedding.length === 768 ? "_nomic" : "")) as "find_similar_issues_to_match" | "find_similar_issues_to_match_nomic",
+        {
+          current_id: currentId,
+          query_embedding: embedding,
+          threshold,
+          top_k: topK ?? 5,
+        }
+      );
       if (error) {
         this.context.logger.error("Error finding similar issues", {
           Error: error,

@@ -5,6 +5,8 @@ import { VoyageAIClient } from "voyageai";
 import { Embedding as VoyageEmbedding } from "../adapters/voyage/helpers/embedding";
 import { Context } from "../types/context";
 import { serializeEmbeddingForDatabase } from "../utils/database-embedding";
+const NOMIC_MODEL = "nomic-embed-text-v1.5";
+const VOYAGE_MODEL = "voyage-4-large";
 import { cleanMarkdown, isTooShort, MIN_ISSUE_MARKDOWN_LENGTH } from "../utils/embedding-content";
 interface IssueMetadata {
   nodeId: string;
@@ -284,7 +286,10 @@ export async function issueScraper(username: string, token?: string): Promise<st
           doc_type: "issue",
           parent_id: null,
           markdown: storedMarkdown,
-          embedding: serializeEmbeddingForDatabase(embedding ?? null),
+          embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding ?? null),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding ?? null) : null,
+          embedding_model: embedding?.length === 768 ? NOMIC_MODEL : VOYAGE_MODEL,
+          embedding_dim: embedding?.length ?? null,
           author_id: metadata.authorId,
           modified_at: metadata.updatedAt,
           payload: payload,
