@@ -78,7 +78,7 @@ export class Comment extends SuperSupabase {
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+      embedding = await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource);
     }
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
@@ -94,7 +94,10 @@ export class Comment extends SuperSupabase {
         parent_id: commentData.issue_id,
         markdown: finalMarkdown,
         author_id: commentData.author_id,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+          embedding_model: embedding?.length === 768 ? 'nomic-embed-text-v1.5' : 'voyage-4-large',
+          embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
       },
     ]);
@@ -120,7 +123,7 @@ export class Comment extends SuperSupabase {
     //Create the embedding for this comment
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+      embedding = Array.from(await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource));
     }
     let finalMarkdown = shouldSkipEmbedding ? null : commentData.markdown;
     let finalPayload = commentData.payload;
@@ -140,7 +143,10 @@ export class Comment extends SuperSupabase {
           doc_type: docType,
           parent_id: commentData.issue_id,
           markdown: finalMarkdown,
-          embedding: serializeEmbeddingForDatabase(embedding),
+          embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+          embedding_model: embedding?.length === 768 ? 'nomic-embed-text-v1.5' : 'voyage-4-large',
+          embedding_dim: embedding?.length ?? null,
           payload: finalPayload,
           modified_at: new Date(),
         })
@@ -224,8 +230,8 @@ export class Comment extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_comments_annotate", {
+      const embedding = await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(("find_similar_comments_annotate" + (embedding.length === 768 ? "_nomic" : "")) as any, {
         query_embedding: embedding,
         current_id: currentId,
         threshold,

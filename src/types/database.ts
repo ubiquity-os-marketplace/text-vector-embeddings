@@ -15,6 +15,7 @@ export type Database = {
           deleted_at: string | null;
           doc_type: string;
           embedding: string | null;
+          embedding_nomic: string | null;
           embedding_dim: number | null;
           embedding_model: string | null;
           embedding_status: string;
@@ -441,6 +442,7 @@ export type Database = {
           author_id: string | null;
           created_at: string | null;
           embedding: string | null;
+          embedding_nomic: string | null;
           issue_number: string | null;
           markdown: string | null;
           modified_at: string | null;

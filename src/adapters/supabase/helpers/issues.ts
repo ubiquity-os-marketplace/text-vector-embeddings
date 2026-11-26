@@ -91,7 +91,7 @@ export class Issue extends SuperSupabase {
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
+      embedding = await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource);
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
@@ -106,7 +106,10 @@ export class Issue extends SuperSupabase {
         id: issueData.id,
         doc_type: docType,
         parent_id: null,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+          embedding_model: embedding?.length === 768 ? 'nomic-embed-text-v1.5' : 'voyage-4-large',
+          embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
         author_id: issueData.author_id,
         markdown: finalMarkdown,
@@ -132,7 +135,7 @@ export class Issue extends SuperSupabase {
     //Create the embedding for this issue
     let embedding: number[] | null = null;
     if (!shouldDeferEmbedding && embeddingSource && !isPrivate) {
-      embedding = Array.from(await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource));
+      embedding = Array.from(await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource));
     }
     let finalMarkdown = isShortIssue ? null : issueData.markdown;
     let finalPayload = issueData.payload;
@@ -154,7 +157,10 @@ export class Issue extends SuperSupabase {
       .update({
         doc_type: docType,
         markdown: finalMarkdown,
-        embedding: serializeEmbeddingForDatabase(embedding),
+        embedding: embedding?.length === 768 ? null : serializeEmbeddingForDatabase(embedding),
+          embedding_nomic: embedding?.length === 768 ? serializeEmbeddingForDatabase(embedding) : null,
+          embedding_model: embedding?.length === 768 ? 'nomic-embed-text-v1.5' : 'voyage-4-large',
+          embedding_dim: embedding?.length ?? null,
         payload: finalPayload,
         modified_at: new Date(),
       })
@@ -229,8 +235,8 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_annotate", {
+      const embedding = await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(("find_similar_issues_annotate" + (embedding.length === 768 ? "_nomic" : "")) as any, {
         query_embedding: embedding,
         current_id: currentId,
         threshold,
@@ -274,8 +280,8 @@ export class Issue extends SuperSupabase {
         });
         return null;
       }
-      const embedding = await this.context.adapters.voyage.embedding.createEmbedding(embeddingSource);
-      const { data, error } = await this.supabase.rpc("find_similar_issues_to_match", {
+      const embedding = await (this.context.adapters.nomic?.embedding ?? this.context.adapters.voyage.embedding).createEmbedding(embeddingSource);
+      const { data, error } = await this.supabase.rpc(("find_similar_issues_to_match" + (embedding.length === 768 ? "_nomic" : "")) as any, {
         current_id: currentId,
         query_embedding: embedding,
         threshold,

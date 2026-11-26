@@ -8,6 +8,8 @@ import { Issue } from "./supabase/helpers/issues";
 import { SuperSupabase } from "./supabase/helpers/supabase";
 import { Embedding as VoyageEmbedding } from "./voyage/helpers/embedding";
 import { SuperVoyage } from "./voyage/helpers/voyage";
+import { Embedding as NomicEmbedding } from "./nomic/helpers/embedding";
+import { SuperNomic } from "./nomic/helpers/nomic";
 
 type AdapterSet = {
   supabase: {
@@ -15,7 +17,15 @@ type AdapterSet = {
     issue: Issue;
     super: SuperSupabase;
   };
-  voyage: {
+  nomic?: {
+    embedding: NomicEmbedding;
+    super: SuperNomic;
+  };
+  nomic: context.env.NOMIC_API_KEY ? {
+      embedding: new NomicEmbedding(context.env.NOMIC_API_KEY, context),
+      super: new SuperNomic(context.env.NOMIC_API_KEY, context),
+    } : undefined,
+    voyage: {
     embedding: VoyageEmbedding;
     super: SuperVoyage;
   };
